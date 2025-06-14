@@ -1,4 +1,4 @@
-import { existsSync, rmdirSync, unlinkSync } from "node:fs";
+import { existsSync, rmdirSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 export default {
@@ -35,12 +35,12 @@ export default {
 				"Sorry, the file or folder in question was not found."
 			);
 		}
-		if (fs.statSync(filePath).isDirectory()) {
+		if (statSync(filePath).isDirectory()) {
 			rmdirSync(filePath, { recursive: true });
 		} else {
 			unlinkSync(filePath);
 		}
 
-		m.reply(`Successfully delete ${text}`);
+		m.reply(`Successfully delete ${m.text}`);
 	},
 };

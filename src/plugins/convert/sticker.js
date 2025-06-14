@@ -126,7 +126,9 @@ export default {
 					emojis: emojis[0],
 				});
 				return await m.reply({ sticker });
-			} else if (
+			}
+
+			if (
 				emojis &&
 				emojis.length === 2 &&
 				emojis.join("") === input.trim()
@@ -198,7 +200,7 @@ export default {
 					const arrayBuffer = await response.arrayBuffer();
 					buffer = Buffer.from(arrayBuffer);
 					break;
-				} catch (error) {
+				} catch {
 					attempts++;
 					if (attempts >= maxRetries) {
 						return m.reply(

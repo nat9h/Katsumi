@@ -49,7 +49,7 @@ export default {
 			Array.isArray(result.comments) &&
 			result.comments.length > 0
 		) {
-			caption += `\n💬 *Top Comments:*\n`;
+			caption += "\n💬 *Top Comments:*\n";
 			const topComments = result.comments.slice(0, 3);
 			for (const comment of topComments) {
 				if (comment.text && comment.text.trim() !== "") {

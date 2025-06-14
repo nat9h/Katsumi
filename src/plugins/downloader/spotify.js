@@ -63,34 +63,34 @@ export default {
 				audio: await to_audio(buffer, "mp3"),
 				mimetype: "audio/mpeg",
 			});
-		} else {
-			const {
-				data: { status, result, message },
-			} = await api.Sayuran.get("/search/spotify", { q: input });
-
-			if (!status) {
-				return m.reply(message);
-			}
-
-			let nginfo = `🕊 Spotify: *${input}*\n\n`;
-			nginfo += "_Note: Reply with the number to download (e.g. 1)_\n\n";
-			result.forEach((track, i) => {
-				nginfo += `*List:*\n*${i + 1}*. ${track.artist.join(", ")} - ${track.title}\n`;
-			});
-			const sent = await m.reply(nginfo.trim());
-
-			sock.spotify[m.sender] = {
-				results: result,
-				messageId: sent.key.id,
-			};
-
-			setTimeout(() => {
-				if (sock.spotify[m.sender]?.messageId === sent.key.id) {
-					delete sock.spotify[m.sender];
-					console.log(`Expired Spotify session for ${m.sender}`);
-				}
-			}, 60000);
 		}
+
+		const {
+			data: { status, result, message },
+		} = await api.Sayuran.get("/search/spotify", { q: input });
+
+		if (!status) {
+			return m.reply(message);
+		}
+
+		let nginfo = `🕊 Spotify: *${input}*\n\n`;
+		nginfo += "_Note: Reply with the number to download (e.g. 1)_\n\n";
+		result.forEach((track, i) => {
+			nginfo += `*List:*\n*${i + 1}*. ${track.artist.join(", ")} - ${track.title}\n`;
+		});
+		const sent = await m.reply(nginfo.trim());
+
+		sock.spotify[m.sender] = {
+			results: result,
+			messageId: sent.key.id,
+		};
+
+		setTimeout(() => {
+			if (sock.spotify[m.sender]?.messageId === sent.key.id) {
+				delete sock.spotify[m.sender];
+				console.log(`Expired Spotify session for ${m.sender}`);
+			}
+		}, 60000);
 	},
 
 	/**
@@ -133,12 +133,12 @@ export default {
 			return m.reply(message);
 		}
 
-		let antemi = `*Spotify Downloader*\n\n`;
+		let antemi = "*Spotify Downloader*\n\n";
 		antemi += `*Title:* ${track.title}\n`;
 		antemi += `*Artist:* ${track.artist.join(", ")}\n`;
 		antemi += `*Release Date:* ${track.release_date}\n`;
 		antemi += `*Duration:* ${msToTime(track.duration_ms)}\n\n`;
-		antemi += `_Sending audio, please wait..._`;
+		antemi += "_Sending audio, please wait..._";
 
 		await m.reply({
 			image: { url: track.cover_url },

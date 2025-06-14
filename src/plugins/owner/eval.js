@@ -24,7 +24,9 @@ export default {
 	 * @param {string} context.command - The actual command triggered (e.g., ">>" or "=>").
 	 * @param {boolean} context.isOwner - Indicates if the sender is an owner.
 	 */
+	/* eslint-disable no-unused-vars */
 	async execute(m, { text, command, db, store, groupMetadata, sock }) {
+		/* eslint-enable no-unused-vars */
 		if (!text) {
 			await m.reply(
 				"📚 Usage:\n`>> <code>` (direct eval)\n`=> <code>` (async IIFE eval)\nExample: `>> 2 + 2`"

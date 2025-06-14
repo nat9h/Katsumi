@@ -26,8 +26,9 @@ const log = (type, message, error = null) => {
 	);
 	if (error instanceof Error) {
 		output += `\n${colorize(Colors.FgRed, "Error: " + error.message)}`;
-		if (error.stack)
+		if (error.stack) {
 			output += `\n${colorize(Colors.FgGray, "Stack: " + error.stack)}`;
+		}
 	} else if (error) {
 		output += `\nAdditional Info: ${JSON.stringify(error, null, 2)}`;
 	}

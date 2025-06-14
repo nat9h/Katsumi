@@ -21,6 +21,7 @@ import pino from "pino";
 import { BOT_CONFIG } from "../config/index.js";
 import * as Func from "./functions.js";
 import { mimeMap } from "./media.js";
+import Sticker from "./sticker.js";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
 
@@ -338,8 +339,9 @@ export function Client({ sock, store }) {
 					!participants ||
 					!Array.isArray(participants) ||
 					!tags.length
-				)
+				) {
 					return [];
+				}
 
 				const ids = [];
 				for (const number of tags) {
@@ -400,7 +402,7 @@ export function Client({ sock, store }) {
 				mime = options?.mimetype ? options.mimetype : mime;
 				let data = { text: "" },
 					mimetype = /audio/i.test(mime) ? "audio/mpeg" : mime;
-				if (size > 45000000)
+				if (size > 45000000) {
 					data = {
 						document: buffer,
 						mimetype: mime,
@@ -409,7 +411,7 @@ export function Client({ sock, store }) {
 							: `file (${new Date()}).${ext}`,
 						...options,
 					};
-				else if (options.asDocument)
+				} else if (options.asDocument) {
 					data = {
 						document: buffer,
 						mimetype: mime,
@@ -418,7 +420,7 @@ export function Client({ sock, store }) {
 							: `file (${new Date()}).${ext}`,
 						...options,
 					};
-				else if (options.asSticker || /webp/.test(mime)) {
+				} else if (options.asSticker || /webp/.test(mime)) {
 					let pathFile = await Sticker.create(
 						{ mimetype, data: buffer },
 						{ ...options }
@@ -429,7 +431,7 @@ export function Client({ sock, store }) {
 						...options,
 					};
 					existsSync(pathFile) ? await promises.unlink(pathFile) : "";
-				} else if (/image/.test(mime))
+				} else if (/image/.test(mime)) {
 					data = {
 						image: buffer,
 						mimetype: options?.mimetype
@@ -437,7 +439,7 @@ export function Client({ sock, store }) {
 							: "image/png",
 						...options,
 					};
-				else if (/video/.test(mime))
+				} else if (/video/.test(mime)) {
 					data = {
 						video: buffer,
 						mimetype: options?.mimetype
@@ -445,7 +447,7 @@ export function Client({ sock, store }) {
 							: "video/mp4",
 						...options,
 					};
-				else if (/audio/.test(mime))
+				} else if (/audio/.test(mime)) {
 					data = {
 						audio: buffer,
 						mimetype: options?.mimetype
@@ -453,12 +455,13 @@ export function Client({ sock, store }) {
 							: "audio/mpeg",
 						...options,
 					};
-				else
+				} else {
 					data = {
 						document: buffer,
 						mimetype: mime,
 						...options,
 					};
+				}
 				return await sock.sendMessage(jid, data, {
 					quoted,
 					messageId: randomId(32),
@@ -665,14 +668,15 @@ export default async function serialize(sock, msg, store) {
 	if (m.message) {
 		m.type = getContentType(m.message) || Object.keys(m.message)[0];
 		let edited = m.message.editedMessage?.message?.protocolMessage;
-		let msgContent = edited?.editedMessage || m.message;
-		msgContent = m.type == "conversation" ? msgContent : msgContent[m.type];
+		let _msgContent = edited?.editedMessage || m.message;
+		_msgContent =
+			m.type == "conversation" ? _msgContent : _msgContent[m.type];
 
 		if (edited?.editedMessage) {
-			m.message = msgContent =
+			m.message = _msgContent =
 				store.loadMessage(m.from.toString(), edited.key.id).message ||
 				edited.editedMessage;
-			msgContent = msgContent[getContentType(msgContent)];
+			_msgContent = _msgContent[getContentType(_msgContent)];
 		}
 		m.msg = parseMessage(m.message[m.type]) || m.message[m.type];
 		m.mentions = [
