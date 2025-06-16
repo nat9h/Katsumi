@@ -6,8 +6,8 @@ import {
 	makeCacheableSignalKeyStore,
 	makeWASocket,
 } from "baileys";
+import { LRUCache } from "lru-cache";
 import { useMySQLAuthState } from "mysql-baileys";
-import NodeCache from "node-cache";
 import readline from "node:readline";
 import qrcode from "qrcode";
 import { BOT_CONFIG, MYSQL_CONFIG } from "../config/index.js";
@@ -31,9 +31,9 @@ class Connect {
 	constructor() {
 		this.sock = null;
 		this.sessionName = BOT_CONFIG.sessionName;
-		this.groupMetadataCache = new NodeCache({
-			stdTTL: 3600,
-			checkperiod: 120,
+		this.groupMetadataCache = new LRUCache({
+			max: 100,
+			maxAge: 1000 * 60 * 60,
 		});
 		this.pluginManager = new PluginManager(BOT_CONFIG);
 		this.store = new Store(this.sessionName);
@@ -95,21 +95,22 @@ class Connect {
 			logger,
 			getMessage: async (key) => {
 				const jid = jidNormalizedUser(key.remoteJid);
-				const msg = await Store.loadMessage(jid, key.id);
-
-				return msg?.message || "";
+				return this.store.loadMessage(jid, key.id)?.message || null;
 			},
 			getGroupMetadata: async (jid) => {
 				const normalizedJid = jidNormalizedUser(jid);
+
 				let metadata = this.groupMetadataCache.get(normalizedJid);
 				if (metadata) {
 					return metadata;
 				}
+
 				metadata = this.store.getGroupMetadata(normalizedJid);
 				if (metadata) {
 					this.groupMetadataCache.set(normalizedJid, metadata);
 					return metadata;
 				}
+
 				try {
 					metadata = await this.sock.groupMetadata(jid);
 					this.groupMetadataCache.set(normalizedJid, metadata);
@@ -125,8 +126,10 @@ class Connect {
 				}
 			},
 			browser: Browsers.macOS("Safari"),
+			syncFullHistory: false,
 			generateHighQualityLinkPreview: true,
 			qrTimeout: usePairingCode ? undefined : 60000,
+			printQRInTerminal: false,
 		});
 
 		this.sock = Client({ sock: this.sock, store: this.store });

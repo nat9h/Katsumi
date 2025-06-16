@@ -305,3 +305,66 @@ export function msToTime(ms) {
 	const seconds = ((ms % 60000) / 1000).toFixed(0);
 	return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
 }
+
+/**
+ * Creates a delay for the specified amount of time
+ * @param {number} ms - Delay duration in milliseconds
+ * @returns {Promise<void>}
+ */
+export function delay(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Creates a cancellable delay
+ * @param {number} ms - Delay duration in milliseconds
+ * @returns {{promise: Promise<void>, cancel: Function}}
+ */
+export function cancellableDelay(ms) {
+	let timeoutId;
+	const promise = new Promise((resolve) => {
+		timeoutId = setTimeout(resolve, ms);
+	});
+
+	return {
+		promise,
+		cancel: () => clearTimeout(timeoutId),
+	};
+}
+
+/**
+ * Exponential backoff delay with jitter
+ * @param {number} attempt - Current attempt number
+ * @param {number} baseDelay - Base delay in ms (default: 100ms)
+ * @param {number} maxDelay - Maximum delay in ms (default: 10s)
+ * @returns {Promise<void>}
+ */
+export function exponentialBackoff(attempt, baseDelay = 100, maxDelay = 10000) {
+	const delayMs = Math.min(
+		maxDelay,
+		Math.pow(2, attempt) * baseDelay + Math.random() * baseDelay
+	);
+	return delay(delayMs);
+}
+
+/**
+ * Delay with progress reporting
+ * @param {number} ms - Delay duration in milliseconds
+ * @param {Function} callback - Callback with progress percentage
+ * @returns {Promise<void>}
+ */
+export function delayWithProgress(ms, callback) {
+	return new Promise((resolve) => {
+		const start = Date.now();
+		const interval = setInterval(() => {
+			const elapsed = Date.now() - start;
+			const progress = Math.min(100, Math.floor((elapsed / ms) * 100));
+			callback(progress);
+
+			if (elapsed >= ms) {
+				clearInterval(interval);
+				resolve();
+			}
+		}, 100);
+	});
+}

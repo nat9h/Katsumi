@@ -1,4 +1,4 @@
-import { BufferJSON, initAuthCreds, proto } from "baileys";
+import baileys, { BufferJSON, initAuthCreds } from "baileys";
 import { MongoClient } from "mongodb";
 import print from "../print.js";
 
@@ -147,7 +147,7 @@ export const useMongoDbAuthState = async (
 							let value = await readData(`${type}-${id}.json`);
 							if (type === "app-state-sync-key" && value) {
 								value =
-									proto.Message.AppStateSyncKeyData.fromObject(
+									baileys.proto.Message.AppStateSyncKeyData.fromObject(
 										value
 									);
 							}

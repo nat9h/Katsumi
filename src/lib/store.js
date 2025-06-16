@@ -1,113 +1,86 @@
 import { jidNormalizedUser } from "baileys";
 import { mkdir, readFile, writeFile } from "fs/promises";
+import { LRUCache } from "lru-cache";
 import { MongoClient } from "mongodb";
 import { join } from "path";
 import { MONGO_CONFIG } from "../config/index.js";
+
+/** @type {LRUCache<string, any>} */
+const groupMetadataCache = new LRUCache({
+	max: 100,
+	maxAge: 1000 * 60 * 60,
+});
+
+/** @type {LRUCache<string, any>} */
+const messageCache = new LRUCache({
+	max: 500,
+	maxAge: 1000 * 60 * 30,
+});
 
 /**
  * Represents a local store for session data, backed by JSON files.
  */
 class Local {
 	/**
-	 * Creates an instance of Local.
-	 * @param {string} sessionName - The name of the session, used for creating the directory and filenames.
+	 * @param {string} sessionName - The name of the session, used for file storage paths.
 	 */
 	constructor(sessionName) {
-		/**
-		 * The name of the session.
-		 * @type {string}
-		 */
+		/** @type {string} */
 		this.sessionName = sessionName;
-		/**
-		 * Stores contact data.
-		 * @type {object}
-		 */
-		this.contacts = {};
-		/**
-		 * Stores group metadata.
-		 * @type {object}
-		 */
-		this.groupMetadata = {};
-		/**
-		 * Stores messages.
-		 * @type {object}
-		 */
-		this.messages = {};
-		/**
-		 * Paths to the JSON files for storing data.
-		 * @type {object}
-		 * @property {string} contacts - Path to the contacts JSON file.
-		 * @property {string} metadata - Path to the group metadata JSON file.
-		 * @property {string} messages - Path to the messages JSON file.
-		 */
 		this.path = {
 			contacts: join(process.cwd(), `${sessionName}/contacts.json`),
 			metadata: join(process.cwd(), `${sessionName}/groupMetadata.json`),
 			messages: join(process.cwd(), `${sessionName}/messages.json`),
 		};
-		/**
-		 * Interval ID for periodic saving.
-		 * @type {NodeJS.Timeout|null}
-		 */
 		this.saveInterval = null;
+		this.cleanupInterval = null;
+		/** @type {Object.<string, any>} */
+		this.contacts = {};
+		/** @type {Object.<string, any>} */
+		this.groupMetadata = {};
+		/** @type {Object.<string, any>} */
+		this.messages = {};
 	}
 
 	/**
-	 * Asynchronously loads session data from JSON files.
-	 * If a file doesn't exist or is invalid, it initializes with an empty object.
+	 * Loads contacts and group metadata from JSON files.
 	 * @returns {Promise<void>}
 	 */
 	async load() {
+		await mkdir(this.sessionName, { recursive: true });
+		this.contacts = (await this._loadJson(this.path.contacts)) || {};
+		this.groupMetadata = (await this._loadJson(this.path.metadata)) || {};
+		this.messages = {};
+	}
+
+	/**
+	 * Helper to read JSON data from file.
+	 * @private
+	 * @param {string} path
+	 * @returns {Promise<Object>}
+	 */
+	async _loadJson(path) {
 		try {
-			await mkdir(this.sessionName, { recursive: true });
-			try {
-				this.contacts = JSON.parse(
-					await readFile(this.path.contacts, "utf-8")
-				);
-			} catch {
-				await writeFile(this.path.contacts, "{}");
-				this.contacts = {};
-			}
-			try {
-				this.groupMetadata = JSON.parse(
-					await readFile(this.path.metadata, "utf-8")
-				);
-			} catch {
-				await writeFile(this.path.metadata, "{}");
-				this.groupMetadata = {};
-			}
-			try {
-				this.messages = JSON.parse(
-					await readFile(this.path.messages, "utf-8")
-				);
-			} catch {
-				await writeFile(this.path.messages, "{}");
-				this.messages = {};
-			}
-		} catch (error) {
-			console.error("Failed to initialize store:", error);
+			return JSON.parse(await readFile(path, "utf-8"));
+		} catch {
+			return {};
 		}
 	}
 
 	/**
-	 * Asynchronously saves current session data to JSON files.
+	 * Cleans up old messages (currently a stub).
+	 */
+	cleanupMessages() {}
+
+	/**
+	 * Saves contacts and group metadata to JSON files.
 	 * @returns {Promise<void>}
 	 */
 	async save() {
 		try {
 			await Promise.all([
-				writeFile(
-					this.path.contacts,
-					JSON.stringify(this.contacts, null, 2)
-				),
-				writeFile(
-					this.path.metadata,
-					JSON.stringify(this.groupMetadata, null, 2)
-				),
-				writeFile(
-					this.path.messages,
-					JSON.stringify(this.messages, null, 2)
-				),
+				this._saveJson(this.path.contacts, this.contacts),
+				this._saveJson(this.path.metadata, this.groupMetadata),
 			]);
 		} catch (error) {
 			console.error("Failed to save store:", error);
@@ -115,29 +88,48 @@ class Local {
 	}
 
 	/**
-	 * Starts periodically saving session data to JSON files.
-	 * @param {number} [interval=30000] - The interval in milliseconds at which to save the data. Defaults to 30 seconds.
+	 * Helper to write JSON data to file.
+	 * @private
+	 * @param {string} path
+	 * @param {Object} data
+	 * @returns {Promise<void>}
+	 */
+	async _saveJson(path, data) {
+		try {
+			await writeFile(path, JSON.stringify(data, null, 2));
+		} catch (error) {
+			console.error(`Failed to save ${path}:`, error);
+		}
+	}
+
+	/**
+	 * Enables periodic saving and message cleanup.
+	 * @param {number} [interval=30000] - Interval in ms.
 	 */
 	savePeriodically(interval = 30000) {
-		if (this.saveInterval) {
-			clearInterval(this.saveInterval);
-		}
+		this.saveInterval && clearInterval(this.saveInterval);
 		this.saveInterval = setInterval(() => this.save(), interval);
+
+		this.cleanupInterval && clearInterval(this.cleanupInterval);
+		this.cleanupInterval = setInterval(
+			() => this.cleanupMessages(),
+			600000
+		);
 	}
 
 	/**
-	 * Stops the periodic saving of session data.
+	 * Stops periodic saving and cleanup.
 	 */
 	stopSaving() {
-		if (this.saveInterval) {
-			clearInterval(this.saveInterval);
-		}
+		this.saveInterval && clearInterval(this.saveInterval);
+		this.cleanupInterval && clearInterval(this.cleanupInterval);
 		this.saveInterval = null;
+		this.cleanupInterval = null;
 	}
 
 	/**
-	 * Updates contact information.
-	 * @param {Array<object>} update - An array of contact objects with updates.
+	 * Updates existing contacts with partial data.
+	 * @param {Array<Object>} update
 	 */
 	updateContacts(update) {
 		for (const contact of update) {
@@ -147,8 +139,8 @@ class Local {
 	}
 
 	/**
-	 * Inserts or updates contact information, marking them as contacts.
-	 * @param {Array<object>} update - An array of contact objects to upsert.
+	 * Upserts contacts, replacing data and marking as contacts.
+	 * @param {Array<Object>} update
 	 */
 	upsertContacts(update) {
 		for (const contact of update) {
@@ -158,8 +150,8 @@ class Local {
 	}
 
 	/**
-	 * Updates group metadata.
-	 * @param {Array<object>} updates - An array of group metadata objects with updates.
+	 * Updates group metadata for groups that already exist.
+	 * @param {Array<Object>} updates
 	 */
 	updateGroupMetadata(updates) {
 		for (const update of updates) {
@@ -174,9 +166,9 @@ class Local {
 	}
 
 	/**
-	 * Retrieves group metadata for a given JID.
-	 * @param {string} jid - The JID of the group.
-	 * @returns {object|undefined} The group metadata or undefined if not found.
+	 * Gets group metadata for a given JID.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getGroupMetadata(jid) {
 		return this.groupMetadata[jidNormalizedUser(jid)];
@@ -184,44 +176,40 @@ class Local {
 
 	/**
 	 * Sets group metadata for a given JID.
-	 * @param {string} jid - The JID of the group.
-	 * @param {object} metadata - The metadata object to set.
+	 * @param {string} jid
+	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
 		this.groupMetadata[jidNormalizedUser(jid)] = metadata;
 	}
 
 	/**
-	 * Retrieves contact information for a given JID.
-	 * @param {string} jid - The JID of the contact.
-	 * @returns {object|undefined} The contact object or undefined if not found.
+	 * Gets contact data by JID.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getContact(jid) {
 		return this.contacts[jidNormalizedUser(jid)];
 	}
 
 	/**
-	 * Saves a message for a given JID.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {object} message - The message object to save.
+	 * Saves a message to the LRU cache if it's from the user or is a command.
+	 * @param {string} jid
+	 * @param {Object} message
 	 */
 	saveMessage(jid, message) {
-		const normalizedJid = jidNormalizedUser(jid);
-		if (!this.messages[normalizedJid]) {
-			this.messages[normalizedJid] = {};
-		}
-		this.messages[normalizedJid][message.key.id] = message;
+		const key = `${jidNormalizedUser(jid)}:${message.key.id}`;
+		messageCache.set(key, message);
 	}
 
 	/**
-	 * Loads a message for a given JID and message ID.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {string} id - The ID of the message to load.
-	 * @returns {object|null} The message object or null if not found.
+	 * Loads a message by JID and message ID from cache.
+	 * @param {string} jid
+	 * @param {string} id
+	 * @returns {Object|null}
 	 */
 	loadMessage(jid, id) {
-		const normalizedJid = jidNormalizedUser(jid);
-		return this.messages[normalizedJid]?.[id] || null;
+		return messageCache.get(`${jidNormalizedUser(jid)}:${id}`) || null;
 	}
 }
 
@@ -230,57 +218,20 @@ class Local {
  */
 class Mongo {
 	/**
-	 * Creates an instance of Mongo.
-	 * @param {string} sessionName - The name of the session, used as the database name.
+	 * @param {string} sessionName - The name of the session, used as the DB name.
 	 */
 	constructor(sessionName) {
-		/**
-		 * The name of the session, used as the database name.
-		 * @type {string}
-		 */
+		/** @type {string} */
 		this.sessionName = sessionName;
-		/**
-		 * Stores contact data.
-		 * @type {object}
-		 */
-		this.contacts = {};
-		/**
-		 * Stores group metadata.
-		 * @type {object}
-		 */
-		this.groupMetadata = {};
-		/**
-		 * Stores messages.
-		 * @type {object}
-		 */
-		this.messages = {};
-		/**
-		 * Interval ID for periodic saving.
-		 * @type {NodeJS.Timeout|null}
-		 */
 		this.saveInterval = null;
-		/**
-		 * The MongoDB client instance.
-		 * @type {MongoClient|null}
-		 */
+		this.cleanupInterval = null;
 		this.client = null;
-		/**
-		 * The MongoDB database instance.
-		 * @type {Db|null}
-		 */
 		this.db = null;
-		/**
-		 * MongoDB collection instances.
-		 * @type {object}
-		 * @property {Collection} contacts - The contacts collection.
-		 * @property {Collection} groupMetadata - The group metadata collection.
-		 * @property {Collection} messages - The messages collection.
-		 */
 		this.coll = {};
 	}
 
 	/**
-	 * Establishes a connection to MongoDB and initializes collections.
+	 * Connects to MongoDB and initializes collections.
 	 * @private
 	 * @returns {Promise<void>}
 	 */
@@ -291,305 +242,252 @@ class Mongo {
 			this.db = this.client.db(this.sessionName);
 			this.coll.contacts = this.db.collection("contacts");
 			this.coll.groupMetadata = this.db.collection("groupMetadata");
-			this.coll.messages = this.db.collection("messages");
 		}
 	}
 
 	/**
-	 * Asynchronously loads session data from MongoDB.
+	 * Loads contacts and group metadata into LRU cache.
 	 * @returns {Promise<void>}
 	 */
 	async load() {
 		await this._connect();
-		const [contacts, groupMetadata, messages] = await Promise.all([
+		const [contacts, groupMetadata] = await Promise.all([
 			this.coll.contacts.find().toArray(),
 			this.coll.groupMetadata.find().toArray(),
-			this.coll.messages.find().toArray(),
 		]);
-		this.contacts = Object.fromEntries(contacts.map((c) => [c.id, c]));
-		this.groupMetadata = Object.fromEntries(
-			groupMetadata.map((g) => [g.id, g])
-		);
-		this.messages = {};
-		for (const doc of messages) {
-			if (!this.messages[doc.jid]) {
-				this.messages[doc.jid] = {};
-			}
-			this.messages[doc.jid][doc.id] = doc.message;
-		}
+		contacts.forEach((c) => groupMetadataCache.set(c.id, c));
+		groupMetadata.forEach((g) => groupMetadataCache.set(g.id, g));
 	}
 
 	/**
-	 * Asynchronously saves current session data to MongoDB.
+	 * Saves contacts and group metadata from LRU cache to MongoDB.
 	 * @returns {Promise<void>}
 	 */
 	async save() {
 		await this._connect();
-		await Promise.all(
-			Object.values(this.contacts).map((c) =>
-				this.coll.contacts.updateOne(
-					{ id: c.id },
-					{ $set: c },
-					{ upsert: true }
-				)
-			)
+		const contacts = Array.from(groupMetadataCache.values()).filter(
+			(v) => v.isContact
 		);
-		await Promise.all(
-			Object.values(this.groupMetadata).map((g) =>
-				this.coll.groupMetadata.updateOne(
-					{ id: g.id },
-					{ $set: g },
-					{ upsert: true }
-				)
-			)
+		const groups = Array.from(groupMetadataCache.values()).filter((v) =>
+			v.id.endsWith("@g.us")
 		);
-		for (const [jid, msgs] of Object.entries(this.messages)) {
-			for (const [id, msg] of Object.entries(msgs)) {
-				await this.coll.messages.updateOne(
-					{ jid, id },
-					{ $set: { jid, id, message: msg } },
-					{ upsert: true }
-				);
-			}
+
+		if (contacts.length > 0) {
+			const bulkOps = contacts.map((c) => ({
+				updateOne: {
+					filter: { id: c.id },
+					update: { $set: c },
+					upsert: true,
+				},
+			}));
+			await this.coll.contacts.bulkWrite(bulkOps);
+		}
+
+		if (groups.length > 0) {
+			const bulkOps = groups.map((g) => ({
+				updateOne: {
+					filter: { id: g.id },
+					update: { $set: g },
+					upsert: true,
+				},
+			}));
+			await this.coll.groupMetadata.bulkWrite(bulkOps);
 		}
 	}
 
 	/**
-	 * Starts periodically saving session data to MongoDB.
-	 * @param {number} [interval=30000] - The interval in milliseconds at which to save the data. Defaults to 30 seconds.
+	 * Cleans up old messages (currently a stub).
+	 */
+	cleanupMessages() {}
+
+	/**
+	 * Enables periodic saving.
+	 * @param {number} [interval=30000] - Interval in ms.
 	 */
 	savePeriodically(interval = 30000) {
-		if (this.saveInterval) {
-			clearInterval(this.saveInterval);
-		}
+		this.saveInterval && clearInterval(this.saveInterval);
 		this.saveInterval = setInterval(() => this.save(), interval);
 	}
 
 	/**
-	 * Stops the periodic saving of session data.
+	 * Stops periodic saving and closes the MongoDB connection after 5 seconds.
 	 */
 	stopSaving() {
-		if (this.saveInterval) {
-			clearInterval(this.saveInterval);
-		}
+		this.saveInterval && clearInterval(this.saveInterval);
 		this.saveInterval = null;
+		if (this.client) {
+			setTimeout(() => this.client.close(), 5000);
+			this.client = null;
+		}
 	}
 
 	/**
-	 * Updates contact information.
-	 * @param {Array<object>} update - An array of contact objects with updates.
+	 * Updates existing contacts in cache with partial data.
+	 * @param {Array<Object>} update
 	 */
 	updateContacts(update) {
 		for (const contact of update) {
 			const id = jidNormalizedUser(contact.id);
-			this.contacts[id] = { ...(this.contacts[id] || {}), ...contact };
+			groupMetadataCache.set(id, {
+				...(groupMetadataCache.get(id) || {}),
+				...contact,
+			});
 		}
 	}
 
 	/**
-	 * Inserts or updates contact information, marking them as contacts.
-	 * @param {Array<object>} update - An array of contact objects to upsert.
+	 * Upserts contacts, replacing data and marking as contacts.
+	 * @param {Array<Object>} update
 	 */
 	upsertContacts(update) {
 		for (const contact of update) {
 			const id = jidNormalizedUser(contact.id);
-			this.contacts[id] = { ...contact, isContact: true };
+			groupMetadataCache.set(id, { ...contact, isContact: true });
 		}
 	}
 
 	/**
-	 * Updates group metadata.
-	 * @param {Array<object>} updates - An array of group metadata objects with updates.
+	 * Updates group metadata in cache for groups that already exist.
+	 * @param {Array<Object>} updates
 	 */
 	updateGroupMetadata(updates) {
 		for (const update of updates) {
 			const id = update.id;
-			if (this.groupMetadata[id]) {
-				this.groupMetadata[id] = {
-					...this.groupMetadata[id],
-					...update,
-				};
+			const existing = groupMetadataCache.get(id);
+			if (existing) {
+				groupMetadataCache.set(id, { ...existing, ...update });
 			}
 		}
 	}
 
 	/**
-	 * Retrieves group metadata for a given JID.
-	 * @param {string} jid - The JID of the group.
-	 * @returns {object|undefined} The group metadata or undefined if not found.
+	 * Gets group metadata for a given JID.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getGroupMetadata(jid) {
-		return this.groupMetadata[jidNormalizedUser(jid)];
+		return groupMetadataCache.get(jidNormalizedUser(jid));
 	}
 
 	/**
 	 * Sets group metadata for a given JID.
-	 * @param {string} jid - The JID of the group.
-	 * @param {object} metadata - The metadata object to set.
+	 * @param {string} jid
+	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
-		this.groupMetadata[jidNormalizedUser(jid)] = metadata;
+		groupMetadataCache.set(jidNormalizedUser(jid), metadata);
 	}
 
 	/**
-	 * Retrieves contact information for a given JID.
-	 * @param {string} jid - The JID of the contact.
-	 * @returns {object|undefined} The contact object or undefined if not found.
+	 * Gets contact data by JID.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getContact(jid) {
-		return this.contacts[jidNormalizedUser(jid)];
+		return groupMetadataCache.get(jidNormalizedUser(jid));
 	}
 
 	/**
-	 * Saves a message for a given JID.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {object} message - The message object to save.
+	 * Saves a message to the LRU cache if it's from the user or is a command.
+	 * @param {string} jid
+	 * @param {Object} message
 	 */
 	saveMessage(jid, message) {
-		const normalizedJid = jidNormalizedUser(jid);
-		if (!this.messages[normalizedJid]) {
-			this.messages[normalizedJid] = {};
-		}
-		this.messages[normalizedJid][message.key.id] = message;
+		const key = `${jidNormalizedUser(jid)}:${message.key.id}`;
+		messageCache.set(key, message);
 	}
 
 	/**
-	 * Loads a message for a given JID and message ID.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {string} id - The ID of the message to load.
-	 * @returns {object|null} The message object or null if not found.
+	 * Loads a message by JID and message ID from cache.
+	 * @param {string} jid
+	 * @param {string} id
+	 * @returns {Object|null}
 	 */
 	loadMessage(jid, id) {
-		const normalizedJid = jidNormalizedUser(jid);
-		return this.messages[normalizedJid]?.[id] || null;
+		return messageCache.get(`${jidNormalizedUser(jid)}:${id}`) || null;
 	}
 }
 
 /**
- * A versatile store class that delegates its operations to either a
- * local JSON-based store (`Local`) or a MongoDB-based store (`Mongo`)
- * depending on the `MONGO_CONFIG.USE_MONGO` flag.
+ * Versatile session store class. Switches between Mongo and Local backends.
  */
 class Store {
 	/**
-	 * Creates an instance of Store.
-	 * @param {string} sessionName - The name of the session, used for both local and MongoDB storage.
+	 * @param {string} sessionName
 	 */
 	constructor(sessionName) {
-		/**
-		 * The underlying storage backend, either a `Local` or `Mongo` instance.
-		 * @type {Local|Mongo}
-		 */
-		if (MONGO_CONFIG.USE_MONGO) {
-			this.backend = new Mongo(sessionName);
-		} else {
-			this.backend = new Local(sessionName);
-		}
+		this.backend = MONGO_CONFIG.USE_MONGO
+			? new Mongo(sessionName)
+			: new Local(sessionName);
 	}
 
-	/**
-	 * Loads session data from the configured backend.
-	 * @returns {Promise<void>}
-	 */
+	/** @returns {Promise<void>} */
 	load() {
 		return this.backend.load();
 	}
-
-	/**
-	 * Saves current session data to the configured backend.
-	 * @returns {Promise<void>}
-	 */
+	/** @returns {Promise<void>} */
 	save() {
 		return this.backend.save();
 	}
-
 	/**
-	 * Starts periodically saving session data to the configured backend.
-	 * @param {number} interval - The interval in milliseconds at which to save the data.
-	 * @returns {void}
+	 * @param {number} [interval]
 	 */
 	savePeriodically(interval) {
 		return this.backend.savePeriodically(interval);
 	}
-
-	/**
-	 * Stops the periodic saving of session data for the configured backend.
-	 * @returns {void}
-	 */
 	stopSaving() {
 		return this.backend.stopSaving();
 	}
-
 	/**
-	 * Updates contact information in the configured backend.
-	 * @param {Array<object>} update - An array of contact objects with updates.
-	 * @returns {void}
+	 * @param {Array<Object>} update
 	 */
 	updateContacts(update) {
 		return this.backend.updateContacts(update);
 	}
-
 	/**
-	 * Inserts or updates contact information in the configured backend, marking them as contacts.
-	 * @param {Array<object>} update - An array of contact objects to upsert.
-	 * @returns {void}
+	 * @param {Array<Object>} update
 	 */
 	upsertContacts(update) {
 		return this.backend.upsertContacts(update);
 	}
-
 	/**
-	 * Updates group metadata in the configured backend.
-	 * @param {Array<object>} updates - An array of group metadata objects with updates.
-	 * @returns {void}
+	 * @param {Array<Object>} updates
 	 */
 	updateGroupMetadata(updates) {
 		return this.backend.updateGroupMetadata(updates);
 	}
-
 	/**
-	 * Retrieves group metadata for a given JID from the configured backend.
-	 * @param {string} jid - The JID of the group.
-	 * @returns {object|undefined} The group metadata or undefined if not found.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getGroupMetadata(jid) {
 		return this.backend.getGroupMetadata(jid);
 	}
-
 	/**
-	 * Sets group metadata for a given JID in the configured backend.
-	 * @param {string} jid - The JID of the group.
-	 * @param {object} metadata - The metadata object to set.
-	 * @returns {void}
+	 * @param {string} jid
+	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
 		return this.backend.setGroupMetadata(jid, metadata);
 	}
-
 	/**
-	 * Retrieves contact information for a given JID from the configured backend.
-	 * @param {string} jid - The JID of the contact.
-	 * @returns {object|undefined} The contact object or undefined if not found.
+	 * @param {string} jid
+	 * @returns {Object|undefined}
 	 */
 	getContact(jid) {
 		return this.backend.getContact(jid);
 	}
-
 	/**
-	 * Saves a message for a given JID in the configured backend.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {object} message - The message object to save.
-	 * @returns {void}
+	 * @param {string} jid
+	 * @param {Object} message
 	 */
 	saveMessage(jid, message) {
 		return this.backend.saveMessage(jid, message);
 	}
-
 	/**
-	 * Loads a message for a given JID and message ID from the configured backend.
-	 * @param {string} jid - The JID of the chat.
-	 * @param {string} id - The ID of the message to load.
-	 * @returns {object|null} The message object or null if not found.
+	 * @param {string} jid
+	 * @param {string} id
+	 * @returns {Object|null}
 	 */
 	loadMessage(jid, id) {
 		return this.backend.loadMessage(jid, id);

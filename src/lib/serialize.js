@@ -1,4 +1,4 @@
-import {
+import baileys, {
 	STORIES_JID,
 	areJidsSameUser,
 	chatModificationToAppPatch,
@@ -11,7 +11,6 @@ import {
 	getContentType,
 	jidDecode,
 	jidNormalizedUser,
-	proto,
 } from "baileys";
 import { fileTypeFromBuffer } from "file-type";
 import { randomBytes } from "node:crypto";
@@ -87,17 +86,41 @@ const parsePhoneNumber = (number) => {
 	return number;
 };
 
-function resolveLidToJid(participant, participants = [], lidMap = {}) {
-	if (!participant?.endsWith?.("@lid")) {
-		return participant;
+/**
+ * Build a fast lookup map of lid jid to phoneNumber.
+ * @param {Array} participants - Group participants array
+ * @returns {Object} - { lidJid: phoneNumber }
+ */
+export function buildLidMap(participants = []) {
+	const map = {};
+	for (const p of participants) {
+		if (
+			typeof p.id === "string" &&
+			p.id.endsWith("@lid") &&
+			p.phoneNumber
+		) {
+			map[p.id] = p.phoneNumber;
+		}
 	}
-	if (lidMap && lidMap[participant]) {
-		return lidMap[participant];
+	return map;
+}
+
+/**
+ * Resolve a LID jid (e.g. xxx@lid) to a real jid (xxx@s.whatsapp.net) or phoneNumber.
+ * @param {string} jid - The jid to resolve
+ * @param {Array} participants - Group participants
+ * @param {Object} lidMap - Optional lid-to-phoneNumber map
+ * @returns {string} - Resolved jid/phoneNumber or original if not found
+ */
+export function resolveLidToJid(jid, participants = [], lidMap = {}) {
+	if (!jid || typeof jid !== "string" || !jid.endsWith("@lid")) {
+		return jid;
 	}
-	const found = participants.find(
-		(p) => p.lid === participant || p.id === participant
-	);
-	return found?.phoneNumber || found?.id || participant;
+	if (lidMap && lidMap[jid]) {
+		return lidMap[jid];
+	}
+	const found = participants.find((p) => p.id === jid || p.lid === jid);
+	return found?.phoneNumber || found?.id || jid;
 }
 
 export function Client({ sock, store }) {
@@ -408,7 +431,7 @@ export function Client({ sock, store }) {
 						mimetype: mime,
 						fileName: options?.fileName
 							? options.fileName
-							: `file (${new Date()}).${ext}`,
+							: `Natsumi_(${new Date()}).${ext}`,
 						...options,
 					};
 				} else if (options.asDocument) {
@@ -417,7 +440,7 @@ export function Client({ sock, store }) {
 						mimetype: mime,
 						fileName: options?.fileName
 							? options.fileName
-							: `file (${new Date()}).${ext}`,
+							: `Natsumi_(${new Date()}).${ext}`,
 						...options,
 					};
 				} else if (options.asSticker || /webp/.test(mime)) {
@@ -508,7 +531,7 @@ export function Client({ sock, store }) {
 
 				copy.key.remoteJid = jid;
 				copy.key.fromMe = areJidsSameUser(sender, sock.user.id);
-				return proto.WebMessageInfo.fromObject(copy);
+				return baileys.proto.WebMessageInfo.fromObject(copy);
 			},
 			enumerable: false,
 		},
@@ -591,68 +614,59 @@ export default async function serialize(sock, msg, store) {
 			try {
 				metadata = await sock.groupMetadata(m.from);
 				store.setGroupMetadata(m.from, metadata);
-			} catch (error) {
-				console.error(
-					`Failed to fetch group metadata for ${m.from}:`,
-					error
-				);
+			} catch (e) {
 				metadata = null;
 			}
 		}
+		m.metadata = metadata || null;
+		lidMap = m.metadata ? buildLidMap(m.metadata.participants) : {};
 
-		if (metadata) {
-			m.metadata = metadata;
-			for (const p of metadata.participants || []) {
-				if (p.id?.endsWith?.("@lid") && p.phoneNumber) {
-					lidMap[p.id] = p.phoneNumber;
-				}
-			}
+		m.groupAdmins = m.metadata
+			? m.metadata.participants
+					.filter((p) => p.admin)
+					.map((p) => ({
+						id: p.phoneNumber || p.id,
+						admin: p.admin,
+					}))
+			: [];
 
-			m.groupAdmins = metadata.participants
-				.filter((p) => p.admin)
-				.map((p) => ({
-					id: p.phoneNumber || p.id,
-					admin: p.admin,
-				}));
-
-			const normalizeJid = (jid) => {
-				if (!jid) {
-					return jid;
-				}
-				if (typeof sock.decodeJid === "function") {
-					return sock.decodeJid(jid);
-				}
-				return jid.split(":")[0];
-			};
-
-			const botJid = normalizeJid(sock.user.id);
-
-			m.isAdmin = m.groupAdmins.some((admin) => {
-				const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
-				const senderNum = m.sender
-					? (m.sender.match(/\d{8,}/) || [])[0]
-					: "";
-				return adminNum && senderNum && adminNum === senderNum;
-			});
-			m.isBotAdmin = m.groupAdmins.some((admin) => {
-				const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
-				const botNum = (botJid.match(/\d{8,}/) || [])[0];
-				return adminNum && botNum && adminNum === botNum;
-			});
-		} else {
-			m.metadata = null;
-			m.groupAdmins = [];
-			m.isAdmin = false;
-			m.isBotAdmin = false;
-		}
+		const botJid = jidNormalizedUser(sock.user.id);
+		m.isAdmin = m.groupAdmins.some((admin) => {
+			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
+			const senderNum = m.sender
+				? (m.sender.match(/\d{8,}/) || [])[0]
+				: "";
+			return adminNum && senderNum && adminNum === senderNum;
+		});
+		m.isBotAdmin = m.groupAdmins.some((admin) => {
+			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
+			const botNum = (botJid.match(/\d{8,}/) || [])[0];
+			return adminNum && botNum && adminNum === botNum;
+		});
+	} else {
+		m.metadata = null;
+		m.groupAdmins = [];
+		m.isAdmin = false;
+		m.isBotAdmin = false;
 	}
 
-	let _participant =
-		jidNormalizedUser(msg?.participant || m.key?.participant) || "";
+	let rawParticipant = msg?.participant || msg?.key?.participant || "";
+	rawParticipant = typeof rawParticipant === "string" ? rawParticipant : "";
+
+	m.participantLid = jidNormalizedUser(rawParticipant);
+
 	m.participant =
 		m.isGroup && m.metadata
-			? resolveLidToJid(_participant, m.metadata.participants, lidMap)
-			: _participant;
+			? resolveLidToJid(
+					jidNormalizedUser(rawParticipant),
+					m.metadata.participants,
+					lidMap
+				)
+			: jidNormalizedUser(rawParticipant);
+
+	if (!m.participant) {
+		m.participant = "";
+	}
 
 	m.sender = m.fromMe
 		? jidNormalizedUser(sock.user.id)
@@ -770,8 +784,16 @@ export default async function serialize(sock, msg, store) {
 				m.quoted.participant =
 					jidNormalizedUser(m.msg.contextInfo.participant) || false;
 
+				const quotedRawParticipant =
+					typeof m.msg.contextInfo.participant === "string"
+						? m.msg.contextInfo.participant
+						: "";
+
+				m.quoted.participantLid =
+					jidNormalizedUser(quotedRawParticipant);
+
 				let _quotedSender = jidNormalizedUser(
-					m.msg.contextInfo.participant || m.quoted.from
+					quotedRawParticipant || m.quoted.from
 				);
 				m.quoted.sender =
 					m.isGroup && m.metadata
@@ -865,24 +887,25 @@ export default async function serialize(sock, msg, store) {
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
 
-				let vM = (m.quoted.fakeObj = proto.WebMessageInfo.fromObject({
-					key: {
-						fromMe: m.quoted.fromMe,
-						remoteJid: m.quoted.from,
-						id: m.quoted.id,
-					},
-					message: m.quoted.message,
-					...(m.isGroup
-						? {
-								participant: m.quoted.sender,
-							}
-						: {}),
-				}));
+				let vM = (m.quoted.fakeObj =
+					baileys.proto.WebMessageInfo.fromObject({
+						key: {
+							fromMe: m.quoted.fromMe,
+							remoteJid: m.quoted.from,
+							id: m.quoted.id,
+						},
+						message: m.quoted.message,
+						...(m.isGroup
+							? {
+									participant: m.quoted.sender,
+								}
+							: {}),
+					}));
 				m.getQuotedObj = m.getQuotedMessage = async () => {
 					if (!m.quoted.id) {
 						return null;
 					}
-					let q = proto.WebMessageInfo.fromObject(
+					let q = baileys.proto.WebMessageInfo.fromObject(
 						(await store.loadMessage(m.from, m.quoted.id)) || vM
 					);
 					return await serialize(sock, q, store);

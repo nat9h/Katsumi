@@ -1,4 +1,4 @@
-import { generateWAMessageFromContent, proto, toNumber } from "baileys";
+import baileys, { generateWAMessageFromContent, toNumber } from "baileys";
 import { getFile } from "../../lib/functions.js";
 
 export default {
@@ -74,7 +74,7 @@ export default {
 				const gp = await getFile(pp);
 				const msgs = generateWAMessageFromContent(
 					res.jid,
-					proto.Message.fromObject({
+					baileys.proto.Message.fromObject({
 						groupInviteMessage: {
 							groupJid: m.from,
 							inviteCode: code,

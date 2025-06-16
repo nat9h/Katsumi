@@ -1,5 +1,5 @@
 import { readdirSync, watch } from "fs";
-import NodeCache from "node-cache";
+import { LRUCache } from "lru-cache";
 import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { BOT_CONFIG } from "../config/index.js";
@@ -15,13 +15,14 @@ class PluginManager {
 	constructor(botConfig) {
 		this.plugins = [];
 		this.sessionName = BOT_CONFIG.sessionName;
-		this.cooldowns = new NodeCache({ stdTTL: 0, checkperiod: 60 });
-		this.usageLimits = new NodeCache({ stdTTL: 86400 });
+		this.cooldowns = new LRUCache({ max: 1000, maxAge: 1000 * 60 * 60 });
+		this.usageLimits = new LRUCache({ max: 1000, maxAge: 86400 * 1000 });
 		this.botConfig = botConfig;
 		this.commandQueues = new Map();
 		this.processingStatus = new Map();
 		this.debounceTimeout = null;
 		this.store = new Store(this.sessionName);
+		this.MAX_QUEUE_PER_USER = 5;
 	}
 
 	async loadPlugins() {
@@ -37,6 +38,8 @@ class PluginManager {
 
 			print.info(`🌱 Loading plugins from: ${pluginsDir}`);
 
+			const pluginLoadPromises = [];
+
 			for (const folder of pluginFolders) {
 				const folderPath = join(pluginsDir, folder);
 				const pluginFiles = readdirSync(folderPath).filter(
@@ -47,28 +50,35 @@ class PluginManager {
 					const absolutePath = join(folderPath, file);
 					const pluginURL = pathToFileURL(absolutePath).href;
 
-					try {
-						const module = await import(
-							`${pluginURL}?update=${Date.now()}`
-						);
-						const plugin = module.default;
+					pluginLoadPromises.push(
+						(async () => {
+							try {
+								const module = await import(
+									`${pluginURL}?update=${Date.now()}`
+								);
+								const plugin = module.default;
 
-						if (!this.validatePlugin(plugin, file)) {
-							continue;
-						}
+								if (!this.validatePlugin(plugin, file)) return;
 
-						this.configurePluginDefaults(plugin);
-						plugin.filePath = absolutePath;
-						this.plugins.push(plugin);
+								this.configurePluginDefaults(plugin);
+								plugin.filePath = absolutePath;
+								this.plugins.push(plugin);
 
-						print.info(
-							`✔ Loaded: ${plugin.name} (${plugin.command.join(", ")})`
-						);
-					} catch (error) {
-						print.error(`❌ Failed to load ${file}:`, error);
-					}
+								print.info(
+									`✔ Loaded: ${plugin.name} (${plugin.command.join(", ")})`
+								);
+							} catch (error) {
+								print.error(
+									`❌ Failed to load ${file}:`,
+									error
+								);
+							}
+						})()
+					);
 				}
 			}
+
+			await Promise.all(pluginLoadPromises);
 			print.info(`🚀 Successfully loaded ${this.plugins.length} plugins`);
 		} catch (dirError) {
 			print.error("Plugin directory error:", dirError);
@@ -153,6 +163,13 @@ class PluginManager {
 
 		const queue = this.commandQueues.get(senderJid);
 
+		if (queue.length >= this.MAX_QUEUE_PER_USER) {
+			print.debug(
+				`🚫 Queue full for ${senderJid}. Dropping command: ${m.command}`
+			);
+			return;
+		}
+
 		const isDuplicate = queue.some(
 			(item) => item.m.command === m.command && item.m.args === m.args
 		);
@@ -227,7 +244,7 @@ class PluginManager {
 
 		const cooldownKey = `${m.sender}:${plugin.name}`;
 		if (this.cooldowns.has(cooldownKey)) {
-			const remaining = this.cooldowns.getTtl(cooldownKey) - Date.now();
+			const remaining = this.cooldowns.getRemainingTTL(cooldownKey);
 			const seconds = Math.ceil(remaining / 1000);
 
 			await m.reply(
@@ -425,11 +442,9 @@ class PluginManager {
 			}
 
 			if (plugin.cooldown > 0) {
-				this.cooldowns.set(
-					`${m.sender}:${plugin.name}`,
-					true,
-					plugin.cooldown
-				);
+				this.cooldowns.set(`${m.sender}:${plugin.name}`, true, {
+					ttl: plugin.cooldown * 1000,
+				});
 			}
 			if (plugin.react) {
 				await m.react("✅");
