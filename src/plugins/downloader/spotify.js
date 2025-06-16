@@ -75,8 +75,9 @@ export default {
 
 		let nginfo = `🕊 Spotify: *${input}*\n\n`;
 		nginfo += "_Note: Reply with the number to download (e.g. 1)_\n\n";
+		nginfo += "*List:*\n";
 		result.forEach((track, i) => {
-			nginfo += `*List:*\n*${i + 1}*. ${track.artist.join(", ")} - ${track.title}\n`;
+			nginfo += `*${i + 1}*. ${track.artist.join(", ")} - ${track.title}\n`;
 		});
 		const sent = await m.reply(nginfo.trim());
 
