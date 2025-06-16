@@ -37,7 +37,9 @@ const downloadMedia = async (message, pathFile) => {
 		mimeMap[type]
 	);
 	const buffer = [];
-	for await (const chunk of stream) buffer.push(chunk);
+	for await (const chunk of stream) {
+		buffer.push(chunk);
+	}
 
 	const data = Buffer.concat(buffer);
 	if (pathFile) {
@@ -90,7 +92,9 @@ const parsePhoneNumber = (number) => {
 	};
 
 	for (const [prefix, formatter] of Object.entries(formatters)) {
-		if (cleaned.startsWith(prefix)) return formatter(cleaned);
+		if (cleaned.startsWith(prefix)) {
+			return formatter(cleaned);
+		}
 	}
 	return number;
 };

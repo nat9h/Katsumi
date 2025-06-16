@@ -58,7 +58,9 @@ class PluginManager {
 								);
 								const plugin = module.default;
 
-								if (!this.validatePlugin(plugin, file)) return;
+								if (!this.validatePlugin(plugin, file)) {
+									return;
+								}
 
 								this.configurePluginDefaults(plugin);
 								plugin.filePath = absolutePath;
