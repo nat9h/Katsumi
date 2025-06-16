@@ -37,51 +37,60 @@ const downloadMedia = async (message, pathFile) => {
 		mimeMap[type]
 	);
 	const buffer = [];
-	for await (const chunk of stream) {
-		buffer.push(chunk);
-	}
+	for await (const chunk of stream) buffer.push(chunk);
+
+	const data = Buffer.concat(buffer);
 	if (pathFile) {
-		await promises.writeFile(pathFile, Buffer.concat(buffer));
+		await promises.writeFile(pathFile, data);
 		return pathFile;
 	}
-	return Buffer.concat(buffer);
+	return data;
 };
 
-function parseMessage(content) {
+const parseMessage = (content) => {
 	content = extractMessageContent(content);
 
-	if (content?.viewOnceMessageV2Extension) {
-		content = content.viewOnceMessageV2Extension.message;
-	}
-	if (content?.protocolMessage?.type === 14) {
-		const type = getContentType(content.protocolMessage);
-		content = content.protocolMessage[type];
-	}
-	if (content?.message) {
-		const type = getContentType(content.message);
-		content = content.message[type];
+	const handlers = [
+		(msg) => msg?.viewOnceMessageV2Extension?.message,
+		(msg) =>
+			msg?.protocolMessage?.type === 14
+				? msg.protocolMessage[getContentType(msg.protocolMessage)]
+				: msg,
+		(msg) =>
+			msg?.message ? msg.message[getContentType(msg.message)] : msg,
+	];
+
+	for (const handler of handlers) {
+		const result = handler(content);
+		if (result) {
+			content = result;
+			break;
+		}
 	}
 
 	return content;
-}
+};
 
 const parsePhoneNumber = (number) => {
-	let cleaned = ("" + number).replace(/\D/g, "");
-	if (cleaned.startsWith("62")) {
-		if (cleaned.length >= 11 && cleaned.length <= 13) {
-			return `+${cleaned.slice(0, 2)} ${cleaned.slice(2, 6)} ${cleaned.slice(6, 10)} ${cleaned.slice(10)}`;
-		}
-		if (cleaned.length === 10) {
-			return `+${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7)}`;
-		}
-	}
-	if (cleaned.startsWith("1")) {
-		if (cleaned.length === 10) {
-			return `+1 ${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-		}
-		if (cleaned.length === 11) {
-			return `+${cleaned.slice(0, 1)} ${cleaned.slice(1, 4)}-${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
-		}
+	const cleaned = ("" + number).replace(/\D/g, "");
+
+	const formatters = {
+		62: (num) =>
+			num.length >= 11 && num.length <= 13
+				? `+${num.slice(0, 2)} ${num.slice(2, 6)} ${num.slice(6, 10)} ${num.slice(10)}`
+				: num.length === 10
+					? `+${num.slice(0, 2)} ${num.slice(2, 4)} ${num.slice(4, 7)} ${num.slice(7)}`
+					: num,
+		1: (num) =>
+			num.length === 10
+				? `+1 ${num.slice(0, 3)}-${num.slice(3, 6)}-${num.slice(6)}`
+				: num.length === 11
+					? `+${num.slice(0, 1)} ${num.slice(1, 4)}-${num.slice(4, 7)}-${num.slice(7)}`
+					: num,
+	};
+
+	for (const [prefix, formatter] of Object.entries(formatters)) {
+		if (cleaned.startsWith(prefix)) return formatter(cleaned);
 	}
 	return number;
 };
@@ -116,7 +125,7 @@ export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 		return lidMap[jid];
 	}
 	const found = participants.find((p) => p.id === jid || p.lid === jid);
-	return found?.phoneNumber || found?.id || jid;
+	return found?.jid || found?.phoneNumber || found?.id || jid;
 }
 
 export function Client({ sock, store }) {
@@ -614,7 +623,7 @@ export default async function serialize(sock, msg, store) {
 			try {
 				metadata = await sock.groupMetadata(m.from);
 				store.setGroupMetadata(m.from, metadata);
-			} catch (e) {
+			} catch {
 				metadata = null;
 			}
 		}
