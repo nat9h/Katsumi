@@ -51,7 +51,7 @@ export default {
 			}
 			if (res.status == 408) {
 				await m.reply(
-					`Link has been successfully sent to @${parseInt(res.jid)}, please wait for the user to join the group.`
+					`Link has been successfully sent to @${res.jid}, please wait for the user to join the group.`
 				);
 				await sock.sendMessage(res.jid, {
 					text:
@@ -60,13 +60,7 @@ export default {
 				});
 			}
 			if (res.status == 403) {
-				await m.reply(
-					`Invite message has been sent to @${parseInt(res.jid)}`,
-					true,
-					{
-						mentions: [res.jid],
-					}
-				);
+				await m.reply(`Invite message has been sent to @${res.jid}`);
 				const { code, expiration } = res.content.content[0].attrs;
 				const pp = await sock
 					.profilePictureUrl(m.from)

@@ -354,7 +354,7 @@ export function Client({ sock, store }) {
 		},
 
 		parseMention: {
-			value(text, participants = []) {
+			value(text, participants = [], lidMap = {}) {
 				const tags = [...text.matchAll(/@([0-9]{5,16}|0)/g)].map(
 					(v) => v[1]
 				);
@@ -365,27 +365,31 @@ export function Client({ sock, store }) {
 				) {
 					return [];
 				}
-
-				const ids = [];
+				const jids = [];
 				for (const number of tags) {
 					const found = participants.find(
 						(p) =>
-							(p.phoneNumber && p.phoneNumber.includes(number)) ||
+							(p.phoneNumber &&
+								p.phoneNumber
+									.replace(/\D/g, "")
+									.endsWith(number)) ||
 							(p.id && p.id.replace(/\D/g, "").endsWith(number))
 					);
 					if (found) {
 						if (found.id && found.id.endsWith("@lid")) {
-							ids.push(found.id);
+							jids.push(
+								resolveLidToJid(found.id, participants, lidMap)
+							);
 						} else if (found.phoneNumber) {
-							ids.push(found.phoneNumber);
+							jids.push(found.phoneNumber);
 						} else if (found.id) {
-							ids.push(found.id);
+							jids.push(found.id);
 						}
 					} else {
-						ids.push(number + "@s.whatsapp.net");
+						jids.push(number + "@s.whatsapp.net");
 					}
 				}
-				return ids;
+				return jids;
 			},
 		},
 
