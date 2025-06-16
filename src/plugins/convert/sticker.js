@@ -196,7 +196,7 @@ export default {
 			let buffer = null;
 			while (attempts < maxRetries) {
 				try {
-					const response = await fetch("https://s.hanni.baby");
+					const response = await fetch("https://sticker.rmdni.id");
 					const arrayBuffer = await response.arrayBuffer();
 					buffer = Buffer.from(arrayBuffer);
 					break;
