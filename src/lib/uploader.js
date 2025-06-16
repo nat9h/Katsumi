@@ -145,7 +145,7 @@ class NetorareProvider extends Provider {
 				"Content-Type": "multipart/form-data",
 			},
 		});
-		return data.result.url;
+		return "https://scdn.pdi.moe" + data.result.downloadUrl;
 	}
 }
 

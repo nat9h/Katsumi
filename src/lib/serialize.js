@@ -86,32 +86,6 @@ const parsePhoneNumber = (number) => {
 	return number;
 };
 
-/**
- * Build a fast lookup map of lid jid to phoneNumber.
- * @param {Array} participants - Group participants array
- * @returns {Object} - { lidJid: phoneNumber }
- */
-export function buildLidMap(participants = []) {
-	const map = {};
-	for (const p of participants) {
-		if (
-			typeof p.id === "string" &&
-			p.id.endsWith("@lid") &&
-			p.phoneNumber
-		) {
-			map[p.id] = p.phoneNumber;
-		}
-	}
-	return map;
-}
-
-/**
- * Resolve a LID jid (e.g. xxx@lid) to a real jid (xxx@s.whatsapp.net) or phoneNumber.
- * @param {string} jid - The jid to resolve
- * @param {Array} participants - Group participants
- * @param {Object} lidMap - Optional lid-to-phoneNumber map
- * @returns {string} - Resolved jid/phoneNumber or original if not found
- */
 export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 	if (!jid || typeof jid !== "string" || !jid.endsWith("@lid")) {
 		return jid;
@@ -120,8 +94,15 @@ export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 		return lidMap[jid];
 	}
 	const found = participants.find((p) => p.id === jid || p.lid === jid);
-	return found?.phoneNumber || found?.id || jid;
+	return found?.jid || found?.phoneNumber || found?.id || jid;
 }
+
+const extractNum = (jid) => {
+	if (!jid) {
+		return "";
+	}
+	return (jid.match(/\d{8,}/) || [])[0];
+};
 
 export function Client({ sock, store }) {
 	const client = Object.defineProperties(sock, {
@@ -623,28 +604,26 @@ export default async function serialize(sock, msg, store) {
 			}
 		}
 		m.metadata = metadata || null;
-		lidMap = m.metadata ? buildLidMap(m.metadata.participants) : {};
+		lidMap = m.metadata ? {} : {};
 
 		m.groupAdmins = m.metadata
 			? m.metadata.participants
 					.filter((p) => p.admin)
 					.map((p) => ({
-						id: p.phoneNumber || p.id,
+						id: p.jid || p.phoneNumber || p.id,
 						admin: p.admin,
 					}))
 			: [];
 
 		const botJid = jidNormalizedUser(sock.user.id);
 		m.isAdmin = m.groupAdmins.some((admin) => {
-			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
-			const senderNum = m.sender
-				? (m.sender.match(/\d{8,}/) || [])[0]
-				: "";
+			const adminNum = extractNum(admin.id);
+			const senderNum = m.sender ? extractNum(m.sender) : "";
 			return adminNum && senderNum && adminNum === senderNum;
 		});
 		m.isBotAdmin = m.groupAdmins.some((admin) => {
-			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
-			const botNum = (botJid.match(/\d{8,}/) || [])[0];
+			const adminNum = extractNum(admin.id);
+			const botNum = extractNum(botJid);
 			return adminNum && botNum && adminNum === botNum;
 		});
 	} else {
@@ -668,9 +647,7 @@ export default async function serialize(sock, msg, store) {
 				)
 			: jidNormalizedUser(rawParticipant);
 
-	if (!m.participant) {
-		m.participant = "";
-	}
+	if (!m.participant) m.participant = "";
 
 	m.sender = m.fromMe
 		? jidNormalizedUser(sock.user.id)
@@ -680,8 +657,12 @@ export default async function serialize(sock, msg, store) {
 
 	m.pushName = msg.pushName;
 
-	const senderNum = (m.sender.match(/\d{8,}/) || [])[0];
-	m.isOwner = senderNum && BOT_CONFIG.ownerJids.includes(senderNum);
+	const ownerNums = Array.isArray(BOT_CONFIG.ownerJids)
+		? BOT_CONFIG.ownerJids.map(extractNum)
+		: [];
+	const senderNum = extractNum(m.sender);
+
+	m.isOwner = senderNum && ownerNums.includes(senderNum);
 
 	if (m.message) {
 		m.type = getContentType(m.message) || Object.keys(m.message)[0];
@@ -773,6 +754,7 @@ export default async function serialize(sock, msg, store) {
 				)
 					? m.quoted.key.participant
 					: m.quoted.key.remoteJid;
+
 				m.quoted.fromMe = m.quoted.key.fromMe;
 				m.quoted.id = m.msg?.contextInfo?.stanzaId;
 				m.quoted.device = /^3A/.test(m.quoted.id)
@@ -785,28 +767,20 @@ export default async function serialize(sock, msg, store) {
 								? "desktop"
 								: "unknown";
 				m.quoted.isGroup = m.quoted.from.endsWith("@g.us");
-				m.quoted.participant =
-					jidNormalizedUser(m.msg.contextInfo.participant) || false;
 
-				const quotedRawParticipant =
-					typeof m.msg.contextInfo.participant === "string"
-						? m.msg.contextInfo.participant
-						: "";
-
-				m.quoted.participantLid =
-					jidNormalizedUser(quotedRawParticipant);
-
-				let _quotedSender = jidNormalizedUser(
-					quotedRawParticipant || m.quoted.from
-				);
-				m.quoted.sender =
+				const resolvedQuotedSender =
 					m.isGroup && m.metadata
 						? resolveLidToJid(
-								_quotedSender,
+								jidNormalizedUser(
+									m.msg.contextInfo.participant
+								),
 								m.metadata.participants,
 								lidMap
 							)
-						: _quotedSender;
+						: jidNormalizedUser(m.msg.contextInfo.participant);
+
+				m.quoted.participant = resolvedQuotedSender;
+				m.quoted.sender = resolvedQuotedSender;
 
 				m.quoted.mentions = [
 					...(m.quoted.msg?.contextInfo?.mentionedJid || []),
@@ -864,16 +838,13 @@ export default async function serialize(sock, msg, store) {
 					m.quoted.message[m.quoted.type]?.hydratedTemplate
 						?.hydratedContentText ||
 					"";
-
 				m.quoted.url =
 					(m.quoted.text.match(
 						/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
 					) || [])[0] || "";
-				m.quoted.isOwner =
-					m.quoted.sender &&
-					BOT_CONFIG.ownerJids.includes(
-						(m.quoted.sender.match(/\d{8,}/) || [])[0]
-					);
+
+				const quotedNum = extractNum(resolvedQuotedSender);
+				m.quoted.isOwner = quotedNum && ownerNums.includes(quotedNum);
 				m.quoted.isBot = m.quoted.id
 					? (m.quoted.id.startsWith("BAE5") &&
 							m.quoted.id.length === 16) ||
@@ -906,9 +877,7 @@ export default async function serialize(sock, msg, store) {
 							: {}),
 					}));
 				m.getQuotedObj = m.getQuotedMessage = async () => {
-					if (!m.quoted.id) {
-						return null;
-					}
+					if (!m.quoted.id) return null;
 					let q = baileys.proto.WebMessageInfo.fromObject(
 						(await store.loadMessage(m.from, m.quoted.id)) || vM
 					);
@@ -922,7 +891,6 @@ export default async function serialize(sock, msg, store) {
 		let chatId = options?.from ? options.from : m.from;
 		let quoted = options?.quoted ? options.quoted : m;
 		const text = content;
-
 		if (
 			Buffer.isBuffer(text) ||
 			/^data:.?\/.*?;base64,/i.test(text) ||
@@ -957,7 +925,6 @@ export default async function serialize(sock, msg, store) {
 				...options,
 			});
 		}
-
 		if (typeof text === "object" && !Array.isArray(text)) {
 			return sock.sendMessage(
 				chatId,
@@ -977,7 +944,6 @@ export default async function serialize(sock, msg, store) {
 				}
 			);
 		}
-
 		if (typeof text === "string") {
 			return sock.sendMessage(
 				chatId,
@@ -999,10 +965,7 @@ export default async function serialize(sock, msg, store) {
 	m.react = (emoji) => {
 		try {
 			return sock.sendMessage(m.from, {
-				react: {
-					text: String(emoji),
-					key: m.key,
-				},
+				react: { text: String(emoji), key: m.key },
 			});
 		} catch (error) {
 			console.error("Failed to send reaction:", error);

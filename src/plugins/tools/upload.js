@@ -53,6 +53,6 @@ export default {
 			);
 		}
 
-		m.reply(`${await providers[index].upload(buffer)}`.trim());
+		m.reply({ text: `${await providers[index].upload(buffer)}`.trim() });
 	},
 };
