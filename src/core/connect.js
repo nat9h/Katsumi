@@ -88,7 +88,7 @@ class Connect {
 					);
 					print.info(`All auth files removed from: ${authPath}`);
 				} catch (e) {
-					print.error(`Failed to remove local auth files:`, e);
+					print.error("Failed to remove local auth files:", e);
 				}
 			};
 			print.info("Auth store: Local File (" + authPath + ")");

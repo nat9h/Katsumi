@@ -26,38 +26,38 @@ if (useLocal) {
 		},
 	};
 
-    UserModel = {
-        async getUser(id) {
-            await localDB.initialize();
-            return localDB.users.get(id) || {};
-        },
-        async setUser(id, data) {
-            await localDB.initialize();
-            localDB.users.set(id, data);
-            localDB.save();
-        },
-        async setName(id, name) {
-            const user = await this.getUser(id);
-            user.name = name;
-            await this.setUser(id, user);
-        },
-        async setBanned(id, banned = false) {
-            const user = await this.getUser(id);
-            user.banned = banned;
-            await this.setUser(id, user);
-        },
-        async setPremium(id, premium = false, expired = 0) {
-            const user = await this.getUser(id);
-            user.premium = premium;
-            user.premium_expired = expired;
-            await this.setUser(id, user);
-        },
-        async setLimit(id, limit = 0) {
-            const user = await this.getUser(id);
-            user.limit = limit;
-            await this.setUser(id, user);
-        },
-    };
+	UserModel = {
+		async getUser(id) {
+			await localDB.initialize();
+			return localDB.users.get(id) || {};
+		},
+		async setUser(id, data) {
+			await localDB.initialize();
+			localDB.users.set(id, data);
+			localDB.save();
+		},
+		async setName(id, name) {
+			const user = await this.getUser(id);
+			user.name = name;
+			await this.setUser(id, user);
+		},
+		async setBanned(id, banned = false) {
+			const user = await this.getUser(id);
+			user.banned = banned;
+			await this.setUser(id, user);
+		},
+		async setPremium(id, premium = false, expired = 0) {
+			const user = await this.getUser(id);
+			user.premium = premium;
+			user.premium_expired = expired;
+			await this.setUser(id, user);
+		},
+		async setLimit(id, limit = 0) {
+			const user = await this.getUser(id);
+			user.limit = limit;
+			await this.setUser(id, user);
+		},
+	};
 
 	GroupModel = {
 		async getGroup(id) {

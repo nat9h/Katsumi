@@ -58,14 +58,16 @@ class LocalDB {
 	}
 
 	async initialize() {
-		if (this.#initialized) return;
+		if (this.#initialized) {
+			return;
+		}
 		if (!existsSync(this.#path)) {
 			writeFileSync(this.#path, JSON.stringify(this.#data, null, 2));
 		}
 		try {
 			const content = readFileSync(this.#path, "utf-8");
 			this.#data = JSON.parse(content);
-		} catch (e) {
+		} catch {
 			this.#data = {
 				users: {},
 				groups: {},
