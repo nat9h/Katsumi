@@ -2,12 +2,16 @@ import {
 	Browsers,
 	DisconnectReason,
 	fetchLatestBaileysVersion,
+	getAggregateVotesInPollMessage,
 	jidNormalizedUser,
 	makeCacheableSignalKeyStore,
 	makeWASocket,
+	useMultiFileAuthState,
 } from "baileys";
 import { LRUCache } from "lru-cache";
 import { useMySQLAuthState } from "mysql-baileys";
+import { readdir, unlink } from "node:fs/promises";
+import { join } from "node:path";
 import readline from "node:readline";
 import qrcode from "qrcode";
 import { BOT_CONFIG, MYSQL_CONFIG } from "../config/index.js";
@@ -57,19 +61,37 @@ class Connect {
 
 		let state, saveCreds, removeCreds;
 
-		if (process.env.USE_MONGO_AUTH === "true") {
+		if (
+			process.env.AUTH_STORE === "mongodb" ||
+			process.env.USE_MONGO_AUTH === "true"
+		) {
 			const mongoUrl = process.env.MONGO_URI;
 			({ state, saveCreds, removeCreds } = await useMongoDbAuthState(
 				mongoUrl,
 				{ session: this.sessionName }
 			));
 			print.info("Auth store: MongoDB");
-		} else {
+		} else if (process.env.AUTH_STORE === "mysql") {
 			({ state, saveCreds, removeCreds } = await useMySQLAuthState({
 				...MYSQL_CONFIG,
 				session: this.sessionName,
 			}));
 			print.info("Auth store: MySQL");
+		} else {
+			const authPath = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
+			({ state, saveCreds } = await useMultiFileAuthState(authPath));
+			removeCreds = async () => {
+				try {
+					const files = await readdir(authPath);
+					await Promise.all(
+						files.map((file) => unlink(join(authPath, file)))
+					);
+					print.info(`All auth files removed from: ${authPath}`);
+				} catch (e) {
+					print.error(`Failed to remove local auth files:`, e);
+				}
+			};
+			print.info("Auth store: Local File (" + authPath + ")");
 		}
 
 		let usePairingCode = false;
@@ -221,6 +243,24 @@ class Connect {
 		this.sock.ev.on("messages.upsert", (data) =>
 			this.message.process(this.sock, data)
 		);
+
+		this.sock.ev.on("messages.update", async (event) => {
+			for (const { key, update } of event) {
+				if (update.pollUpdates) {
+					const pollCreation = await this.store.loadMessage(
+						jidNormalizedUser(key.remoteJid),
+						key.id
+					);
+					if (pollCreation && pollCreation.message) {
+						const aggregate = getAggregateVotesInPollMessage({
+							message: pollCreation.message,
+							pollUpdates: update.pollUpdates,
+						});
+						print.info("Got poll update, aggregation:", aggregate);
+					}
+				}
+			}
+		});
 
 		this.sock.ev.on(
 			"group-participants.update",

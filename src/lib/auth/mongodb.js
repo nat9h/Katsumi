@@ -174,6 +174,6 @@ export const useMongoDbAuthState = async (
 			},
 		},
 		saveCreds: () => writeData(creds, "creds.json"),
-		clearAll,
+		removeCreds: clearAll,
 	};
 };

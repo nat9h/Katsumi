@@ -132,6 +132,7 @@ dist
 
 
 # Custom Additions
+auth_info_baileys
 baileys_*
 *logs*.txt
 database.json
