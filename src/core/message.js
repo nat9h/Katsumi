@@ -7,6 +7,13 @@ import serialize from "../lib/serialize.js";
  * Class for processing incoming messages and routing them to the PluginManager.
  */
 class Message {
+	/**
+	 * @param {import('../lib/plugins.js').default} pluginManager - The plugin manager instance.
+	 * @param {string[]} ownerJids - An array of owner JIDs (raw numbers).
+	 * @param {string[]} prefixes - An array of bot prefixes.
+	 * @param {import('lru-cache')} groupMetadataCache - Cache for group metadata.
+	 * @param {import('../lib/store.js')} store - Store instance.
+	 */
 	constructor(pluginManager, ownerJids, prefixes, groupMetadataCache, store) {
 		this.pluginManager = pluginManager;
 		this.ownerJids = ownerJids;
@@ -15,6 +22,11 @@ class Message {
 		this.store = store;
 	}
 
+	/**
+	 * Handle 'messages.upsert' event from Baileys.
+	 * @param {import('baileys').WASocket} sock - Baileys socket object.
+	 * @param {{ messages: import('baileys').proto.IWebMessageInfo[], type: string }} data - Message data from the event.
+	 */
 	async process(sock, { messages, type }) {
 		if (type !== "notify") {
 			return;

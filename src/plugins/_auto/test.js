@@ -6,7 +6,7 @@ export default {
 	execute: () => {},
 	periodic: {
 		enabled: true,
-		type: "message",
+		type: "message", // this example for type message
 		run: async function (m) {
 			console.log(
 				`[TEST-PERIODIC] From: ${m.pushName} | Text: ${m.body}`
