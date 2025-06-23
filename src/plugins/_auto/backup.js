@@ -16,7 +16,7 @@ export default {
 	periodic: {
 		enabled: true, // true to enable automatic backup
 		type: "interval", // Required: so it's only called by interval scheduler, not message handler. Options: "interval" or "message"
-		interval: 3_600_000, // ms, adjust for production use (e.g. 3_600_000 for hourly)
+		interval: 1000 * 60 * 60 * 24, // ms, adjust for production use (e.g. 3_600_000 for hourly)
 		run: async function (_, { sock }) {
 			// First param (m) is ignored for interval type
 			// support param 'm' if u using type message, like this -> run: async function (m, { sock }) {...}

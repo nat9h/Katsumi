@@ -1,4 +1,5 @@
 import { SettingsModel } from "../lib/database/index.js";
+import * as db from "../lib/database/index.js";
 import { getPrefix } from "../lib/prefix.js";
 import { print } from "../lib/print.js";
 import serialize from "../lib/serialize.js";
@@ -47,6 +48,7 @@ class Message {
 				const m = await serialize(sock, msg, this.store);
 
 				this.store.saveMessage(m.from, msg);
+				await db.UserModel.setUser(m.sender, { name: m.pushName });
 
 				if (!m || !m.body) {
 					continue;
