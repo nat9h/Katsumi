@@ -23,6 +23,7 @@ class PluginManager {
 		this.debounceTimeout = null;
 		this.store = new Store(this.sessionName);
 		this.MAX_QUEUE_PER_USER = 5;
+		this.periodicTasks = [];
 	}
 
 	async loadPlugins() {
@@ -82,8 +83,34 @@ class PluginManager {
 
 			await Promise.all(pluginLoadPromises);
 			print.info(`🚀 Successfully loaded ${this.plugins.length} plugins`);
+			this.logActivePeriodicTasks();
 		} catch (dirError) {
 			print.error("Plugin directory error:", dirError);
+		}
+	}
+
+	logActivePeriodicTasks() {
+		const periodicInterval = [];
+		const periodicMessage = [];
+		for (const plugin of this.plugins) {
+			const p = plugin.periodic;
+			if (p?.enabled && typeof p.run === "function") {
+				if (p.type === "interval") {
+					periodicInterval.push(plugin.name);
+				} else if (p.type === "message" || !p.type) {
+					periodicMessage.push(plugin.name);
+				}
+			}
+		}
+		if (periodicInterval.length) {
+			print.debug(
+				`🔁 [Scheduler] Active periodic (interval) tasks: ${periodicInterval.join(", ")}`
+			);
+		}
+		if (periodicMessage.length) {
+			print.debug(
+				`🔁 [MessageScheduler] Active periodic (message) tasks: ${periodicMessage.join(", ")}`
+			);
 		}
 	}
 
@@ -102,8 +129,10 @@ class PluginManager {
 						);
 
 						clearTimeout(this.debounceTimeout);
-						this.debounceTimeout = setTimeout(() => {
-							this.loadPlugins();
+						this.debounceTimeout = setTimeout(async () => {
+							await this.loadPlugins();
+							this.stopAllPeriodicTasks();
+							this.scheduleAllPeriodicTasks(this.sock);
 						}, 200);
 					}
 				}
@@ -486,7 +515,87 @@ class PluginManager {
 		};
 	}
 
-	// TODO: make after execute
+	async runPeriodicMessagePlugins(m, sock) {
+		for (const plugin of this.plugins) {
+			const periodic = plugin.periodic;
+			if (
+				periodic?.enabled &&
+				(periodic.type === "message" || !periodic.type) &&
+				typeof periodic.run === "function"
+			) {
+				try {
+					await periodic.run(m, { sock, pluginManager: this });
+				} catch (err) {
+					print.error(`[Periodic ${plugin.name}] Error:`, err);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Only periodic with type: 'interval' is scheduled here.
+	 * Periodic with type: 'message' is called in message handler.
+	 */
+	scheduleAllPeriodicTasks(sock) {
+		this.sock = sock;
+		print.debug(
+			`🚦 [Scheduler] Initiating periodic task scheduling for ${this.plugins.length} plugins...`
+		);
+		this.plugins.forEach((plugin) => {
+			const periodic = plugin.periodic;
+			if (!periodic) {
+				return;
+			}
+			if (
+				periodic.enabled &&
+				periodic.type === "interval" &&
+				typeof periodic.run === "function"
+			) {
+				print.debug(
+					`🔁 [Scheduler] Registering periodic (interval) task: ${plugin.name}`
+				);
+				const timer = setInterval(
+					() =>
+						periodic.run(undefined, {
+							sock,
+							pluginManager: this,
+						}),
+					periodic.interval
+				);
+				this.periodicTasks.push({ name: plugin.name, timer });
+				print.debug(
+					`⏰ [Scheduler] Task '${plugin.name}' scheduled to run every ${periodic.interval / 1000} seconds.`
+				);
+			} else if (
+				periodic.enabled &&
+				periodic.type &&
+				periodic.type !== "interval" &&
+				periodic.type !== "message"
+			) {
+				print.warn(
+					`[Scheduler] WARNING: Plugin '${plugin.name}' uses unknown periodic type '${periodic.type}'`
+				);
+			}
+		});
+		if (!this.periodicTasks.length) {
+			print.debug(
+				"⚠️ [Scheduler] No periodic tasks registered. All clear!"
+			);
+		} else {
+			print.debug(
+				`✅ [Scheduler] All periodic interval tasks are now active. Total: ${this.periodicTasks.length}`
+			);
+		}
+	}
+
+	stopAllPeriodicTasks() {
+		for (const { timer } of this.periodicTasks) {
+			clearInterval(timer);
+		}
+		this.periodicTasks = [];
+		print.debug("🛑 All periodic interval tasks stopped.");
+	}
+
 	async handleAfterPlugins(m, sock) {
 		const params = {
 			sock,

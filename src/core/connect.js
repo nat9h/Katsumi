@@ -156,6 +156,8 @@ class Connect {
 
 		this.sock = Client({ sock: this.sock, store: this.store });
 
+		this.pluginManager.scheduleAllPeriodicTasks(this.sock);
+
 		this.sock.ev.on("creds.update", saveCreds);
 		this.sock.ev.on("contacts.update", (update) => {
 			this.store.updateContacts(update);
