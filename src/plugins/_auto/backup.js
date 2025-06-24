@@ -14,7 +14,7 @@ export default {
 	hidden: true,
 	owner: true,
 	periodic: {
-		enabled: true, // true to enable automatic backup
+		enabled: false, // true to enable automatic backup
 		type: "interval", // Required: so it's only called by interval scheduler, not message handler. Options: "interval" or "message"
 		interval: 1000 * 60 * 60 * 24, // ms, adjust for production use (e.g. 3_600_000 for hourly)
 		run: async function (_, { sock }) {

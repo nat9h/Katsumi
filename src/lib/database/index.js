@@ -27,6 +27,13 @@ if (useLocal) {
 	};
 
 	UserModel = {
+		async getAllUsers() {
+			await localDB.initialize();
+			if (typeof localDB.users.values === "function") {
+				return Array.from(localDB.users.values());
+			}
+			return Object.values(localDB.users);
+		},
 		async getUser(id) {
 			await localDB.initialize();
 			return localDB.users.get(id) || {};

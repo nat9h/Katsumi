@@ -1,4 +1,5 @@
 import Connect from "./core/connect.js";
+import { autoLoadCloneBots } from "./lib/clonebot/load.js";
 import { Colors, colorize } from "./lib/colors.js";
 import print from "./lib/print.js";
 
@@ -51,6 +52,7 @@ try {
 	print.info("Bot started & periodic task scheduled!");
 
 	await bot.start();
+	await autoLoadCloneBots();
 
 	process.on("SIGINT", async () => {
 		print.debug(colorize(Colors.FgYellow, "🛑 Stopping bot..."));

@@ -3,6 +3,10 @@ import { getCollection } from "../db.js";
 const COLLECTION = "users";
 
 export class UserModel {
+	static async getAllUsers() {
+		const col = await getCollection(COLLECTION);
+		return col.find({}).toArray();
+	}
 	/**
 	 * Get a user by JID, auto-create if not exists (schema compliant).
 	 * @param {string} jid

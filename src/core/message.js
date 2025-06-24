@@ -67,7 +67,7 @@ class Message {
 
 				await print(m, sock);
 
-				if (settings.self && !m.isOwner) {
+				if (settings.self && !m.isOwner && !m.isClonebot) {
 					continue;
 				}
 				if (settings.groupOnly && !m.isGroup && !m.isOwner) {

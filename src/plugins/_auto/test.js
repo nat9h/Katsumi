@@ -8,9 +8,6 @@ export default {
 		enabled: true,
 		type: "message", // this example for type message
 		run: async function (m) {
-			console.log(
-				`[TEST-PERIODIC] From: ${m.pushName} | Text: ${m.body}`
-			);
 			if ((m.body || "").toLowerCase().includes("tes")) {
 				await m.reply("tis");
 			}

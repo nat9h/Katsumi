@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { BOT_CONFIG } from "../config/index.js";
 import * as db from "../lib/database/index.js";
 import { APIRequest as api } from "../utils/API/request.js";
+import { setAllCommands } from "./prefix.js";
 import print from "./print.js";
 import Store from "./store.js";
 
@@ -82,11 +83,18 @@ class PluginManager {
 			}
 
 			await Promise.all(pluginLoadPromises);
+			setAllCommands(this.getAllCommands());
 			print.info(`🚀 Successfully loaded ${this.plugins.length} plugins`);
 			this.logActivePeriodicTasks();
 		} catch (dirError) {
 			print.error("Plugin directory error:", dirError);
 		}
+	}
+
+	getAllCommands() {
+		return this.plugins.flatMap((plugin) =>
+			plugin.command.map((cmd) => cmd.toLowerCase())
+		);
 	}
 
 	logActivePeriodicTasks() {
@@ -131,6 +139,7 @@ class PluginManager {
 						clearTimeout(this.debounceTimeout);
 						this.debounceTimeout = setTimeout(async () => {
 							await this.loadPlugins();
+							setAllCommands(this.getAllCommands());
 							this.stopAllPeriodicTasks();
 							this.scheduleAllPeriodicTasks(this.sock);
 						}, 200);
@@ -311,8 +320,11 @@ class PluginManager {
 		return false;
 	}
 
-	async checkPermissions(plugin, m) {
+	async checkPermissions(plugin, m, sock) {
 		const isOwner = m.isOwner;
+		const isClonebot =
+			(m.sock && m.sock.isClonebot) ||
+			(typeof sock !== "undefined" && sock.isClonebot);
 
 		let isGroupAdmin = false;
 		if (m.isGroup && m.metadata?.participants) {
@@ -325,6 +337,14 @@ class PluginManager {
 		}
 
 		if (plugin.owner && !isOwner) {
+			await m.reply("🔒 Owner-only command");
+			if (plugin.react) {
+				await m.react("❌");
+			}
+			return true;
+		}
+
+		if (plugin.owner && isClonebot && !m.isOwner) {
 			await m.reply("🔒 Owner-only command");
 			if (plugin.react) {
 				await m.react("❌");

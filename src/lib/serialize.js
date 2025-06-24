@@ -20,6 +20,7 @@ import pino from "pino";
 import { BOT_CONFIG } from "../config/index.js";
 import * as Func from "./functions.js";
 import { mimeMap } from "./media.js";
+import { getPrefix } from "./prefix.js";
 import Sticker from "./sticker.js";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
@@ -130,6 +131,12 @@ export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 	}
 	const found = participants.find((p) => p.id === jid || p.lid === jid);
 	return found?.jid || found?.phoneNumber || found?.id || jid;
+}
+
+function safeParseMention(sock, text) {
+	return typeof sock.parseMention === "function"
+		? sock.parseMention(text)
+		: [];
 }
 
 export function Client({ sock, store }) {
@@ -363,42 +370,12 @@ export function Client({ sock, store }) {
 		},
 
 		parseMention: {
-			value(text, participants = [], lidMap = {}) {
-				const tags = [...text.matchAll(/@([0-9]{5,16}|0)/g)].map(
-					(v) => v[1]
+			value(text) {
+				return (
+					[...text.matchAll(/@([0-9]{5,16}|0)/g)].map(
+						(v) => v[1] + "@s.whatsapp.net"
+					) || []
 				);
-				if (
-					!participants ||
-					!Array.isArray(participants) ||
-					!tags.length
-				) {
-					return [];
-				}
-				const jids = [];
-				for (const number of tags) {
-					const found = participants.find(
-						(p) =>
-							(p.phoneNumber &&
-								p.phoneNumber
-									.replace(/\D/g, "")
-									.endsWith(number)) ||
-							(p.id && p.id.replace(/\D/g, "").endsWith(number))
-					);
-					if (found) {
-						if (found.id && found.id.endsWith("@lid")) {
-							jids.push(
-								resolveLidToJid(found.id, participants, lidMap)
-							);
-						} else if (found.phoneNumber) {
-							jids.push(found.phoneNumber);
-						} else if (found.id) {
-							jids.push(found.id);
-						}
-					} else {
-						jids.push(number + "@s.whatsapp.net");
-					}
-				}
-				return jids;
 			},
 		},
 
@@ -585,6 +562,9 @@ export function Client({ sock, store }) {
 export default async function serialize(sock, msg, store) {
 	const m = {};
 
+	m.sock = sock;
+	m.isClonebot = sock.isClonebot || false;
+
 	if (!msg.message) {
 		return null;
 	}
@@ -725,25 +705,26 @@ export default async function serialize(sock, msg, store) {
 			m.msg?.name ||
 			"";
 
-		m.prefix = new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi").test(
-			m.body
-		)
-			? m.body.match(
-					new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi")
-				)[0]
-			: "";
-		m.command =
-			m.body &&
-			m.body.trim().replace(m.prefix, "").trim().split(/ +/).shift();
-		m.args =
-			m.body
-				.trim()
-				.replace(new RegExp("^" + Func.escapeRegExp(m.prefix), "i"), "")
-				.replace(m.command, "")
-				.split(/ +/)
-				.filter((a) => a) || [];
-		m.text = m.args.join(" ").trim();
-		m.isCommand = false;
+		// m.prefix = new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi").test(
+		// 	m.body
+		// )
+		// 	? m.body.match(
+		// 			new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi")
+		// 		)[0]
+		// 	: "";
+		// m.command =
+		// 	m.body &&
+		// 	m.body.trim().replace(m.prefix, "").trim().split(/ +/).shift();
+		// m.args =
+		// 	m.body
+		// 		.trim()
+		// 		.replace(new RegExp("^" + Func.escapeRegExp(m.prefix), "i"), "")
+		// 		.replace(m.command, "")
+		// 		.split(/ +/)
+		// 		.filter((a) => a) || [];
+		// m.text = m.args.join(" ").trim();
+		// m.isCommand = false;
+		Object.assign(m, getPrefix(m.body, m));
 
 		m.expiration = m.msg?.contextInfo?.expiration || 0;
 		m.isMedia =
@@ -927,10 +908,9 @@ export default async function serialize(sock, msg, store) {
 		}
 	}
 
-	m.reply = async (content, options = {}) => {
+	m.reply = async (text, options = {}) => {
 		let chatId = options?.from ? options.from : m.from;
 		let quoted = options?.quoted ? options.quoted : m;
-		const text = content;
 
 		if (
 			Buffer.isBuffer(text) ||
@@ -949,7 +929,10 @@ export default async function serialize(sock, msg, store) {
 					chatId,
 					{
 						text: data.data.toString(),
-						mentions: [m.sender, ...sock.parseMention(text)],
+						mentions: [
+							m.sender,
+							...safeParseMention(sock, data.data.toString()),
+						],
 						...options,
 					},
 					{
@@ -974,7 +957,7 @@ export default async function serialize(sock, msg, store) {
 					...text,
 					mentions: [
 						m.sender,
-						...sock.parseMention(JSON.stringify(text)),
+						...safeParseMention(sock, JSON.stringify(text)),
 					],
 					...options,
 				},
@@ -992,7 +975,7 @@ export default async function serialize(sock, msg, store) {
 				chatId,
 				{
 					text,
-					mentions: [m.sender, ...sock.parseMention(text)],
+					mentions: [m.sender, ...safeParseMention(sock, text)],
 					...options,
 				},
 				{

@@ -17,7 +17,13 @@ export const MYSQL_CONFIG = {
  */
 export const BOT_CONFIG = {
 	sessionName: process.env.BOT_SESSION_NAME || "sessions",
-	prefixes: (process.env.BOT_PREFIXES || "!").split(","),
+	prefixes: process.env.BOT_PREFIXES
+		? process.env.BOT_PREFIXES.includes("[")
+			? JSON.parse(process.env.BOT_PREFIXES.replace(/'/g, '"'))
+			: process.env.BOT_PREFIXES.split(",")
+					.map((p) => p.trim())
+					.filter(Boolean)
+		: [],
 	ownerJids: process.env.OWNER_JIDS
 		? process.env.OWNER_JIDS.includes("[")
 			? JSON.parse(process.env.OWNER_JIDS.replace(/'/g, '"'))

@@ -1,16 +1,14 @@
 import { BOT_CONFIG } from "../config/index.js";
 
-/**
- * Determines the prefix for a given message body and sender.
- * Owner can use no-prefix or prefix, regular users must use a prefix.
- *
- * @param {string} body - The message body.
- * @param {string} senderJid - The JID of the sender (e.g., "6285175106460@s.whatsapp.net").
- * @returns {{prefix: string, isCommand: boolean, command: string, args: string[], text: string}} An object containing prefix, isCommand, command, args, and text.
- */
+export let allCmd = [];
+
+export function setAllCommands(list) {
+	allCmd = (list || []).map((cmd) => cmd.toLowerCase());
+}
+
 export function getPrefix(body, m) {
 	const isOwner = m.isOwner;
-	const prefixes = BOT_CONFIG.prefixes;
+	const prefixes = (BOT_CONFIG.prefixes || []).filter(Boolean);
 
 	let prefix = "";
 	let isCommand = false;
@@ -22,7 +20,9 @@ export function getPrefix(body, m) {
 		return { prefix, isCommand, command, args, text };
 	}
 
-	for (const p of prefixes) {
+	const sortedPrefixes = prefixes.slice().sort((a, b) => b.length - a.length);
+
+	for (const p of sortedPrefixes) {
 		if (body.startsWith(p)) {
 			prefix = p;
 			isCommand = true;
@@ -30,18 +30,19 @@ export function getPrefix(body, m) {
 		}
 	}
 
-	if (!isCommand && isOwner) {
+	if (!isCommand && isOwner && sortedPrefixes.length && allCmd.length) {
 		const parts = body.trim().split(/\s+/);
-		if (parts.length > 0) {
-			command = parts[0].toLowerCase();
+		const possibleCmd = (parts[0] || "").toLowerCase();
+		if (allCmd.includes(possibleCmd)) {
+			command = possibleCmd;
 			args = parts.slice(1);
 			text = args.join(" ");
 			isCommand = true;
 		}
 	} else if (isCommand) {
-		const contentWithoutPrefix = body.substring(prefix.length).trim();
+		const contentWithoutPrefix = body.slice(prefix.length).trim();
 		const parts = contentWithoutPrefix.split(/\s+/);
-		command = parts.shift()?.toLowerCase() || "";
+		command = (parts.shift() || "").toLowerCase();
 		args = parts;
 		text = args.join(" ");
 	}
