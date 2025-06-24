@@ -6,6 +6,14 @@ export function setAllCommands(list) {
 	allCmd = (list || []).map((cmd) => cmd.toLowerCase());
 }
 
+/*
+ * Determines the prefix for a given message body and sender.
+ * Owner can use no-prefix or prefix, regular users must use a prefix.
+ *
+ * @param {string} body - The message body.Add commentMore actions
+ * @param {string} senderJid - The JID of the sender (e.g., "6285175106460@s.whatsapp.net").
+ * @returns {{prefix: string, isCommand: boolean, command: string, args: string[], text: string}} An object containing prefix, isCommand, command, args, and text.
+ */
 export function getPrefix(body, m) {
 	const isOwner = m.isOwner;
 	const prefixes = (BOT_CONFIG.prefixes || []).filter(Boolean);

@@ -14,7 +14,7 @@ export default {
 
 	/**
 	 * @param {import("../../lib/serialize.js").SerializedMessage} m
-	 * @param {string[]} args 
+	 * @param {string[]} args
 	 */
 	execute: async (m, { args }) => {
 		const arg = (args[0] || "").replace(/\D/g, "");
