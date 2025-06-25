@@ -2,6 +2,7 @@ import cp, { exec as _exec } from "child_process";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "fs";
 import { promisify } from "util";
 import { BOT_CONFIG } from "../../config/index.js";
+import { SettingsModel } from "../../lib/database/index.js";
 import print from "../../lib/print.js";
 
 const exec = promisify(_exec).bind(cp);
@@ -14,12 +15,17 @@ export default {
 	hidden: true,
 	owner: true,
 	periodic: {
-		enabled: false, // true to enable automatic backup
+		enabled: false, // true to enable automatic backup, u can setting on command
 		type: "interval", // Required: so it's only called by interval scheduler, not message handler. Options: "interval" or "message"
 		interval: 1000 * 60 * 60 * 24, // ms, adjust for production use (e.g. 3_600_000 for hourly)
 		run: async function (_, { sock }) {
 			// First param (m) is ignored for interval type
 			// support param 'm' if u using type message, like this -> run: async function (m, { sock }) {...}
+			const settings = await SettingsModel.getSettings();
+			// this key must be the same as the plugins "name" property
+			if (!settings.autobackup) {
+				return;
+			}
 			const ownerJids = BOT_CONFIG.ownerJids.map(
 				(j) => `${j}@s.whatsapp.net`
 			);

@@ -49,7 +49,7 @@ export default {
 
 		return m.reply(
 			[
-				`🛑 *CloneBot Session Stopped & Deleted!*`,
+				"🛑 *CloneBot Session Stopped & Deleted!*",
 				`• *Session ID:* ${found._id}`,
 				`• *Phone:* +${found.phone}`,
 				"",

@@ -3,7 +3,7 @@ import { SettingsModel } from "../../lib/database/index.js";
 export default {
 	name: "mode",
 	description: "Set bot operation mode: self / group / private / public",
-	command: ["mode", "setting"],
+	command: ["mode"],
 	category: "owner",
 	permissions: "owner",
 	wait: null,

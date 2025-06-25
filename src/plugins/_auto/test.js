@@ -5,7 +5,7 @@ export default {
 	owner: false,
 	execute: () => {},
 	periodic: {
-		enabled: true,
+		enabled: false,
 		type: "message", // this example for type message
 		run: async function (m) {
 			if ((m.body || "").toLowerCase().includes("tes")) {

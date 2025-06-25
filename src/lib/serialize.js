@@ -18,6 +18,7 @@ import { existsSync, promises, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pino from "pino";
 import { BOT_CONFIG } from "../config/index.js";
+import { to_audio } from "../utils/converter.js";
 import * as Func from "./functions.js";
 import { mimeMap } from "./media.js";
 import { getPrefix } from "./prefix.js";
@@ -462,7 +463,7 @@ export function Client({ sock, store }) {
 					};
 				} else if (/audio/.test(mime)) {
 					data = {
-						audio: buffer,
+						audio: await to_audio(buffer, "mp3"),
 						mimetype: options?.mimetype
 							? options.mimetype
 							: "audio/mpeg",

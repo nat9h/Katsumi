@@ -7,7 +7,9 @@ export async function autoLoadCloneBots() {
 	let activeCount = 0;
 
 	for (const session of sessions) {
-		if (!session.connected) continue;
+		if (!session.connected) {
+			continue;
+		}
 
 		const bot = new CloneBot(session.phone);
 

@@ -1,22 +1,17 @@
-import { to_audio } from "../../utils/converter.js";
+import { basename, extname } from "path";
+import qs from "querystring";
 
 export default {
 	name: "fetcher",
-	description: "Fetches metadata and content from a URL.",
+	description: "Fetch metadata and content from URL.",
 	command: ["get", "fetch"],
 	permissions: "all",
-	hidden: false,
-	failed: "Failed to %command: %error",
-	wait: null,
 	category: "tools",
 	cooldown: 5,
-	limit: true,
-	usage: "$prefix$command <url>",
+	wait: null,
 	react: true,
-	botAdmin: false,
-	group: false,
-	private: false,
-	owner: false,
+	failed: "Failed to %command: %error",
+	usage: "$prefix$command <url>",
 
 	execute: async (m, { args }) => {
 		const url = args[0]
@@ -25,98 +20,148 @@ export default {
 				? m.quoted.url?.trim()
 				: "";
 
-		if (!url) {
-			return m.reply("Need url.");
+		const urlMatch = url.match(/https?:\/\/[^\s]+/);
+		if (!urlMatch) {
+			return m.reply(
+				[
+					"*🌐 Fetcher Bot Usage*",
+					"",
+					"*Example Usage:*",
+					`⤷ \`${m.prefix + m.command} https://google.com\``,
+					"",
+					"*Example (POST with Method/Headers):*",
+					`⤷ \`${m.prefix + m.command} https://httpbin.org/post --method 'POST' --header 'Authorization: Bearer 123' --data 'name: test'\``,
+					"",
+					"*Option List:*",
+					"• \`--method 'GET/POST/DELETE/PUT'\`",
+					"• \`--header 'name: value'\`",
+					"• \`--data 'name: value'\`",
+					"• \`--form 'name: value'\`",
+					"• \`--json\`  _(send data as JSON)_",
+					"• \`--redirect\`",
+					"• \`--head\`  _(show response headers only)_",
+					"• \`--family '0/4/6'\`",
+				].join("\n")
+			);
 		}
 
-		const formatUrl = url.match(/^https?:\/\//) ? url : `https://${url}`;
-		const response = await fetch(formatUrl);
-
-		const headers = Object.fromEntries(response.headers.entries());
-		const arrayBuffer = await response.arrayBuffer();
-		const buffer = Buffer.from(arrayBuffer);
-
-		const maxSize = 200 * 1024 * 1024;
-		if (buffer.length >= maxSize) {
-			return m.reply("File size is over 200MB, cannot send.");
-		}
-
-		const mediaMap = {
-			image: "image",
-			video: "video",
-			audio: "audio",
-			document: "application",
+		const inputText = m.body || "";
+		const options = parseOptions(inputText.replace(url, ""));
+		const requestOptions = {
+			method: options.method || "GET",
+			headers: options.headers,
+			redirect: options.redirect ? "follow" : "manual",
+			family: options.family,
 		};
 
-		function getContentType() {
-			const contentType = headers?.["content-type"] || "";
-			for (const key in mediaMap) {
-				if (contentType.includes(mediaMap[key])) {
-					return key;
-				}
+		if (
+			["POST", "PUT", "DELETE"].includes(requestOptions.method) &&
+			(Object.keys(options.data).length > 0 ||
+				Object.keys(options.form).length > 0)
+		) {
+			if (options.json) {
+				requestOptions.body = JSON.stringify(
+					options.data || options.form
+				);
+				requestOptions.headers["Content-Type"] = "application/json";
+			} else {
+				requestOptions.body = qs.stringify(
+					options.data || options.form
+				);
+				requestOptions.headers["Content-Type"] =
+					"application/x-www-form-urlencoded";
 			}
-			return "document";
 		}
 
-		const contentType = getContentType();
+		const response = await fetch(url, requestOptions);
+		const contentType = response.headers.get("content-type") || "";
+		const contentDisposition = response.headers.get("content-disposition");
+		const oldFilename =
+			contentDisposition
+				?.split("filename=")[1]
+				?.replace(/["']/g, "")
+				.trim() || basename(new URL(url).pathname);
 
-		const randomName =
-			Date.now() + "_" + Math.random().toString(36).substr(2, 8);
-
-		const urlExt = url.split(".").pop()?.split("?")[0];
-		const ext = contentType || (urlExt ? "." + urlExt : ".bin");
-		const fileName = randomName + ext;
-
-		if (contentType === "image") {
-			return m.reply({ image: buffer });
-		}
-
-		if (contentType === "video") {
-			return m.reply({ video: buffer });
-		}
-
-		if (contentType === "audio") {
-			const convert = await to_audio(buffer, "mp3");
-			return m.reply({
-				audio: Buffer.from(convert),
-				mimetype: "audio/mpeg",
-			});
-		}
-
-		if (headers?.["content-type"]?.includes("json")) {
-			let text = buffer.toString("utf-8");
-			try {
-				const obj = JSON.parse(text);
-				text = JSON.stringify(obj, null, 2);
-			} catch (e) {
-				console.log(e);
+		let ext = extname(oldFilename);
+		if (!ext && contentType) {
+			const match = contentType.match(/\/([a-z0-9]+)$/i);
+			if (match) {
+				ext = "." + match[1];
 			}
-			if (text.length > 4000) {
-				return m.reply({
-					document: buffer,
-					fileName,
-					mimetype: headers["content-type"],
-				});
-			}
-			return m.reply(text);
 		}
 
-		if (headers?.["content-type"]?.includes("text")) {
-			const text = buffer.toString("utf-8");
-			if (text.length > 4000) {
-				return m.reply({
-					document: buffer,
-					fileName,
-					mimetype: headers["content-type"],
-				});
+		// const randomPart = randomBytes(4).toString("hex") + "-" + Date.now();
+		// const filename = `Natsumi-${randomPart}${ext || ""}`;
+
+		if (options.head) {
+			let lines = [];
+			for (let [key, value] of response.headers) {
+				lines.push(`${key}: ${value}`);
 			}
-			return m.reply(text);
+			return m.reply(lines.join("\n"));
 		}
 
-		return m.reply({
-			document: buffer,
-			fileName,
-			mimetype: headers["content-type"] || "application/octet-stream",
-		});
+		if (/^image\//i.test(contentType)) {
+			return m.reply(url);
+		}
+
+		if (/^application\/json/i.test(contentType)) {
+			const json = await response.json();
+			return m.reply(formatJson(json));
+		}
+
+		if (/^text\/html/i.test(contentType)) {
+			const html = await response.text();
+			return m.reply(
+				html.slice(0, 65536) +
+					(html.length > 65536 ? "\n\n...(truncated)" : "")
+			);
+		}
+
+		if (/^text\//i.test(contentType)) {
+			const textData = await response.text();
+			return m.reply(textData.slice(0, 65536));
+		}
+
+		return m.reply(url);
 	},
 };
+
+function parseOptions(text = "") {
+	let options = { headers: {}, data: {}, form: {} };
+	(text.match(/--method\s+['"]?(\w+)['"]?/i) || [])[1] &&
+		(options.method = RegExp.$1);
+	for (let match of text.matchAll(
+		/--headers?\s+['"]([^:]+):\s*([^'"]+)['"]/gi
+	)) {
+		options.headers[match[1].trim()] = match[2].trim();
+	}
+	for (let match of text.matchAll(/--data\s+['"]([^:]+):\s*([^'"]+)['"]/gi)) {
+		options.data[match[1].trim()] = match[2].trim();
+	}
+	for (let match of text.matchAll(/--form\s+['"]([^:]+):\s*([^'"]+)['"]/gi)) {
+		options.form[match[1].trim()] = match[2].trim();
+	}
+	/--json/.test(text) && (options.json = true);
+	/--redirect/.test(text) && (options.redirect = true);
+	/--head/.test(text) && (options.head = true);
+	(text.match(/--family\s+['"]?(\d)['"]?/) || [])[1] &&
+		(options.family = parseInt(RegExp.$1));
+	return options;
+}
+
+function formatJson(json, depth = 0) {
+	if (typeof json !== "object" || json === null) {
+		return String(json);
+	}
+	let str = "";
+	for (let key in json) {
+		str +=
+			`${"┊".repeat(depth)}*${key}:* ` +
+			(typeof json[key] === "object"
+				? "\n" + formatJson(json[key], depth + 1)
+				: json[key]) +
+			"\n";
+	}
+	return str;
+}
