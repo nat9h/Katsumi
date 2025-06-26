@@ -1,5 +1,6 @@
-import baileys, {
+import {
 	STORIES_JID,
+	WAProto,
 	areJidsSameUser,
 	chatModificationToAppPatch,
 	downloadContentFromMessage,
@@ -522,7 +523,7 @@ export function Client({ sock, store }) {
 
 				copy.key.remoteJid = jid;
 				copy.key.fromMe = areJidsSameUser(sender, sock.user.id);
-				return baileys.proto.WebMessageInfo.fromObject(copy);
+				return WAProto.WebMessageInfo.fromObject(copy);
 			},
 			enumerable: false,
 		},
@@ -882,25 +883,24 @@ export default async function serialize(sock, msg, store) {
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
 
-				let vM = (m.quoted.fakeObj =
-					baileys.proto.WebMessageInfo.fromObject({
-						key: {
-							fromMe: m.quoted.fromMe,
-							remoteJid: m.quoted.from,
-							id: m.quoted.id,
-						},
-						message: m.quoted.message,
-						...(m.isGroup
-							? {
-									participant: m.quoted.sender,
-								}
-							: {}),
-					}));
+				let vM = (m.quoted.fakeObj = WAProto.WebMessageInfo.fromObject({
+					key: {
+						fromMe: m.quoted.fromMe,
+						remoteJid: m.quoted.from,
+						id: m.quoted.id,
+					},
+					message: m.quoted.message,
+					...(m.isGroup
+						? {
+								participant: m.quoted.sender,
+							}
+						: {}),
+				}));
 				m.getQuotedObj = m.getQuotedMessage = async () => {
 					if (!m.quoted.id) {
 						return null;
 					}
-					let q = baileys.proto.WebMessageInfo.fromObject(
+					let q = WAProto.WebMessageInfo.fromObject(
 						(await store.loadMessage(m.from, m.quoted.id)) || vM
 					);
 					return await serialize(sock, q, store);

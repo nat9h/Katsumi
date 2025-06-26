@@ -221,14 +221,11 @@ class Connect {
 						);
 					} catch (e) {
 						print.error("Failed to request pairing code:", e);
-					} finally {
-						rl.close();
-					}
+					} 
 				} else {
 					print.error(
 						"No phone number provided for pairing code. Please restart the bot and try again."
 					);
-					rl.close();
 					process.exit(1);
 				}
 			}
