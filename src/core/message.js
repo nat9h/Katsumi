@@ -50,6 +50,8 @@ class Message {
 				this.store.saveMessage(m.from, msg);
 				await db.UserModel.setUser(m.sender, { name: m.pushName });
 
+				await print(m, sock);
+
 				if (!m || !m.body) {
 					continue;
 				}
@@ -64,8 +66,6 @@ class Message {
 				m.command = command;
 				m.args = args;
 				m.text = text;
-
-				await print(m, sock);
 
 				if (settings.self && !m.isOwner && !m.isClonebot) {
 					continue;

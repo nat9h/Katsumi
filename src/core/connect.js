@@ -23,10 +23,65 @@ import { Client } from "../lib/serialize.js";
 import Store from "../lib/store.js";
 import Message from "./message.js";
 
-const rl = readline.createInterface({
-	input: process.stdin,
-	output: process.stdout,
-});
+/**
+ * Handle authentication state for different backends (MongoDB, MySQL, Local File)
+ * @param {string} sessionName
+ * @returns {Promise<{state, saveCreds, removeCreds}>}
+ */
+async function getAuthState(sessionName) {
+	let state, saveCreds, removeCreds;
+	if (
+		process.env.AUTH_STORE === "mongodb" ||
+		process.env.USE_MONGO_AUTH === "true"
+	) {
+		const mongoUrl = process.env.MONGO_URI;
+		({ state, saveCreds, removeCreds } = await useMongoDbAuthState(
+			mongoUrl,
+			{ session: sessionName }
+		));
+		print.info("Auth store: MongoDB");
+	} else if (process.env.AUTH_STORE === "mysql") {
+		({ state, saveCreds, removeCreds } = await useMySQLAuthState({
+			...MYSQL_CONFIG,
+			session: sessionName,
+		}));
+		print.info("Auth store: MySQL");
+	} else {
+		const authPath = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
+		({ state, saveCreds } = await useMultiFileAuthState(authPath));
+		removeCreds = async () => {
+			try {
+				const files = await readdir(authPath);
+				await Promise.all(
+					files.map((file) => unlink(join(authPath, file)))
+				);
+				print.info(`All auth files removed from: ${authPath}`);
+			} catch (e) {
+				print.error("Failed to remove local auth files:", e);
+			}
+		};
+		print.info(`Auth store: Local File (${authPath})`);
+	}
+	return { state, saveCreds, removeCreds };
+}
+
+/**
+ * Ask question via terminal input (safer: make new readline each time)
+ * @param {string} query
+ * @returns {Promise<string>}
+ */
+function askQuestion(query) {
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+	return new Promise((resolve) =>
+		rl.question(query, (ans) => {
+			rl.close();
+			resolve(ans);
+		})
+	);
+}
 
 /**
  * Main class to manage the WhatsApp bot connection and events.
@@ -59,40 +114,9 @@ class Connect {
 		await this.store.load();
 		this.store.savePeriodically();
 
-		let state, saveCreds, removeCreds;
-
-		if (
-			process.env.AUTH_STORE === "mongodb" ||
-			process.env.USE_MONGO_AUTH === "true"
-		) {
-			const mongoUrl = process.env.MONGO_URI;
-			({ state, saveCreds, removeCreds } = await useMongoDbAuthState(
-				mongoUrl,
-				{ session: this.sessionName }
-			));
-			print.info("Auth store: MongoDB");
-		} else if (process.env.AUTH_STORE === "mysql") {
-			({ state, saveCreds, removeCreds } = await useMySQLAuthState({
-				...MYSQL_CONFIG,
-				session: this.sessionName,
-			}));
-			print.info("Auth store: MySQL");
-		} else {
-			const authPath = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
-			({ state, saveCreds } = await useMultiFileAuthState(authPath));
-			removeCreds = async () => {
-				try {
-					const files = await readdir(authPath);
-					await Promise.all(
-						files.map((file) => unlink(join(authPath, file)))
-					);
-					print.info(`All auth files removed from: ${authPath}`);
-				} catch (e) {
-					print.error("Failed to remove local auth files:", e);
-				}
-			};
-			print.info("Auth store: Local File (" + authPath + ")");
-		}
+		const { state, saveCreds, removeCreds } = await getAuthState(
+			this.sessionName
+		);
 
 		let usePairingCode = false;
 		if (!state.creds.registered) {
@@ -334,19 +358,6 @@ class Connect {
 			}
 		);
 	}
-}
-
-/**
- * User for input.
- * @param {string} query The question to ask the user.
- * @returns {Promise<string>} A promise that resolves with the user's input.
- */
-function askQuestion(query) {
-	return new Promise((resolve) =>
-		rl.question(query, (ans) => {
-			resolve(ans);
-		})
-	);
 }
 
 export default Connect;
