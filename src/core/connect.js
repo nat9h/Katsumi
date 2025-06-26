@@ -252,14 +252,12 @@ class Connect {
 					setTimeout(() => this.start(), 3000);
 				} else {
 					this.store.stopSaving();
-					rl.close();
 					process.exit(1);
 				}
 			} else if (connection === "open") {
 				print.info(
 					`Connection opened successfully for session ${this.sessionName}.`
 				);
-				rl.close();
 			}
 		});
 
