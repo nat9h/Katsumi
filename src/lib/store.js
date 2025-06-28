@@ -1,20 +1,20 @@
+import NodeCache from "@cacheable/node-cache";
 import { jidNormalizedUser } from "baileys";
 import { mkdir, readFile, writeFile } from "fs/promises";
-import { LRUCache } from "lru-cache";
 import { MongoClient } from "mongodb";
 import { join } from "path";
 import { MONGO_CONFIG } from "../config/index.js";
 
-/** @type {LRUCache<string, any>} */
-const groupMetadataCache = new LRUCache({
-	max: 100,
-	maxAge: 1000 * 60 * 60,
+/** @type {NodeCache<string, any>} */
+const groupMetadataCache = new NodeCache({
+	stdTTL: 60 * 60,
+	checkperiod: 120,
 });
 
-/** @type {LRUCache<string, any>} */
-const messageCache = new LRUCache({
-	max: 500,
-	maxAge: 1000 * 60 * 30,
+/** @type {NodeCache<string, any>} */
+const messageCache = new NodeCache({
+	stdTTL: 30 * 60,
+	checkperiod: 120,
 });
 
 /**
@@ -193,7 +193,7 @@ class Local {
 	}
 
 	/**
-	 * Saves a message to the LRU cache if it's from the user or is a command.
+	 * Saves a message to the node-cache if it's from the user or is a command.
 	 * @param {string} jid
 	 * @param {Object} message
 	 */
@@ -246,7 +246,7 @@ class Mongo {
 	}
 
 	/**
-	 * Loads contacts and group metadata into LRU cache.
+	 * Loads contacts and group metadata into node-cache.
 	 * @returns {Promise<void>}
 	 */
 	async load() {
@@ -260,7 +260,7 @@ class Mongo {
 	}
 
 	/**
-	 * Saves contacts and group metadata from LRU cache to MongoDB.
+	 * Saves contacts and group metadata from node-cache to MongoDB.
 	 * @returns {Promise<void>}
 	 */
 	async save() {
@@ -388,7 +388,7 @@ class Mongo {
 	}
 
 	/**
-	 * Saves a message to the LRU cache if it's from the user or is a command.
+	 * Saves a message to the node-cache if it's from the user or is a command.
 	 * @param {string} jid
 	 * @param {Object} message
 	 */

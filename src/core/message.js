@@ -12,7 +12,7 @@ class Message {
 	 * @param {import('../lib/plugins.js').default} pluginManager - The plugin manager instance.
 	 * @param {string[]} ownerJids - An array of owner JIDs (raw numbers).
 	 * @param {string[]} prefixes - An array of bot prefixes.
-	 * @param {import('lru-cache')} groupMetadataCache - Cache for group metadata.
+	 * @param {import('@cacheable/node-cache')} groupMetadataCache - Cache for group metadata.
 	 * @param {import('../lib/store.js')} store - Store instance.
 	 */
 	constructor(pluginManager, ownerJids, prefixes, groupMetadataCache, store) {

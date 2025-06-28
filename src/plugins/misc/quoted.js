@@ -15,10 +15,8 @@ export default {
 	/**
 	 * @param {import('baileys').WASocket} sock - The Baileys socket object.
 	 * @param {object} m - The serialized message object.
-	 * @param {object} context - Additional context.
-	 * @param {object} context.store - The store instance.
 	 */
-	execute: async (m, { sock }) => {
+	execute: async (m) => {
 		const q = m.quoted ? m.quoted : m;
 		if (!q) {
 			return m.reply("Reply message!");
@@ -27,6 +25,6 @@ export default {
 		if (!c.quoted) {
 			return m.reply("Message not found.");
 		}
-		await sock.copyNForward(m.from, c.quoted.fakeObj, true);
+		m.reply({ forward: c.quoted, force: true });
 	},
 };

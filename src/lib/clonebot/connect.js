@@ -1,3 +1,4 @@
+import NodeCache from "@cacheable/node-cache";
 import {
 	Browsers,
 	DisconnectReason,
@@ -6,7 +7,6 @@ import {
 	makeCacheableSignalKeyStore,
 	makeWASocket,
 } from "baileys";
-import { LRUCache } from "lru-cache";
 import { randomBytes } from "node:crypto";
 import pino from "pino";
 import { BOT_CONFIG } from "../../config/index.js";
@@ -25,9 +25,9 @@ export class CloneBot {
 		this.maxReconnect = options.maxReconnect || 5;
 		this.reconnectCount = 0;
 		this.sock = null;
-		this.groupMetadataCache = new LRUCache({
-			max: 100,
-			maxAge: 1000 * 60 * 60,
+		this.groupMetadataCache = new NodeCache({
+			stdTTL: 60 * 60,
+			checkperiod: 120,
 		});
 		this.pluginManager = new PluginManager(BOT_CONFIG);
 		this.store = new Store(this.sessionName);

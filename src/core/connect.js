@@ -1,3 +1,4 @@
+import NodeCache from "@cacheable/node-cache";
 import {
 	Browsers,
 	DisconnectReason,
@@ -8,7 +9,6 @@ import {
 	makeWASocket,
 	useMultiFileAuthState,
 } from "baileys";
-import { LRUCache } from "lru-cache";
 import { useMySQLAuthState } from "mysql-baileys";
 import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -90,10 +90,12 @@ class Connect {
 	constructor() {
 		this.sock = null;
 		this.sessionName = BOT_CONFIG.sessionName;
-		this.groupMetadataCache = new LRUCache({
-			max: 100,
-			maxAge: 1000 * 60 * 60,
+
+		this.groupMetadataCache = new NodeCache({
+			stdTTL: 60 * 60,
+			checkperiod: 120,
 		});
+
 		this.pluginManager = new PluginManager(BOT_CONFIG);
 		this.store = new Store(this.sessionName);
 		this.message = new Message(
@@ -221,7 +223,7 @@ class Connect {
 						);
 					} catch (e) {
 						print.error("Failed to request pairing code:", e);
-					} 
+					}
 				} else {
 					print.error(
 						"No phone number provided for pairing code. Please restart the bot and try again."

@@ -1,5 +1,5 @@
+import NodeCache from "@cacheable/node-cache";
 import { readdirSync, watch } from "fs";
-import { LRUCache } from "lru-cache";
 import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { BOT_CONFIG } from "../config/index.js";
@@ -16,8 +16,8 @@ class PluginManager {
 	constructor(botConfig) {
 		this.plugins = [];
 		this.sessionName = BOT_CONFIG.sessionName;
-		this.cooldowns = new LRUCache({ max: 1000, maxAge: 1000 * 60 * 60 });
-		this.usageLimits = new LRUCache({ max: 1000, maxAge: 86400 * 1000 });
+		this.cooldowns = new NodeCache({ stdTTL: 60 * 60 });
+		this.usageLimits = new NodeCache({ stdTTL: 86400 });
 		this.botConfig = botConfig;
 		this.commandQueues = new Map();
 		this.processingStatus = new Map();
@@ -284,17 +284,20 @@ class PluginManager {
 
 		const cooldownKey = `${m.sender}:${plugin.name}`;
 		if (this.cooldowns.has(cooldownKey)) {
-			const remaining = this.cooldowns.getRemainingTTL(cooldownKey);
-			const seconds = Math.ceil(remaining / 1000);
-
-			await m.reply(
-				`⏳ Cooldown active! Please wait *${seconds}s* before using *${plugin.command[0]}* again`
-			);
-
-			if (plugin.react) {
-				await m.react("⏳");
+			const expiry = this.cooldowns.getTtl(cooldownKey);
+			let seconds = plugin.cooldown;
+			if (typeof expiry === "number") {
+				seconds = Math.max(Math.ceil((expiry - Date.now()) / 1000), 0);
 			}
-			return true;
+			if (seconds > 0) {
+				await m.reply(
+					`⏳ Cooldown active! Please wait *${seconds}s* before using *${plugin.command[0]}* again`
+				);
+				if (plugin.react) {
+					await m.react("⏳");
+				}
+				return true;
+			}
 		}
 		return false;
 	}
@@ -493,10 +496,13 @@ class PluginManager {
 			}
 
 			if (plugin.cooldown > 0) {
-				this.cooldowns.set(`${m.sender}:${plugin.name}`, true, {
-					ttl: plugin.cooldown * 1000,
-				});
+				this.cooldowns.set(
+					`${m.sender}:${plugin.name}`,
+					true,
+					plugin.cooldown
+				);
 			}
+
 			if (plugin.react) {
 				await m.react("✅");
 			}
