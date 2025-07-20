@@ -1,9 +1,9 @@
+import { MONGO_CONFIG } from "#config/index";
 import NodeCache from "@cacheable/node-cache";
 import { jidNormalizedUser } from "baileys";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { MongoClient } from "mongodb";
 import { join } from "path";
-import { MONGO_CONFIG } from "../config/index.js";
 
 /** @type {NodeCache<string, any>} */
 const groupMetadataCache = new NodeCache({

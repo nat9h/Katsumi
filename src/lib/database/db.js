@@ -1,5 +1,5 @@
+import { MONGO_CONFIG } from "#config/index";
 import { MongoClient } from "mongodb";
-import { MONGO_CONFIG } from "../../config/index.js";
 
 let mongoClient = null;
 

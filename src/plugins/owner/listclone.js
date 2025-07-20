@@ -1,4 +1,4 @@
-import { CloneSessionModel } from "../../lib/database/models/cloneSessions.js";
+import { CloneSessionModel } from "#lib/database/models/cloneSessions";
 
 export default {
 	name: "listclone",

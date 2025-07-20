@@ -1,4 +1,4 @@
-import { downloadYt } from "../../lib/yt-dlp.js";
+import { downloadYt } from "#lib/yt-dlp";
 
 export default {
 	name: "play",

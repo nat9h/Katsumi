@@ -48,5 +48,13 @@
 		"eslint-plugin-prettier": "^5.4.0",
 		"globals": "^16.2.0",
 		"prettier": "^3.5.3"
+	},
+	"imports": {
+		"#auth/*": "./src/auth/*.js",
+		"#core/*": "./src/core/*.js",
+		"#lib/*": "./src/lib/*.js",
+		"#config/*": "./src/config/*.js",
+		"#utils/*": "./src/utils/*.js",
+		"#plugins/*": "./src/plugins/*.js"
 	}
 }

@@ -1,4 +1,4 @@
-import { webpToImage } from "../../utils/converter.js";
+import { webpToImage } from "#utils/converter";
 
 export default {
 	name: "toimage",

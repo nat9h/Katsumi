@@ -3,6 +3,11 @@ import print from "../print.js";
 import CloneBot from "./connect.js";
 
 export async function autoLoadCloneBots() {
+	if (!process.env.MONGO_URI || process.env.USE_MONGO === "false") {
+		print.warn("[CLONE] CloneBot is disabled (MongoDB not enabled)");
+		return;
+	}
+
 	const sessions = await CloneSessionModel.list();
 	let activeCount = 0;
 

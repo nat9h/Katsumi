@@ -1,4 +1,4 @@
-import { GroupModel, UserModel } from "../../lib/database/index.js";
+import { GroupModel, UserModel } from "#lib/database/index";
 
 export default {
 	name: "ban",

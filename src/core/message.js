@@ -1,8 +1,8 @@
-import { SettingsModel } from "../lib/database/index.js";
-import * as db from "../lib/database/index.js";
-import { getPrefix } from "../lib/prefix.js";
-import { print } from "../lib/print.js";
-import serialize from "../lib/serialize.js";
+import { SettingsModel } from "#lib/database/index";
+import * as db from "#lib/database/index";
+import { getPrefix } from "#lib/prefix";
+import { print } from "#lib/print";
+import serialize from "#lib/serialize";
 
 /**
  * Class for processing incoming messages and routing them to the PluginManager.

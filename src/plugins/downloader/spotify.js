@@ -1,5 +1,5 @@
-import { msToTime } from "../../lib/functions.js";
-import { to_audio } from "../../utils/converter.js";
+import { msToTime } from "#lib/functions";
+import { to_audio } from "#utils/converter";
 
 export default {
 	name: "spotify",

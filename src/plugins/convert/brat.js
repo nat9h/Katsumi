@@ -1,4 +1,4 @@
-import Sticker from "../../lib/sticker.js";
+import Sticker from "#lib/sticker";
 
 export default {
 	name: "brat",

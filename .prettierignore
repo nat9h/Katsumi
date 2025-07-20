@@ -1,0 +1,7 @@
+.github/
+emojis/
+dist/
+logs/
+node_modules/
+sessions/
+auth_info_baileys/

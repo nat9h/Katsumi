@@ -1,3 +1,5 @@
+import { BOT_CONFIG } from "#config/index";
+import { to_audio } from "#utils/converter";
 import {
 	STORIES_JID,
 	WAProto,
@@ -18,8 +20,6 @@ import { randomBytes } from "node:crypto";
 import { existsSync, promises, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pino from "pino";
-import { BOT_CONFIG } from "../config/index.js";
-import { to_audio } from "../utils/converter.js";
 import * as Func from "./functions.js";
 import { mimeMap } from "./media.js";
 import { getPrefix } from "./prefix.js";

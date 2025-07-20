@@ -1,4 +1,4 @@
-import { to_audio } from "../../utils/converter.js";
+import { to_audio } from "#utils/converter";
 
 export default {
 	name: "toaudio",

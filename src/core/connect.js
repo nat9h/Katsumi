@@ -1,3 +1,10 @@
+import { BOT_CONFIG, MYSQL_CONFIG } from "#config/index";
+import { useMongoDbAuthState } from "#lib/auth/mongodb";
+import logger from "#lib/logger";
+import PluginManager from "#lib/plugins";
+import print from "#lib/print";
+import { Client } from "#lib/serialize";
+import Store from "#lib/store";
 import NodeCache from "@cacheable/node-cache";
 import {
 	Browsers,
@@ -12,15 +19,7 @@ import {
 import { useMySQLAuthState } from "mysql-baileys";
 import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import readline from "node:readline";
 import qrcode from "qrcode";
-import { BOT_CONFIG, MYSQL_CONFIG } from "../config/index.js";
-import { useMongoDbAuthState } from "../lib/auth/mongodb.js";
-import logger from "../lib/logger.js";
-import PluginManager from "../lib/plugins.js";
-import print from "../lib/print.js";
-import { Client } from "../lib/serialize.js";
-import Store from "../lib/store.js";
 import Message from "./message.js";
 
 /**
@@ -66,24 +65,6 @@ async function getAuthState(sessionName) {
 }
 
 /**
- * Ask question via terminal input (safer: make new readline each time)
- * @param {string} query
- * @returns {Promise<string>}
- */
-function askQuestion(query) {
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
-	return new Promise((resolve) =>
-		rl.question(query, (ans) => {
-			rl.close();
-			resolve(ans);
-		})
-	);
-}
-
-/**
  * Main class to manage the WhatsApp bot connection and events.
  */
 class Connect {
@@ -120,12 +101,21 @@ class Connect {
 			this.sessionName
 		);
 
+		const qrMode = process.env.QR === "true";
+		const botNumber = process.env.BOT_NUMBER;
 		let usePairingCode = false;
 		if (!state.creds.registered) {
-			const loginChoice = await askQuestion(
-				"Choose login method: (1) QR Code or (2) Pairing Code? Enter 1 or 2: "
-			);
-			usePairingCode = loginChoice.trim() === "2";
+			if (!qrMode) {
+				if (!botNumber) {
+					print.error(
+						"BOT_NUMBER is not set in .env. Please set BOT_NUMBER."
+					);
+					process.exit(1);
+				}
+				usePairingCode = true;
+			} else {
+				usePairingCode = false;
+			}
 		}
 
 		const { version } = await fetchLatestBaileysVersion();
@@ -177,7 +167,7 @@ class Connect {
 			syncFullHistory: false,
 			generateHighQualityLinkPreview: true,
 			qrTimeout: usePairingCode ? undefined : 60000,
-			printQRInTerminal: false,
+			printQRInTerminal: qrMode,
 		});
 
 		this.sock = Client({ sock: this.sock, store: this.store });
@@ -209,24 +199,24 @@ class Connect {
 				connection === "connecting" &&
 				!state.creds.registered
 			) {
-				const phoneNumber = await askQuestion(
-					"Enter your phone number (E.164 format, WITHOUT + sign, e.g., 6281234567890): "
-				);
+				const phoneNumber = botNumber;
 				if (phoneNumber) {
-					try {
-						const code = await this.sock.requestPairingCode(
-							phoneNumber.trim()
-						);
-						print.info(`Your Pairing Code: ${code}`);
-						print.info(
-							"Enter this code on your WhatsApp phone: Settings -> Linked Devices -> Link a Device -> Link with phone number instead."
-						);
-					} catch (e) {
-						print.error("Failed to request pairing code:", e);
-					}
+					setTimeout(async () => {
+						try {
+							const code = await this.sock.requestPairingCode(
+								phoneNumber.trim()
+							);
+							print.info(`Your Pairing Code: ${code}`);
+							print.info(
+								"Enter this code on your WhatsApp phone: Settings -> Linked Devices -> Link a Device -> Link with phone number instead."
+							);
+						} catch (e) {
+							print.error("Failed to request pairing code:", e);
+						}
+					}, 6000);
 				} else {
 					print.error(
-						"No phone number provided for pairing code. Please restart the bot and try again."
+						"No BOT_NUMBER provided for pairing code. Please set BOT_NUMBER in .env and restart the bot."
 					);
 					process.exit(1);
 				}

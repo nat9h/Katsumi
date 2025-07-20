@@ -1,7 +1,7 @@
-import Connect from "./core/connect.js";
-import { autoLoadCloneBots } from "./lib/clonebot/load.js";
-import { Colors, colorize } from "./lib/colors.js";
-import print from "./lib/print.js";
+import Connect from "#core/connect";
+import { autoLoadCloneBots } from "#lib/clonebot/load";
+import { Colors, colorize } from "#lib/colors";
+import print from "#lib/print";
 
 function art() {
 	return [

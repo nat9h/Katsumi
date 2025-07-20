@@ -1,5 +1,5 @@
+import { getFile } from "#lib/functions";
 import { WAProto, generateWAMessageFromContent, toNumber } from "baileys";
-import { getFile } from "../../lib/functions.js";
 
 export default {
 	name: "add",

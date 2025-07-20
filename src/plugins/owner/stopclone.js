@@ -1,5 +1,5 @@
-import { useMongoDbAuthState } from "../../lib/auth/mongodb.js";
-import { CloneSessionModel } from "../../lib/database/models/cloneSessions.js";
+import { useMongoDbAuthState } from "#lib/auth/mongodb";
+import { CloneSessionModel } from "#lib/database/models/cloneSessions";
 
 export default {
 	name: "stopclone",
@@ -13,7 +13,7 @@ export default {
 	usage: "$prefix$command <phone/session_id>",
 
 	/**
-	 * @param {import("../../lib/serialize.js").SerializedMessage} m
+	 * @param {import("#lib/serialize.js").SerializedMessage} m
 	 * @param {string[]} args
 	 */
 	execute: async (m, { args }) => {

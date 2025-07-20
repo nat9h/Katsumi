@@ -1,4 +1,4 @@
-import { isMediaMessage, mimeMap } from "../../lib/media.js";
+import { isMediaMessage, mimeMap } from "#lib/media";
 
 export default {
 	name: "hidetag",

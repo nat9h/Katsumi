@@ -1,6 +1,6 @@
-import { getEmojiRegex } from "../../lib/functions.js";
-import Sticker from "../../lib/sticker.js";
-import uploader from "../../lib/uploader.js";
+import { getEmojiRegex } from "#lib/functions";
+import Sticker from "#lib/sticker";
+import uploader from "#lib/uploader";
 
 export default {
 	name: "sticker",

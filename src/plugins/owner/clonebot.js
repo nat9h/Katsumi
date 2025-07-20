@@ -1,4 +1,4 @@
-import CloneBot from "../../lib/clonebot/connect.js";
+import CloneBot from "#lib/clonebot/connect";
 
 export default {
 	name: "clonebot",

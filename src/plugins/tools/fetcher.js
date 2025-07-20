@@ -107,7 +107,7 @@ export default {
 
 		if (/^application\/json/i.test(contentType)) {
 			const json = await response.json();
-			return m.reply(formatJson(json));
+			return m.reply(JSON.stringify(json, null, 2));
 		}
 
 		if (/^text\/html/i.test(contentType)) {
@@ -148,20 +148,4 @@ function parseOptions(text = "") {
 	(text.match(/--family\s+['"]?(\d)['"]?/) || [])[1] &&
 		(options.family = parseInt(RegExp.$1));
 	return options;
-}
-
-function formatJson(json, depth = 0) {
-	if (typeof json !== "object" || json === null) {
-		return String(json);
-	}
-	let str = "";
-	for (let key in json) {
-		str +=
-			`${"┊".repeat(depth)}*${key}:* ` +
-			(typeof json[key] === "object"
-				? "\n" + formatJson(json[key], depth + 1)
-				: json[key]) +
-			"\n";
-	}
-	return str;
 }

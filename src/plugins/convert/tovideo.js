@@ -1,4 +1,4 @@
-import { webpToVideo } from "../../utils/converter.js";
+import { webpToVideo } from "#utils/converter";
 
 export default {
 	name: "tovideo",

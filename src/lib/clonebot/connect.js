@@ -1,3 +1,5 @@
+import { BOT_CONFIG } from "#config/index";
+import Message from "#core/message";
 import NodeCache from "@cacheable/node-cache";
 import {
 	Browsers,
@@ -9,8 +11,6 @@ import {
 } from "baileys";
 import { randomBytes } from "node:crypto";
 import pino from "pino";
-import { BOT_CONFIG } from "../../config/index.js";
-import Message from "../../core/message.js";
 import { useMongoDbAuthState } from "../auth/mongodb.js";
 import { CloneSessionModel } from "../database/models/cloneSessions.js";
 import PluginManager from "../plugins.js";
@@ -42,6 +42,13 @@ export class CloneBot {
 
 	async start(onUpdate, onSuccess, onError) {
 		await this.pluginManager.loadPlugins();
+
+		if (!process.env.MONGO_URI || process.env.USE_MONGO === "false") {
+			throw new Error(
+				"CloneBot requires MongoDB! MONGO_URI is empty or USE_MONGO=false."
+			);
+		}
+
 		const { state, saveCreds, removeCreds } = await useMongoDbAuthState(
 			this.mongoUrl,
 			this.sessionName,

@@ -1,9 +1,9 @@
+import { BOT_CONFIG } from "#config/index";
+import { SettingsModel } from "#lib/database/index";
+import print from "#lib/print";
 import cp, { exec as _exec } from "child_process";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "fs";
 import { promisify } from "util";
-import { BOT_CONFIG } from "../../config/index.js";
-import { SettingsModel } from "../../lib/database/index.js";
-import print from "../../lib/print.js";
 
 const exec = promisify(_exec).bind(cp);
 

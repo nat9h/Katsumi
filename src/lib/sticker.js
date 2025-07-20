@@ -1,8 +1,8 @@
+import { outputOptionsArgs } from "#config/sticker";
+import { convert } from "#utils/converter";
 import { fileTypeFromBuffer } from "file-type";
 import ffmpeg from "fluent-ffmpeg";
 import webp from "node-webpmux";
-import { outputOptionsArgs } from "../config/sticker.js";
-import { convert } from "../utils/converter.js";
 
 /**
  * Generates the metadata for the sticker.

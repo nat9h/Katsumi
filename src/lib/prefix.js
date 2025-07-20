@@ -1,4 +1,4 @@
-import { BOT_CONFIG } from "../config/index.js";
+import { BOT_CONFIG } from "#config/index";
 
 export let allCmd = [];
 

@@ -1,4 +1,4 @@
-import uploader from "../../lib/uploader.js";
+import uploader from "#lib/uploader";
 
 export default {
 	name: "uploader",

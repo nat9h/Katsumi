@@ -4,7 +4,7 @@ export default {
 	command: ["help", "menu"],
 	permissions: "all",
 	hidden: false,
-	failed: "❌ Failed to show %command: %error",
+	failed: "Failed to show %command: %error",
 	category: "info",
 	cooldown: 5,
 	usage: "$prefix$command [command|category]",

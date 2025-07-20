@@ -1,4 +1,4 @@
-import { SettingsModel } from "../../lib/database/index.js";
+import { SettingsModel } from "#lib/database/index";
 
 export default {
 	name: "mode",
