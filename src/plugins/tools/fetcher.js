@@ -1,3 +1,4 @@
+import axios from "axios";
 import { basename, extname } from "path";
 import qs from "querystring";
 
@@ -13,12 +14,8 @@ export default {
 	failed: "Failed to %command: %error",
 	usage: "$prefix$command <url>",
 
-	execute: async (m, { args }) => {
-		const url = args[0]
-			? args[0].trim()
-			: m.quoted
-				? m.quoted.url?.trim()
-				: "";
+	execute: async (m, { args, sock }) => {
+		const url = args[0] ? args[0].trim() : m.quoted?.url?.trim();
 
 		const urlMatch = url.match(/https?:\/\/[^\s]+/);
 		if (!urlMatch) {
@@ -47,71 +44,63 @@ export default {
 
 		const inputText = m.body || "";
 		const options = parseOptions(inputText.replace(url, ""));
-		const requestOptions = {
-			method: options.method || "GET",
-			headers: options.headers,
-			redirect: options.redirect ? "follow" : "manual",
-			family: options.family,
+
+		let axiosConfig = {
+			method: (options.method || "GET").toLowerCase(),
+			headers: options.headers || {},
+			responseType: "arraybuffer",
+			validateStatus: () => true,
 		};
 
-		if (
-			["POST", "PUT", "DELETE"].includes(requestOptions.method) &&
-			(Object.keys(options.data).length > 0 ||
-				Object.keys(options.form).length > 0)
-		) {
+		if (["POST", "PUT", "DELETE"].includes(axiosConfig.method)) {
 			if (options.json) {
-				requestOptions.body = JSON.stringify(
-					options.data || options.form
-				);
-				requestOptions.headers["Content-Type"] = "application/json";
+				axiosConfig.data = JSON.stringify(options.data || options.form);
+				axiosConfig.headers["Content-Type"] = "application/json";
 			} else {
-				requestOptions.body = qs.stringify(
-					options.data || options.form
-				);
-				requestOptions.headers["Content-Type"] =
+				axiosConfig.data = qs.stringify(options.data || options.form);
+				axiosConfig.headers["Content-Type"] =
 					"application/x-www-form-urlencoded";
 			}
 		}
 
-		const response = await fetch(url, requestOptions);
-		const contentType = response.headers.get("content-type") || "";
-		const contentDisposition = response.headers.get("content-disposition");
-		const oldFilename =
-			contentDisposition
-				?.split("filename=")[1]
-				?.replace(/["']/g, "")
-				.trim() || basename(new URL(url).pathname);
+		const res = await axios(url, axiosConfig);
 
-		let ext = extname(oldFilename);
-		if (!ext && contentType) {
-			const match = contentType.match(/\/([a-z0-9]+)$/i);
-			if (match) {
-				ext = "." + match[1];
-			}
+		const buffer = res.data;
+		const headers = res.headers || {};
+		const contentType =
+			headers["content-type"] || "application/octet-stream";
+		const contentDisposition = headers["content-disposition"] || "";
+		const filenameFromHeader =
+			contentDisposition.match(/filename="?([^"]+)"?/)?.[1];
+
+		let filename = filenameFromHeader || basename(new URL(url).pathname);
+		if (!extname(filename)) {
+			const ext = contentType.split("/")[1] || "bin";
+			filename += "." + ext;
 		}
 
-		// const randomPart = randomBytes(4).toString("hex") + "-" + Date.now();
-		// const filename = `Natsumi-${randomPart}${ext || ""}`;
-
 		if (options.head) {
-			let lines = [];
-			for (let [key, value] of response.headers) {
-				lines.push(`${key}: ${value}`);
-			}
-			return m.reply(lines.join("\n"));
+			const headText = Object.entries(headers)
+				.map(([k, v]) => `${k}: ${v}`)
+				.join("\n");
+			return m.reply(headText);
 		}
 
 		if (/^image\//i.test(contentType)) {
 			return m.reply(url);
 		}
 
+		if (/^video\//i.test(contentType)) {
+			return m.reply(url);
+		}
+
 		if (/^application\/json/i.test(contentType)) {
-			const json = await response.json();
+			const json = JSON.parse(buffer.toString());
 			return m.reply(JSON.stringify(json, null, 2));
 		}
 
 		if (/^text\/html/i.test(contentType)) {
-			const html = await response.text();
+			const html = buffer.toString();
 			return m.reply(
 				html.slice(0, 65536) +
 					(html.length > 65536 ? "\n\n...(truncated)" : "")
@@ -119,11 +108,19 @@ export default {
 		}
 
 		if (/^text\//i.test(contentType)) {
-			const textData = await response.text();
+			const textData = buffer.toString();
 			return m.reply(textData.slice(0, 65536));
 		}
 
-		return m.reply(url);
+		return sock.sendMessage(
+			m.from,
+			{
+				document: buffer,
+				mimetype: contentType,
+				fileName: filename,
+			},
+			{ quoted: m, ephemeralExpiration: m.expiration }
+		);
 	},
 };
 
