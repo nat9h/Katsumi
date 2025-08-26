@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { GroupSchema, SettingsSchema, UserSchema } from "#lib/schema/index";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 class Helper {
 	constructor(name, data, schema) {

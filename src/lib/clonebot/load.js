@@ -1,6 +1,6 @@
+import CloneBot from "#lib/clonebot/connect";
 import { CloneSessionModel } from "#lib/database/models/cloneSessions";
 import print from "#lib/print";
-import CloneBot from "#lib/clonebot/connect";
 
 export async function autoLoadCloneBots() {
 	if (!process.env.MONGO_URI || process.env.USE_MONGO === "false") {

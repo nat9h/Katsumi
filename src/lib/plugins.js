@@ -1,13 +1,13 @@
+import { BOT_CONFIG } from "#config/index";
+import * as db from "#lib/database/index";
+import { setAllCommands } from "#lib/prefix";
+import print from "#lib/print";
+import Store from "#lib/store";
+import { APIRequest as api } from "#utils/API/request";
 import NodeCache from "@cacheable/node-cache";
 import { readdirSync, watch } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import { BOT_CONFIG } from "#config/index";
-import * as db from "#lib/database/index";
-import { APIRequest as api } from "#utils/API/request";
-import { setAllCommands } from "#lib/prefix";
-import print from "#lib/print";
-import Store from "#lib/store";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

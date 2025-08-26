@@ -6,7 +6,19 @@ import { MongoClient } from "mongodb";
 import { join } from "path";
 
 function allCacheValues(cache) {
-  return cache.keys().map((k) => cache.get(k)).filter((v) => v !== undefined);
+	return cache
+		.keys()
+		.map((k) => cache.get(k))
+		.filter((v) => v !== undefined);
+}
+
+/** Safely drop Mongo's _id so we never try to $set it */
+function stripMongoId(doc) {
+	if (!doc || typeof doc !== "object") {
+		return doc;
+	}
+	const { _id, ...rest } = doc;
+	return rest;
 }
 
 /** @type {NodeCache<string, any>} */
@@ -246,6 +258,18 @@ class Mongo {
 			this.db = this.client.db(this.sessionName);
 			this.coll.contacts = this.db.collection("contacts");
 			this.coll.groupMetadata = this.db.collection("groupMetadata");
+			try {
+				await Promise.all([
+					this.coll.contacts.createIndex({ id: 1 }, { unique: true }),
+					this.coll.groupMetadata.createIndex(
+						{ id: 1 },
+						{ unique: true }
+					),
+				]);
+			} catch (e) {
+				if (process.env.DEBUG)
+					console.warn("Index creation warning:", e?.message);
+			}
 		}
 	}
 
@@ -259,8 +283,11 @@ class Mongo {
 			this.coll.contacts.find().toArray(),
 			this.coll.groupMetadata.find().toArray(),
 		]);
-		contacts.forEach((c) => groupMetadataCache.set(c.id, c));
-		groupMetadata.forEach((g) => groupMetadataCache.set(g.id, g));
+
+		contacts.forEach((c) => groupMetadataCache.set(c.id, stripMongoId(c)));
+		groupMetadata.forEach((g) =>
+			groupMetadataCache.set(g.id, stripMongoId(g))
+		);
 	}
 
 	/**
@@ -272,26 +299,35 @@ class Mongo {
 		const all = allCacheValues(groupMetadataCache);
 
 		const contacts = all.filter((v) => v && v.isContact);
-		const groups = all.filter((v) => v && typeof v.id === "string" && v.id.endsWith("@g.us"));
+		const groups = all.filter(
+			(v) => v && typeof v.id === "string" && v.id.endsWith("@g.us")
+		);
+
 		if (contacts.length > 0) {
-			const bulkOps = contacts.map((c) => ({
-				updateOne: {
-					filter: { id: c.id },
-					update: { $set: c },
-					upsert: true,
-				},
-			}));
+			const bulkOps = contacts.map((c) => {
+				const doc = stripMongoId(c);
+				return {
+					updateOne: {
+						filter: { id: doc.id },
+						update: { $set: doc },
+						upsert: true,
+					},
+				};
+			});
 			await this.coll.contacts.bulkWrite(bulkOps);
 		}
 
 		if (groups.length > 0) {
-			const bulkOps = groups.map((g) => ({
-				updateOne: {
-					filter: { id: g.id },
-					update: { $set: g },
-					upsert: true,
-				},
-			}));
+			const bulkOps = groups.map((g) => {
+				const doc = stripMongoId(g);
+				return {
+					updateOne: {
+						filter: { id: doc.id },
+						update: { $set: doc },
+						upsert: true,
+					},
+				};
+			});
 			await this.coll.groupMetadata.bulkWrite(bulkOps);
 		}
 	}
@@ -329,9 +365,10 @@ class Mongo {
 	updateContacts(update) {
 		for (const contact of update) {
 			const id = jidNormalizedUser(contact.id);
+			const existing = groupMetadataCache.get(id) || {};
 			groupMetadataCache.set(id, {
-				...(groupMetadataCache.get(id) || {}),
-				...contact,
+				...stripMongoId(existing),
+				...stripMongoId(contact),
 			});
 		}
 	}
@@ -343,7 +380,10 @@ class Mongo {
 	upsertContacts(update) {
 		for (const contact of update) {
 			const id = jidNormalizedUser(contact.id);
-			groupMetadataCache.set(id, { ...contact, isContact: true });
+			groupMetadataCache.set(id, {
+				...stripMongoId(contact),
+				isContact: true,
+			});
 		}
 	}
 
@@ -356,7 +396,10 @@ class Mongo {
 			const id = update.id;
 			const existing = groupMetadataCache.get(id);
 			if (existing) {
-				groupMetadataCache.set(id, { ...existing, ...update });
+				groupMetadataCache.set(id, {
+					...stripMongoId(existing),
+					...stripMongoId(update),
+				});
 			}
 		}
 	}
@@ -376,7 +419,7 @@ class Mongo {
 	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
-		groupMetadataCache.set(jidNormalizedUser(jid), metadata);
+		groupMetadataCache.set(jidNormalizedUser(jid), stripMongoId(metadata));
 	}
 
 	/**

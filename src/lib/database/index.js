@@ -88,10 +88,10 @@ if (useLocal) {
 		},
 	};
 } else {
-	SettingsModel = (await import("./models/settings.js")).default;
-	UserModel = (await import("./models/user.js")).default;
-	GroupModel = (await import("./models/group.js")).default;
-	SessionModel = (await import("./models/session.js")).default;
+	SettingsModel = (await import("#lib/database/models/settings")).default;
+	UserModel = (await import("#lib/database/models/user")).default;
+	GroupModel = (await import("#lib/database/models/group")).default;
+	SessionModel = (await import("#lib/database/models/session")).default;
 }
 
 export { SettingsModel, UserModel, GroupModel, SessionModel };

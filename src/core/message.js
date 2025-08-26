@@ -1,4 +1,3 @@
-import { SettingsModel } from "#lib/database/index";
 import * as db from "#lib/database/index";
 import { getPrefix } from "#lib/prefix";
 import { print } from "#lib/print";
@@ -33,7 +32,19 @@ class Message {
 			return;
 		}
 
-		const settings = await SettingsModel.getSettings();
+		let settings = {};
+		try {
+			if (!db?.SettingsModel?.getSettings) {
+				console.warn(
+					"[DB] SettingsModel not ready; using empty settings."
+				);
+			} else {
+				settings = await db.SettingsModel.getSettings();
+			}
+		} catch (err) {
+			console.error("[DB] Failed to load settings:", err);
+			settings = {};
+		}
 
 		for (const msg of messages) {
 			try {
@@ -48,7 +59,10 @@ class Message {
 				const m = await serialize(sock, msg, this.store);
 
 				this.store.saveMessage(m.from, msg);
-				await db.UserModel.setUser(m.sender, { name: m.pushName });
+
+				if (db?.UserModel?.setUser) {
+					await db.UserModel.setUser(m.sender, { name: m.pushName });
+				}
 
 				await print(m, sock);
 
@@ -82,7 +96,6 @@ class Message {
 				}
 
 				await this.pluginManager.runPeriodicMessagePlugins(m, sock);
-
 				await this.pluginManager.handleAfterPlugins(m, sock);
 			} catch (error) {
 				console.error("Error processing message:", error);

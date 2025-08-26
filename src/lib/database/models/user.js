@@ -2,7 +2,7 @@ import { getCollection } from "#lib/database/db";
 
 const COLLECTION = "users";
 
-export class UserModel {
+export default class UserModel {
 	static async getAllUsers() {
 		const col = await getCollection(COLLECTION);
 		return col.find({}).toArray();

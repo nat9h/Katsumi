@@ -2,7 +2,7 @@ import { getCollection } from "#lib/database/db";
 
 const COLLECTION = "groups";
 
-export class GroupModel {
+export default class GroupModel {
 	/**
 	 * Get a group by JID, auto-create if not exists (schema compliant).
 	 * @param {string} jid

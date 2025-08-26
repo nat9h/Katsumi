@@ -2,7 +2,7 @@ import { getCollection } from "#lib/database/db";
 
 const COLLECTION = "settings";
 
-export class SettingsModel {
+export default class SettingsModel {
 	/**
 	 * Get bot global settings (schema compliant).
 	 * @returns {Promise<Object>}

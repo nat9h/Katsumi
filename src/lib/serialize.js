@@ -1,4 +1,8 @@
 import { BOT_CONFIG } from "#config/index";
+import * as Func from "#lib/functions";
+import { mimeMap } from "#lib/media";
+import { getPrefix } from "#lib/prefix";
+import Sticker from "#lib/sticker";
 import { to_audio } from "#utils/converter";
 import {
 	STORIES_JID,
@@ -20,10 +24,6 @@ import { randomBytes } from "node:crypto";
 import { existsSync, promises, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pino from "pino";
-import * as Func from "#lib/functions";
-import { mimeMap } from "#lib/media";
-import { getPrefix } from "#lib/prefix";
-import Sticker from "#lib/sticker";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
 

@@ -2,7 +2,7 @@ import { getCollection } from "#lib/database/db";
 
 const COLLECTION = "payloads";
 
-export class SessionModel {
+export default class SessionModel {
 	static async getSession(userJid) {
 		const col = await getCollection(COLLECTION);
 		let session = await col.findOne({ _id: userJid });
