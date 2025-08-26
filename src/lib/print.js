@@ -1,4 +1,4 @@
-import { Colors, colorize } from "./colors.js";
+import { Colors, colorize } from "#lib/colors";
 
 const log = (type, message, error = null) => {
 	const timestamp = new Date().toLocaleString("id-ID");
@@ -68,6 +68,7 @@ export const print = async (m, store) => {
 				`[${timestamp}] [${chatName}] From: ${m.pushName} (${m.sender.split("@")[0]})`
 			)
 		);
+		console.log(colorize(Colors.FgWhite, `[ID]: ${m.id}`));
 		console.log(colorize(Colors.FgWhite, `[Type]: ${m.type}`));
 		console.log(
 			colorize(

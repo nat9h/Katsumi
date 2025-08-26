@@ -2,12 +2,12 @@ import NodeCache from "@cacheable/node-cache";
 import { readdirSync, watch } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import { BOT_CONFIG } from "../config/index.js";
-import * as db from "../lib/database/index.js";
-import { APIRequest as api } from "../utils/API/request.js";
-import { setAllCommands } from "./prefix.js";
-import print from "./print.js";
-import Store from "./store.js";
+import { BOT_CONFIG } from "#config/index";
+import * as db from "#lib/database/index";
+import { APIRequest as api } from "#utils/API/request";
+import { setAllCommands } from "#lib/prefix";
+import print from "#lib/print";
+import Store from "#lib/store";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { GroupSchema, SettingsSchema, UserSchema } from "../schema/index.js";
+import { GroupSchema, SettingsSchema, UserSchema } from "#lib/schema/index";
 
 class Helper {
 	constructor(name, data, schema) {

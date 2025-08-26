@@ -1,4 +1,4 @@
-import { getCollection } from "../db.js";
+import { getCollection } from "#lib/database/db";
 
 const COLLECTION = "groups";
 

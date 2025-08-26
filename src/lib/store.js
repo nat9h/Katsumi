@@ -5,6 +5,10 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import { MongoClient } from "mongodb";
 import { join } from "path";
 
+function allCacheValues(cache) {
+  return cache.keys().map((k) => cache.get(k)).filter((v) => v !== undefined);
+}
+
 /** @type {NodeCache<string, any>} */
 const groupMetadataCache = new NodeCache({
 	stdTTL: 60 * 60,
@@ -265,13 +269,10 @@ class Mongo {
 	 */
 	async save() {
 		await this._connect();
-		const contacts = Array.from(groupMetadataCache.values()).filter(
-			(v) => v.isContact
-		);
-		const groups = Array.from(groupMetadataCache.values()).filter((v) =>
-			v.id.endsWith("@g.us")
-		);
+		const all = allCacheValues(groupMetadataCache);
 
+		const contacts = all.filter((v) => v && v.isContact);
+		const groups = all.filter((v) => v && typeof v.id === "string" && v.id.endsWith("@g.us"));
 		if (contacts.length > 0) {
 			const bulkOps = contacts.map((c) => ({
 				updateOne: {

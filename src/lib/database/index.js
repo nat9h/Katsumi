@@ -3,7 +3,7 @@ const useLocal = process.env.USE_MONGO !== "true";
 let SettingsModel, UserModel, GroupModel, SessionModel;
 
 if (useLocal) {
-	const localDB = (await import("./local.js")).default;
+	const localDB = (await import("#lib/database/local")).default;
 
 	// Optional: Enable autosave
 	// localDB.savePeriodically();

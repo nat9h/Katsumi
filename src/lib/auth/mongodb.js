@@ -1,6 +1,6 @@
 import { BufferJSON, WAProto, initAuthCreds } from "baileys";
 import { MongoClient } from "mongodb";
-import print from "../print.js";
+import print from "#lib/print";
 
 /**
  * Creates and returns a connection to a MongoDB collection.

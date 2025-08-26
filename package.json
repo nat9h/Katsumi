@@ -1,6 +1,6 @@
 {
 	"name": "katsumi",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"main": "src/main.js",
 	"engines": {
 		"node": ">=20.0.0"
@@ -33,6 +33,7 @@
 		"baileys": "github:WhiskeySockets/Baileys",
 		"file-type": "^21.0.0",
 		"fluent-ffmpeg": "^2.1.3",
+		"jimp": "^0.16.13",
 		"mongodb": "^6.17.0",
 		"mysql-baileys": "github:bobslavtriev/mysql-baileys",
 		"node-webpmux": "^3.2.1",
@@ -50,6 +51,7 @@
 		"prettier": "^3.5.3"
 	},
 	"imports": {
+		"#/*": "./*",
 		"#auth/*": "./src/auth/*.js",
 		"#core/*": "./src/core/*.js",
 		"#lib/*": "./src/lib/*.js",

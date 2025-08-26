@@ -20,10 +20,10 @@ import { randomBytes } from "node:crypto";
 import { existsSync, promises, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pino from "pino";
-import * as Func from "./functions.js";
-import { mimeMap } from "./media.js";
-import { getPrefix } from "./prefix.js";
-import Sticker from "./sticker.js";
+import * as Func from "#lib/functions";
+import { mimeMap } from "#lib/media";
+import { getPrefix } from "#lib/prefix";
+import Sticker from "#lib/sticker";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
 
@@ -332,13 +332,16 @@ export function Client({ sock, store }) {
 				const id = jidNormalizedUser(jid);
 				if (id.endsWith("g.us")) {
 					const metadata = store.getGroupMetadata(id);
-					return metadata?.subject;
+					return metadata?.subject || id;
 				}
 				const contact = store.getContact(id);
+				if (!contact) {
+					return parsePhoneNumber("+" + id.split("@")[0]);
+				}
 				return (
-					contact?.name ||
-					contact?.verifiedName ||
-					contact?.notify ||
+					contact.name ||
+					contact.notify ||
+					contact.verifiedName ||
 					parsePhoneNumber("+" + id.split("@")[0])
 				);
 			},
@@ -670,6 +673,13 @@ export default async function serialize(sock, msg, store) {
 			: m.from;
 
 	m.pushName = msg.pushName;
+
+	if (m.pushName) {
+		const contact = store.getContact(m.sender);
+		if (!contact || contact.notify !== m.pushName) {
+			store.updateContacts([{ id: m.sender, notify: m.pushName }]);
+		}
+	}
 
 	const senderNum = (m.sender.match(/\d{8,}/) || [])[0];
 	m.isOwner = senderNum && BOT_CONFIG.ownerJids.includes(senderNum);

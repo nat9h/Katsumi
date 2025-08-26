@@ -62,9 +62,9 @@ export default {
 				const username = await sock.getName(q.sender);
 
 				const request = {
-					type: "quote",
+					type: "image",
 					format: "png",
-					backgroundColor: "#FFFFFF",
+					backgroundColor: m.isGroup ? "#FFFFFF" : "#FFFFFF",
 					width: 512,
 					height: 786,
 					scale: 2,
