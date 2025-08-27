@@ -267,8 +267,9 @@ class Mongo {
 					),
 				]);
 			} catch (e) {
-				if (process.env.DEBUG)
+				if (process.env.DEBUG) {
 					console.warn("Index creation warning:", e?.message);
+				}
 			}
 		}
 	}

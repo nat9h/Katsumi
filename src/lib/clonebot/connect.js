@@ -1,5 +1,9 @@
 import { BOT_CONFIG } from "#config/index";
 import Message from "#core/message";
+import { useMongoDbAuthState } from "#lib/auth/mongodb";
+import { CloneSessionModel } from "#lib/database/models/cloneSessions";
+import PluginManager from "#lib/plugins";
+import Store from "#lib/store";
 import NodeCache from "@cacheable/node-cache";
 import {
 	Browsers,
@@ -11,10 +15,6 @@ import {
 } from "baileys";
 import { randomBytes } from "node:crypto";
 import pino from "pino";
-import { useMongoDbAuthState } from "../auth/mongodb.js";
-import { CloneSessionModel } from "../database/models/cloneSessions.js";
-import PluginManager from "../plugins.js";
-import Store from "../store.js";
 
 export class CloneBot {
 	constructor(phone, options = {}) {

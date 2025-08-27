@@ -1,4 +1,5 @@
 import { BOT_CONFIG, MYSQL_CONFIG } from "#config/index";
+import Message from "#core/message";
 import { useMongoDbAuthState } from "#lib/auth/mongodb";
 import logger from "#lib/logger";
 import PluginManager from "#lib/plugins";
@@ -20,7 +21,6 @@ import { useMySQLAuthState } from "mysql-baileys";
 import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import qrcode from "qrcode";
-import Message from "./message.js";
 
 /**
  * Handle authentication state for different backends (MongoDB, MySQL, Local File)

@@ -53,15 +53,27 @@ export default [
 				"error",
 				"ignorePackages",
 				{
-					js: "always",
-					mjs: "always",
+					js: "never",
+					mjs: "never",
 				},
 			],
+			"import/no-unresolved": ["error", { ignore: ["^#"] }],
 		},
 		settings: {
 			"import/resolver": {
 				node: {
 					extensions: [".js", ".mjs"],
+				},
+				alias: {
+					map: [
+						["#lib", "./src/lib"],
+						["#config", "./src/config"],
+						["#auth", "./src/auth"],
+						["#core", "./src/core"],
+						["#utils", "./src/utils"],
+						["#plugins", "./src/plugins"],
+					],
+					extensions: [".js", ".mjs", ".ts", ".tsx", ".json"],
 				},
 			},
 		},

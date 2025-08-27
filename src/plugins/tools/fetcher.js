@@ -17,7 +17,7 @@ export default {
 	execute: async (m, { args, sock }) => {
 		const url = args[0] ? args[0].trim() : m.quoted?.url?.trim();
 
-		const urlMatch = url.match(/https?:\/\/[^\s]+/);
+		const urlMatch = url?.match(/https?:\/\/[^\s]+/);
 		if (!urlMatch) {
 			return m.reply(
 				[
@@ -30,22 +30,21 @@ export default {
 					`⤷ \`${m.prefix + m.command} https://httpbin.org/post --method 'POST' --header 'Authorization: Bearer 123' --data 'name: test'\``,
 					"",
 					"*Option List:*",
-					"• \`--method 'GET/POST/DELETE/PUT'\`",
-					"• \`--header 'name: value'\`",
-					"• \`--data 'name: value'\`",
-					"• \`--form 'name: value'\`",
-					"• \`--json\`  _(send data as JSON)_",
-					"• \`--redirect\`",
-					"• \`--head\`  _(show response headers only)_",
-					"• \`--family '0/4/6'\`",
+					"• `--method 'GET/POST/DELETE/PUT'`",
+					"• `--header 'name: value'`",
+					"• `--data 'name: value'`",
+					"• `--form 'name: value'`",
+					"• `--json`  _(send data as JSON)_",
+					"• `--redirect`",
+					"• `--head`  _(show response headers only)_",
+					"• `--family '0/4/6'`",
 				].join("\n")
 			);
 		}
 
-		const inputText = m.body || "";
-		const options = parseOptions(inputText.replace(url, ""));
+		const options = parseOptions(m.body.replace(url, ""));
 
-		let axiosConfig = {
+		const axiosConfig = {
 			method: (options.method || "GET").toLowerCase(),
 			headers: options.headers || {},
 			responseType: "arraybuffer",
@@ -95,12 +94,12 @@ export default {
 		}
 
 		if (/^application\/json/i.test(contentType)) {
-			const json = JSON.parse(buffer.toString());
+			const json = JSON.parse(Buffer.from(buffer).toString());
 			return m.reply(JSON.stringify(json, null, 2));
 		}
 
 		if (/^text\/html/i.test(contentType)) {
-			const html = buffer.toString();
+			const html = Buffer.from(buffer).toString();
 			return m.reply(
 				html.slice(0, 65536) +
 					(html.length > 65536 ? "\n\n...(truncated)" : "")
@@ -108,7 +107,7 @@ export default {
 		}
 
 		if (/^text\//i.test(contentType)) {
-			const textData = buffer.toString();
+			const textData = Buffer.from(buffer).toString();
 			return m.reply(textData.slice(0, 65536));
 		}
 
@@ -125,24 +124,41 @@ export default {
 };
 
 function parseOptions(text = "") {
-	let options = { headers: {}, data: {}, form: {} };
-	(text.match(/--method\s+['"]?(\w+)['"]?/i) || [])[1] &&
-		(options.method = RegExp.$1);
-	for (let match of text.matchAll(
+	const options = { headers: {}, data: {}, form: {} };
+	const methodMatch = text.match(/--method\s+['"]?(\w+)['"]?/i);
+	if (methodMatch) {
+		options.method = methodMatch[1];
+	}
+	for (const match of text.matchAll(
 		/--headers?\s+['"]([^:]+):\s*([^'"]+)['"]/gi
 	)) {
 		options.headers[match[1].trim()] = match[2].trim();
 	}
-	for (let match of text.matchAll(/--data\s+['"]([^:]+):\s*([^'"]+)['"]/gi)) {
+	for (const match of text.matchAll(
+		/--data\s+['"]([^:]+):\s*([^'"]+)['"]/gi
+	)) {
 		options.data[match[1].trim()] = match[2].trim();
 	}
-	for (let match of text.matchAll(/--form\s+['"]([^:]+):\s*([^'"]+)['"]/gi)) {
+	for (const match of text.matchAll(
+		/--form\s+['"]([^:]+):\s*([^'"]+)['"]/gi
+	)) {
 		options.form[match[1].trim()] = match[2].trim();
 	}
-	/--json/.test(text) && (options.json = true);
-	/--redirect/.test(text) && (options.redirect = true);
-	/--head/.test(text) && (options.head = true);
-	(text.match(/--family\s+['"]?(\d)['"]?/) || [])[1] &&
-		(options.family = parseInt(RegExp.$1));
+
+	if (/--json/.test(text)) {
+		options.json = true;
+	}
+	if (/--redirect/.test(text)) {
+		options.redirect = true;
+	}
+	if (/--head/.test(text)) {
+		options.head = true;
+	}
+
+	const famMatch = text.match(/--family\s+['"]?(\d)['"]?/);
+	if (famMatch) {
+		options.family = parseInt(famMatch[1], 10);
+	}
+
 	return options;
 }

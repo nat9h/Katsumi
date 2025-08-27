@@ -1,193 +1,198 @@
 <div align="center">
-    <h1>Katsumi</h1>
-    <img
-        src="https://files.catbox.moe/1g4qtd.png"
-        alt="Katsumi"
-        style="display:block; margin:-100px 20px; width:65%;"
-    />
+  <h1>Katsumi</h1>
+  <p>Fast, modular WhatsApp bot built on Baileys. Plugin-system. Multi‑database.</p>
+
+  <!-- Badges: repo & tech -->
+
+  <p>
+    <a href="https://github.com/nat9h/Katsumi"><img alt="Stars" src="https://img.shields.io/github/stars/nat9h/Katsumi?style=flat&logo=github"></a>
+    <a href="https://github.com/nat9h/Katsumi/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/nat9h/Katsumi"></a>
+    <a href="https://github.com/nat9h/Katsumi/issues"><img alt="Issues" src="https://img.shields.io/github/issues/nat9h/Katsumi"></a>
+    <a href="https://github.com/nat9h/Katsumi"><img alt="Last Commit" src="https://img.shields.io/github/last-commit/nat9h/Katsumi"></a>
+    <a href="https://github.com/nat9h/Katsumi"><img alt="Repo Size" src="https://img.shields.io/github/repo-size/nat9h/Katsumi"></a>
+  </p>
+  <p>
+    <a href="https://github.com/nat9h/Katsumi/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-informational"></a>
+    <img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen">
+    <a href="https://dsc.gg/natsumiworld"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white"></a>
+  </p>
 </div>
 
-# 🌸 Why You'll Love Katsumi
+---
 
-- ⚡ <b>Lightning Fast</b>: Feels instant, even with tons of features!
-- 🧩 <b>Plug & Play Modular</b>: Add new features as simply as drag-and-drop.
-- 🗄️ <b>Data Your Way</b>: Works with MySQL, MongoDB, or simple JSON.
-- 🦄 <b>Extreme Customization</b>: Change all settings in one `.env` file—no headaches!
+## Table of Contents
 
-## 🌈 Core Features
+* [Overview](#overview)
+* [Why Katsumi?](#why-katsumi)
+* [Feature Matrix](#feature-matrix)
+* [Quick Start](#quick-start)
+* [Configuration](#configuration)
+* [Project Structure](#project-structure)
+* [Create a Plugin](#create-a-plugin)
+* [Scripts](#scripts)
+* [Troubleshooting](#troubleshooting)
+* [Contributing](#contributing)
+* [License](#license)
 
-### 🔗 Multi-Database
+## Overview
 
-> Use **MongoDB**, **MySQL**, or JSON—effortless to switch. Perfect for any deployment style.
+Katsumi is a lean WhatsApp bot framework built on Baileys. Drop a plugin file in `src/plugins/` and it becomes a command. Configure via `.env`, choose MySQL, MongoDB, or a JSON store, and deploy with PM2 or Docker.
 
-### 🎛️ Plugin System
+## Why Katsumi?
 
-> Every feature is a tidy module. Install, remove, or upgrade with zero pain. Minimal bloat, max power.
+* Focused, minimal core
+* Plugin‑first design
+* MySQL / MongoDB / JSON storage
+* Clean developer workflow (ESLint, Prettier, PM2)
 
-### 🛠️ Full Customization
+## Feature Matrix
 
-> Tweak bot prefixes, owner, DB, experimental flags, and more via `.env`.
+| Area            | Capability                       | Status |
+| --------------- | -------------------------------- | :----: |
+| Core            | Baileys socket + message router  |    ✅   |
+| Plugins         | File‑based, auto‑loaded commands |    ✅   |
+| Storage         | MySQL / MongoDB / JSON           |    ✅   |
+| Config          | Centralized `.env`               |    ✅   |
+| DX              | ESLint, Prettier, scripts        |    ✅   |
+| Process Manager | PM2 `ecosystem.config.cjs`       |    ✅   |
+| Docker          | Example snippet (below)          |   ▶️   |
 
-## 🚀 Getting Started
-
-#### 1. Clone Katsumi
+## Quick Start
 
 ```bash
 git clone https://github.com/nat9h/Katsumi.git
 cd Katsumi
-```
-
-#### 2. Install Everything
-
-```bash
 npm install
-```
-
-#### 3. Set Up Your Environment
-
-```bash
 cp .env.example .env
 ```
 
-#### 4. Edit `.env` With Your Settings
+Edit `.env`, then run:
 
-| Variable         | Description                         | Default                            |
-| ---------------- | ----------------------------------- | ---------------------------------- |
-| MYSQL_HOST       | MySQL database host                 | localhost                          |
-| MYSQL_PORT       | MySQL database port                 | 3306                               |
-| MYSQL_USER       | MySQL username                      | root                               |
-| MYSQL_PASSWORD   | MySQL password                      | password                           |
-| MYSQL_DATABASE   | MySQL database name                 | baileys                            |
-| BOT_SESSION_NAME | Session storage identifier          | session                            |
-| BOT_PREFIXES     | Command prefixes (comma-separated)  | !,.,?                              |
-| USE_MONGO        | Enable MongoDB storage (true/false) | false                              |
-| MONGO_URI        | MongoDB connection URI              | mongodb://localhost:27017/database |
+```bash
+npm run dev   # development
+npm start     # production
+npm run pm2   # PM2 process
+```
 
----
+On first run, scan the QR code or Pairing code with WhatsApp.
 
-## 💥 Running the Bot
+## Configuration
 
-- **Production:**
-    ```bash
-    npm start
-    ```
-- **Development (auto-reload):**
-    ```bash
-    npm run dev
-    ```
-- **Using PM2:**
-    ```bash
-    npm run pm2
-    ```
+| Variable           | Description                          | Example / Default                  |
+| ------------------ | ------------------------------------ | ---------------------------------- |
+| MYSQL\_HOST        | MySQL host                           | localhost                          |
+| MYSQL\_PORT        | MySQL port                           | 3306                               |
+| MYSQL\_USER        | MySQL user                           | root                               |
+| MYSQL\_PASSWORD    | MySQL password                       | password                           |
+| MYSQL\_DATABASE    | MySQL database name                  | baileys                            |
+| USE\_MONGO         | Use MongoDB for storage (true/false) | false                              |
+| MONGO\_URI         | MongoDB connection string            | mongodb://localhost:27017/database |
+| BOT\_SESSION\_NAME | Session storage identifier           | session                            |
+| BOT\_PREFIXES      | Comma‑separated command prefixes     | !,.,?                              |
 
----
+Notes:
 
-## 🌟 Plugins: Power & Simplicity
+* When `USE_MONGO=true`, ensure `MONGO_URI` is reachable.
+* If neither MySQL nor MongoDB is enabled, Katsumi falls back to a JSON store.
 
-Every plugin = a single `.js` file.  
-_Example: `ping.js` — shows latency & server info._
+**Docker (optional)**
 
-```javascript
+```dockerfile
+# Dockerfile (example)
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["npm","start"]
+```
+
+```bash
+# Build & run
+docker build -t katsumi .
+docker run --env-file .env --name katsumi --restart unless-stopped katsumi
+```
+
+## Project Structure
+
+```
+Katsumi/
+├─ src/
+│  ├─ auth/
+│  ├─ core/
+│  ├─ database/
+│  ├─ lib/
+│  ├─ plugins/
+│  ├─ plugins.js
+│  └─ store.js
+├─ ecosystem.config.cjs
+├─ .env.example
+├─ package.json
+└─ README.md
+```
+
+## Create a Plugin
+
+Create `src/plugins/ping.js`:
+
+```js
 import os from "os";
 import { performance } from "perf_hooks";
 
 export default {
-	name: "ping",
-	description: "Displays bot response speed and server info",
-	command: ["ping", "p"],
-	permissions: "all",
-	hidden: false,
-	category: "info",
-	cooldown: 0,
-
-	async execute(m) {
-		const start = performance.now();
-		const ram = (os.totalmem() / Math.pow(1024, 3)).toFixed(2) + " GB";
-		const freeRam = (os.freemem() / Math.pow(1024, 3)).toFixed(2) + " GB";
-		await m.reply(
-			`🚀 *PONG!*
-⏱️ Response Time: ${(performance.now() - start).toFixed(2)}ms
-💻 CPU: ${os.cpus().length} Core(s)
-📦 RAM: ${freeRam} / ${ram}
-🆙 Uptime: ${Math.floor(os.uptime() / 86400)} days`
-		);
-	},
+  name: "ping",
+  description: "Show latency and host info",
+  command: ["ping", "p"],
+  permissions: "all",      // all | admin | owner
+  category: "info",
+  cooldown: 0,
+  async execute(m) {
+    const t0 = performance.now();
+    const total = (os.totalmem() / 1024 ** 3).toFixed(2);
+    const free = (os.freemem() / 1024 ** 3).toFixed(2);
+    await m.reply(
+      `PONG
+` +
+      `Latency: ${(performance.now() - t0).toFixed(2)}ms
+` +
+      `CPU: ${os.cpus().length} cores
+` +
+      `RAM: ${free} / ${total} GB`
+    );
+  },
 };
 ```
 
-or
+### Plugin Options
 
-```javascript
-import os from "os";
-import { performance } from "perf_hooks";
+| Option      | Description                   | Example                 |
+| ----------- | ----------------------------- | ----------------------- |
+| command     | Triggers                      | \["ping", "p"]          |
+| permissions | Access level                  | "all", "admin", "owner" |
+| category    | Help grouping                 | "info"                  |
+| cooldown    | Cooldown in seconds           | 0                       |
+| group       | Group chats only (optional)   | true / false            |
+| private     | Private chats only (optional) | true / false            |
 
-export default {
-	name: "ping",
-	description: "Displays bot response speed and server info",
-	command: ["ping", "p"],
-	permissions: "all",
-	hidden: false,
-	category: "info",
-	cooldown: 0,
+## Scripts
 
-	execute: async (m) => {
-		const start = performance.now();
-		const ram = (os.totalmem() / Math.pow(1024, 3)).toFixed(2) + " GB";
-		const freeRam = (os.freemem() / Math.pow(1024, 3)).toFixed(2) + " GB";
-		await m.reply(
-			`🚀 *PONG!*
-⏱️ Response Time: ${(performance.now() - start).toFixed(2)}ms
-💻 CPU: ${os.cpus().length} Core(s)
-📦 RAM: ${freeRam} / ${ram}
-🆙 Uptime: ${Math.floor(os.uptime() / 86400)} days`
-		);
-	},
-};
+```bash
+npm run dev       # watch mode
+npm run lint      # eslint
+npm run prettier  # format
 ```
 
-**Result:**
+## Troubleshooting
 
-```
-🚀 PONG!
-⏱️ Response Time: 12.34ms
-💻 CPU: 8 Core(s)
-📦 RAM: 3.21 GB / 16.00 GB
-🆙 Uptime: 15 days
-```
+* No QR: widen the terminal and check network; pairing code mode is supported.
+* MySQL auth errors: verify host/user/password and database.
+* Mongo errors: verify `MONGO_URI` and that `USE_MONGO=true`.
+* Session issues: change `BOT_SESSION_NAME` and re‑login.
 
----
+## Contributing
 
-### 🎯 Plugin Option Reference
+Fork, create a feature branch, run lint, open a pull request with a clear description.
 
-| Option      | Description             | Example/Values          |
-| ----------- | ----------------------- | ----------------------- |
-| command     | Plugin triggers         | ["ping", "p"]           |
-| permissions | Who can use             | "all", "admin", "owner" |
-| category    | Help menu group         | "info", "utils", ...    |
-| cooldown    | Cooldown in seconds     | 0 (no cooldown)         |
-| group       | Enable in groups?       | true/false              |
-| private     | Enable in private chat? | true/false              |
+## License
 
----
-
-## 🧑‍💻 Dev Tools
-
-- **Lint:**
-    ```bash
-    npm run lint
-    ```
-- **Prettier:**
-    ```bash
-    npm run prettier
-    ```
-
----
-
-<div align="center" style="margin: 32px 0; font-size:1.25em;">
-  <b>
-    🚀 <a href="https://github.com/nat9h/Katsumi">Get Katsumi on GitHub</a> &nbsp;|&nbsp;
-    <a href="https://github.com/nat9h/Katsumi/issues">Report Issue</a>
-  </b>
-  <br>
-  <span style="font-size:1em; color:#a0a0a0;">MIT License © 2025 Natsumi &nbsp;|&nbsp; Made with <span style="color:#fd6c9e;">♥</span></span>
-</div>
+MIT. See [LICENSE](./LICENSE).
