@@ -30,7 +30,7 @@ function makeClient(instance) {
 	};
 }
 
-export const Gratis = makeClient(createClient("https://api.apigratis.tech"));
+export const Gratis = makeClient(createClient("https://api.apigratis.cc"));
 export const Sayuran = makeClient(createClient("https://sayuran.vip/api"));
 
 export const APIRequest = { Gratis, Sayuran };

@@ -22,6 +22,7 @@ import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import qrcode from "qrcode";
 
+const msgRetryCounterCache = new NodeCache();
 /**
  * Handle authentication state for different backends (MongoDB, MySQL, Local File)
  * @param {string} sessionName
@@ -168,6 +169,7 @@ class Connect {
 			generateHighQualityLinkPreview: true,
 			qrTimeout: usePairingCode ? undefined : 60000,
 			printQRInTerminal: qrMode,
+			msgRetryCounterCache,
 		});
 
 		this.sock = Client({ sock: this.sock, store: this.store });

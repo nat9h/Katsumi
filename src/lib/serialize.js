@@ -57,6 +57,7 @@ const parseMessage = (content) => {
 
 	const handlers = [
 		(msg) => msg?.viewOnceMessageV2Extension?.message,
+		(msg) => msg?.viewOnceMessageV2?.message,
 		(msg) =>
 			msg?.protocolMessage?.type === 14
 				? msg.protocolMessage[getContentType(msg.protocolMessage)]
@@ -526,7 +527,7 @@ export function Client({ sock, store }) {
 
 				copy.key.remoteJid = jid;
 				copy.key.fromMe = areJidsSameUser(sender, sock.user.id);
-				return WAProto.WebMessageInfo.fromObject(copy);
+				return WAProto.WebMessageInfo.create(copy);
 			},
 			enumerable: false,
 		},
@@ -886,14 +887,13 @@ export default async function serialize(sock, msg, store) {
 						(m.quoted.id.startsWith("B24E") &&
 							m.quoted.id.length === 20)
 					: false;
-
-				m.quoted.download = (pathFile) =>
-					downloadMedia(m.quoted.message, pathFile);
+					
+				m.quoted.download = (pathFile) => downloadMedia(m.quoted.message, pathFile);
 
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
 
-				let vM = (m.quoted.fakeObj = WAProto.WebMessageInfo.fromObject({
+				let vM = (m.quoted.fakeObj = WAProto.WebMessageInfo.create({
 					key: {
 						fromMe: m.quoted.fromMe,
 						remoteJid: m.quoted.from,
@@ -910,7 +910,7 @@ export default async function serialize(sock, msg, store) {
 					if (!m.quoted.id) {
 						return null;
 					}
-					let q = WAProto.WebMessageInfo.fromObject(
+					let q = WAProto.WebMessageInfo.create(
 						(await store.loadMessage(m.from, m.quoted.id)) || vM
 					);
 					return await serialize(sock, q, store);

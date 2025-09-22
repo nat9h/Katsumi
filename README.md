@@ -22,17 +22,17 @@
 
 ## Table of Contents
 
-* [Overview](#overview)
-* [Why Katsumi?](#why-katsumi)
-* [Feature Matrix](#feature-matrix)
-* [Quick Start](#quick-start)
-* [Configuration](#configuration)
-* [Project Structure](#project-structure)
-* [Create a Plugin](#create-a-plugin)
-* [Scripts](#scripts)
-* [Troubleshooting](#troubleshooting)
-* [Contributing](#contributing)
-* [License](#license)
+- [Overview](#overview)
+- [Why Katsumi?](#why-katsumi)
+- [Feature Matrix](#feature-matrix)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Project Structure](#project-structure)
+- [Create a Plugin](#create-a-plugin)
+- [Scripts](#scripts)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
@@ -40,21 +40,21 @@ Katsumi is a lean WhatsApp bot framework built on Baileys. Drop a plugin file in
 
 ## Why Katsumi?
 
-* Focused, minimal core
-* Plugin‑first design
-* MySQL / MongoDB / JSON storage
-* Clean developer workflow (ESLint, Prettier, PM2)
+- Focused, minimal core
+- Plugin‑first design
+- MySQL / MongoDB / JSON storage
+- Clean developer workflow (ESLint, Prettier, PM2)
 
 ## Feature Matrix
 
 | Area            | Capability                       | Status |
 | --------------- | -------------------------------- | :----: |
-| Core            | Baileys socket + message router  |    ✅   |
-| Plugins         | File‑based, auto‑loaded commands |    ✅   |
-| Storage         | MySQL / MongoDB / JSON           |    ✅   |
-| Config          | Centralized `.env`               |    ✅   |
-| DX              | ESLint, Prettier, scripts        |    ✅   |
-| Process Manager | PM2 `ecosystem.config.cjs`       |    ✅   |
+| Core            | Baileys socket + message router  |   ✅   |
+| Plugins         | File‑based, auto‑loaded commands |   ✅   |
+| Storage         | MySQL / MongoDB / JSON           |   ✅   |
+| Config          | Centralized `.env`               |   ✅   |
+| DX              | ESLint, Prettier, scripts        |   ✅   |
+| Process Manager | PM2 `ecosystem.config.cjs`       |   ✅   |
 | Docker          | Example snippet (below)          |   ▶️   |
 
 ## Quick Start
@@ -78,22 +78,22 @@ On first run, scan the QR code or Pairing code with WhatsApp.
 
 ## Configuration
 
-| Variable           | Description                          | Example / Default                  |
-| ------------------ | ------------------------------------ | ---------------------------------- |
-| MYSQL\_HOST        | MySQL host                           | localhost                          |
-| MYSQL\_PORT        | MySQL port                           | 3306                               |
-| MYSQL\_USER        | MySQL user                           | root                               |
-| MYSQL\_PASSWORD    | MySQL password                       | password                           |
-| MYSQL\_DATABASE    | MySQL database name                  | baileys                            |
-| USE\_MONGO         | Use MongoDB for storage (true/false) | false                              |
-| MONGO\_URI         | MongoDB connection string            | mongodb://localhost:27017/database |
-| BOT\_SESSION\_NAME | Session storage identifier           | session                            |
-| BOT\_PREFIXES      | Comma‑separated command prefixes     | !,.,?                              |
+| Variable         | Description                          | Example / Default                  |
+| ---------------- | ------------------------------------ | ---------------------------------- |
+| MYSQL_HOST       | MySQL host                           | localhost                          |
+| MYSQL_PORT       | MySQL port                           | 3306                               |
+| MYSQL_USER       | MySQL user                           | root                               |
+| MYSQL_PASSWORD   | MySQL password                       | password                           |
+| MYSQL_DATABASE   | MySQL database name                  | baileys                            |
+| USE_MONGO        | Use MongoDB for storage (true/false) | false                              |
+| MONGO_URI        | MongoDB connection string            | mongodb://localhost:27017/database |
+| BOT_SESSION_NAME | Session storage identifier           | session                            |
+| BOT_PREFIXES     | Comma‑separated command prefixes     | !,.,?                              |
 
 Notes:
 
-* When `USE_MONGO=true`, ensure `MONGO_URI` is reachable.
-* If neither MySQL nor MongoDB is enabled, Katsumi falls back to a JSON store.
+- When `USE_MONGO=true`, ensure `MONGO_URI` is reachable.
+- If neither MySQL nor MongoDB is enabled, Katsumi falls back to a JSON store.
 
 **Docker (optional)**
 
@@ -140,26 +140,26 @@ import os from "os";
 import { performance } from "perf_hooks";
 
 export default {
-  name: "ping",
-  description: "Show latency and host info",
-  command: ["ping", "p"],
-  permissions: "all",      // all | admin | owner
-  category: "info",
-  cooldown: 0,
-  async execute(m) {
-    const t0 = performance.now();
-    const total = (os.totalmem() / 1024 ** 3).toFixed(2);
-    const free = (os.freemem() / 1024 ** 3).toFixed(2);
-    await m.reply(
-      `PONG
+	name: "ping",
+	description: "Show latency and host info",
+	command: ["ping", "p"],
+	permissions: "all", // all | admin | owner
+	category: "info",
+	cooldown: 0,
+	async execute(m) {
+		const t0 = performance.now();
+		const total = (os.totalmem() / 1024 ** 3).toFixed(2);
+		const free = (os.freemem() / 1024 ** 3).toFixed(2);
+		await m.reply(
+			`PONG
 ` +
-      `Latency: ${(performance.now() - t0).toFixed(2)}ms
+				`Latency: ${(performance.now() - t0).toFixed(2)}ms
 ` +
-      `CPU: ${os.cpus().length} cores
+				`CPU: ${os.cpus().length} cores
 ` +
-      `RAM: ${free} / ${total} GB`
-    );
-  },
+				`RAM: ${free} / ${total} GB`
+		);
+	},
 };
 ```
 
@@ -184,10 +184,10 @@ npm run prettier  # format
 
 ## Troubleshooting
 
-* No QR: widen the terminal and check network; pairing code mode is supported.
-* MySQL auth errors: verify host/user/password and database.
-* Mongo errors: verify `MONGO_URI` and that `USE_MONGO=true`.
-* Session issues: change `BOT_SESSION_NAME` and re‑login.
+- No QR: widen the terminal and check network; pairing code mode is supported.
+- MySQL auth errors: verify host/user/password and database.
+- Mongo errors: verify `MONGO_URI` and that `USE_MONGO=true`.
+- Session issues: change `BOT_SESSION_NAME` and re‑login.
 
 ## Contributing
 
