@@ -47,7 +47,7 @@ export const print = async (m, store) => {
 	}
 
 	try {
-		const timestamp = new Date(m.messageTimestamp).toLocaleString("id-ID");
+		// const timestamp = new Date(m.messageTimestamp).toLocaleString("id-ID");
 		let chatName = "Private Chat";
 
 		if (m.isGroup) {
@@ -65,7 +65,7 @@ export const print = async (m, store) => {
 		console.log(
 			colorize(
 				Colors.FgWhite,
-				`[${timestamp}] [${chatName}] From: ${m.pushName} (${m.sender.split("@")[0]})`
+				`[${chatName}] From: ${m.pushName} (${m.sender.split("@")[0]})`
 			)
 		);
 		console.log(colorize(Colors.FgWhite, `[ID]: ${m.id}`));
