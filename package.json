@@ -30,7 +30,7 @@
 		"baileys"
 	],
 	"dependencies": {
-		"baileys": "github:WhiskeySockets/Baileys",
+		"baileys": "npm:baileys",
 		"file-type": "^21.0.0",
 		"fluent-ffmpeg": "^2.1.3",
 		"jimp": "^1.6.0",

@@ -68,7 +68,7 @@ export default {
 				const gp = await getFile(pp);
 				const msgs = generateWAMessageFromContent(
 					res.jid,
-					WAProto.Message.create({
+					WAProto.Message.fromObject({
 						groupInviteMessage: {
 							groupJid: m.from,
 							inviteCode: code,

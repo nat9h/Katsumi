@@ -1,5 +1,5 @@
 import { S_WHATSAPP_NET } from "baileys";
-import * as Jimp from "jimp";
+import { Jimp, JimpMime } from "jimp";
 
 export default {
 	name: "setpp",
@@ -35,12 +35,14 @@ export default {
 
 		async function pp() {
 			const image = await Jimp.read(media);
-			const mwmwx =
-				image.getWidth() > image.getHeight()
-					? image.resize(720, Jimp.AUTO)
-					: image.resize(Jimp.AUTO, 720);
+			let resized;
+			if (image.width > image.height) {
+				resized = image.resize({ w: 720, h: Jimp.RESIZE_AUTO });
+			} else {
+				resized = image.resize({ w: Jimp.RESIZE_AUTO, h: 720 });
+			}
 			return {
-				img: await mwmwx.getBufferAsync(Jimp.MIME_JPEG),
+				img: await resized.getBuffer(JimpMime.jpeg),
 			};
 		}
 
@@ -64,6 +66,6 @@ export default {
 				},
 			],
 		});
-		m.reply("Successfully change group.");
+		m.reply("Successfully change profile picture.");
 	},
 };

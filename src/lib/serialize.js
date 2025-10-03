@@ -527,7 +527,7 @@ export function Client({ sock, store }) {
 
 				copy.key.remoteJid = jid;
 				copy.key.fromMe = areJidsSameUser(sender, sock.user.id);
-				return WAProto.WebMessageInfo.create(copy);
+				return WAProto.WebMessageInfo.fromObject(copy);
 			},
 			enumerable: false,
 		},
@@ -624,7 +624,9 @@ export default async function serialize(sock, msg, store) {
 			? m.metadata.participants
 					.filter((p) => p.admin)
 					.map((p) => ({
-						id: p.phoneNumber || p.id,
+						id: p.id,
+						jid: p.jid,
+						phoneNumber: p.phoneNumber,
 						admin: p.admin,
 					}))
 			: [];
@@ -638,7 +640,8 @@ export default async function serialize(sock, msg, store) {
 			return adminNum && senderNum && adminNum === senderNum;
 		});
 		m.isBotAdmin = m.groupAdmins.some((admin) => {
-			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
+			const adminJid = admin.jid || admin.id;
+			const adminNum = (adminJid.match(/\d{8,}/) || [])[0];
 			const botNum = (botJid.match(/\d{8,}/) || [])[0];
 			return adminNum && botNum && adminNum === botNum;
 		});
@@ -887,13 +890,14 @@ export default async function serialize(sock, msg, store) {
 						(m.quoted.id.startsWith("B24E") &&
 							m.quoted.id.length === 20)
 					: false;
-					
-				m.quoted.download = (pathFile) => downloadMedia(m.quoted.message, pathFile);
+
+				m.quoted.download = (pathFile) =>
+					downloadMedia(m.quoted.message, pathFile);
 
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
 
-				let vM = (m.quoted.fakeObj = WAProto.WebMessageInfo.create({
+				let vM = (m.quoted.fakeObj = WAProto.WebMessageInfo.fromObject({
 					key: {
 						fromMe: m.quoted.fromMe,
 						remoteJid: m.quoted.from,
@@ -910,7 +914,7 @@ export default async function serialize(sock, msg, store) {
 					if (!m.quoted.id) {
 						return null;
 					}
-					let q = WAProto.WebMessageInfo.create(
+					let q = WAProto.WebMessageInfo.fromObject(
 						(await store.loadMessage(m.from, m.quoted.id)) || vM
 					);
 					return await serialize(sock, q, store);
