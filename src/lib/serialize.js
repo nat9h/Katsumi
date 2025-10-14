@@ -1,6 +1,5 @@
 import { BOT_CONFIG } from "#config/index";
 import * as Func from "#lib/functions";
-import { mimeMap } from "#lib/media";
 import { getPrefix } from "#lib/prefix";
 import Sticker from "#lib/sticker";
 import { to_audio } from "#utils/converter";
@@ -9,7 +8,6 @@ import {
 	WAProto,
 	areJidsSameUser,
 	chatModificationToAppPatch,
-	downloadContentFromMessage,
 	downloadMediaMessage,
 	extractMessageContent,
 	generateForwardMessageContent,
@@ -26,31 +24,6 @@ import { join } from "node:path";
 import pino from "pino";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
-
-/**
- * Download the media from the message.
- * @param {import("baileys").proto.IMessage} message - The message object.
- * @param {string} type - The media type.
- * @returns {Promise<Buffer>} - The media buffer.
- */
-const downloadMedia = async (message, pathFile) => {
-	const type = Object.keys(message)[0];
-	const stream = await downloadContentFromMessage(
-		message[type],
-		mimeMap[type]
-	);
-	const buffer = [];
-	for await (const chunk of stream) {
-		buffer.push(chunk);
-	}
-
-	const data = Buffer.concat(buffer);
-	if (pathFile) {
-		await promises.writeFile(pathFile, data);
-		return pathFile;
-	}
-	return data;
-};
 
 const parseMessage = (content) => {
 	content = extractMessageContent(content);
@@ -385,7 +358,7 @@ export function Client({ sock, store }) {
 			},
 		},
 
-		downloadMediaMessage: {
+		downloadMedia: {
 			async value(message, filename) {
 				let media = await downloadMediaMessage(
 					message,
@@ -891,8 +864,8 @@ export default async function serialize(sock, msg, store) {
 							m.quoted.id.length === 20)
 					: false;
 
-				m.quoted.download = (pathFile) =>
-					downloadMedia(m.quoted.message, pathFile);
+				m.quoted.download = async () =>
+					await sock.downloadMedia(m.quoted);
 
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
@@ -1024,7 +997,7 @@ export default async function serialize(sock, msg, store) {
 		}
 	};
 
-	m.download = (pathFile) => downloadMedia(m.message, pathFile);
+	m.download = async () => await sock.downloadMedia(m);
 
 	m.isUrl =
 		((m.text &&

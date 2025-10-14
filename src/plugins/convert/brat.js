@@ -31,26 +31,25 @@ export default {
 		}
 
 		const animated = /\s-animated\s*$/i.test(input);
-		const text = animated
-			? input.replace(/\s-animated\s*$/i, "").trim()
-			: input.trim();
-
+		const text = input.replace(/\s-animated\s*$/i, "").trim();
 		if (!text) {
 			return m.reply("Please provide the text.");
 		}
 
-		const apiUrl = animated
-			? `https://brat.caliphdev.com/api/brat/animate?text=${text}`
-			: `https://brat.caliphdev.com/api/brat?text=${text}`;
+		const baseUrl = "https://inusoft-brat.hf.space/api/";
+		const url = `${baseUrl}${animated ? "bratvid" : "brat"}?text=${encodeURIComponent(text)}`;
 
-		const response = await fetch(apiUrl);
-		if (!response.ok) {
-			throw new Error("Failed.");
+		const res = await fetch(url);
+		if (!res.ok) {
+			throw new Error("Failed to fetch.");
 		}
-		const arrayBuffer = await response.arrayBuffer();
-		const mediaBuffer = Buffer.from(arrayBuffer);
 
-		const sticker = await Sticker.create(mediaBuffer, {
+		const { URL } = await res.json();
+		const buffer = Buffer.from(
+			await (await fetch(URL.trim())).arrayBuffer()
+		);
+
+		const sticker = await Sticker.create(buffer, {
 			packname: "@natsumiworld.",
 			author: m.pushName,
 			emojis: "🤣",

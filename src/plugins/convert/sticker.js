@@ -50,6 +50,7 @@ export default {
 
 		if (m.isQuoted && m.quoted) {
 			if (/image|video|sticker|webp|document|audio/.test(mime)) {
+				await new Promise((res) => setTimeout(res, 500));
 				mediaBuffer = await q.download();
 				isMedia = true;
 			} else if (q.text) {
