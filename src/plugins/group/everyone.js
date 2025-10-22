@@ -26,7 +26,7 @@ export default {
 	execute: async (m, { groupMetadata, text }) => {
 		const q = m.isQuoted ? m.quoted : m;
 		const type = q.type || "";
-		const mentions = groupMetadata.participants.map((p) => p.id);
+		const mentions = groupMetadata.participants.map((p) => p.jid);
 		let mediaBuffer, mediaType;
 
 		if (isMediaMessage(type)) {

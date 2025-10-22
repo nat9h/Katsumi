@@ -694,25 +694,6 @@ export default async function serialize(sock, msg, store) {
 			m.msg?.name ||
 			"";
 
-		// m.prefix = new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi").test(
-		// 	m.body
-		// )
-		// 	? m.body.match(
-		// 			new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi")
-		// 		)[0]
-		// 	: "";
-		// m.command =
-		// 	m.body &&
-		// 	m.body.trim().replace(m.prefix, "").trim().split(/ +/).shift();
-		// m.args =
-		// 	m.body
-		// 		.trim()
-		// 		.replace(new RegExp("^" + Func.escapeRegExp(m.prefix), "i"), "")
-		// 		.replace(m.command, "")
-		// 		.split(/ +/)
-		// 		.filter((a) => a) || [];
-		// m.text = m.args.join(" ").trim();
-		// m.isCommand = false;
 		Object.assign(m, getPrefix(m.body, m));
 
 		m.expiration = m.msg?.contextInfo?.expiration || 0;
@@ -1000,8 +981,8 @@ export default async function serialize(sock, msg, store) {
 	m.download = async () => await sock.downloadMedia(m);
 
 	m.isUrl =
-		((m.text &&
-			m.text.match(
+		((m.body &&
+			m.body.match(
 				/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
 			)) ||
 			[])[0] || "";

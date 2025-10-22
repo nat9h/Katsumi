@@ -1,9 +1,11 @@
 <div align="center">
   <h1>Katsumi</h1>
+  <p>
+<a href="https://i.pinimg.com/736x/82/5c/b2/825cb2782b4ec2709b93bc8e128ba5ac.jpg">
+<img src="https://i.pinimg.com/736x/82/5c/b2/825cb2782b4ec2709b93bc8e128ba5ac.jpg" alt="Katsumi"/>
+</a>
+  </p>
   <p>Fast, modular WhatsApp bot built on Baileys. Plugin-system. Multi‑database.</p>
-
-  <!-- Badges: repo & tech -->
-
   <p>
     <a href="https://github.com/nat9h/Katsumi"><img alt="Stars" src="https://img.shields.io/github/stars/nat9h/Katsumi?style=flat&logo=github"></a>
     <a href="https://github.com/nat9h/Katsumi/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/nat9h/Katsumi"></a>

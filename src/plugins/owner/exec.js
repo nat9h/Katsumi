@@ -6,7 +6,7 @@ export default {
 	command: ["$", "exec"],
 	permissions: "owner",
 	hidden: false,
-	failed: "❌ Failed to execute %command: %error",
+	failed: "Failed to execute %command: %error",
 	category: "owner",
 	cooldown: 0,
 	usage: "$command <text>",

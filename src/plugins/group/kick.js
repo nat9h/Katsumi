@@ -28,7 +28,7 @@ export default {
 
 		const groupAdmins = groupMetadata?.participants
 			.filter((participant) => participant.admin)
-			.map((participant) => participant.id);
+			.map((participant) => participant.jid);
 
 		if (groupAdmins.includes(user)) {
 			return m.reply("You can't kick an admin");

@@ -23,8 +23,8 @@ export default {
 			return m.reply(
 				"⚠️ Please enter the *phone number* or *session ID* you want to stop.\n\n" +
 					"Example:\n" +
-					"`!stopclone 628xxxxxxxxxx`\n" +
-					"`!stopclone <session_id>`"
+					`*${m.prefix + m.command}* 628xxxxxxxxxx\n` +
+					`*${m.prefix + m.command}* <session_id>`
 			);
 		}
 
