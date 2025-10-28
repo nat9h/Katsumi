@@ -1,6 +1,6 @@
 import axios from "axios";
 import { fileTypeFromBuffer } from "file-type";
-import * as Jimp from "jimp";
+import { Jimp, JimpMime } from "jimp";
 import { existsSync, promises, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -203,7 +203,7 @@ export const clockString = (ms) => {
 
 export const reSize = async (buffer, width, height) => {
 	const img = await Jimp.read(buffer);
-	return img.resize(width, height).getBufferAsync(Jimp.MIME_JPEG);
+	return img.resize(width, height).getBuffer(JimpMime.jpeg);
 };
 
 export const sleep = async (ms) => {

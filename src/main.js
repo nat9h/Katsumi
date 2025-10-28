@@ -3,9 +3,14 @@ import { autoLoadCloneBots } from "#lib/clonebot/load";
 import { Colors, colorize } from "#lib/colors";
 import print from "#lib/print";
 
+function centerText(text, width = 55) {
+	const pad = Math.max(0, Math.floor((width - text.length) / 2));
+	return " ".repeat(pad) + text;
+}
+
 function art() {
 	return [
-		colorize(Colors.FgWhite, "	       Katsumi by NatsumiWorld"),
+		colorize(Colors.FgWhite, centerText("Katsumi by NatsumiWorld")),
 		colorize(
 			Colors.FgWhite,
 			"+====================================================+"

@@ -100,13 +100,14 @@ export function buildLidMap(participants = []) {
  */
 export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 	if (!jid || typeof jid !== "string" || !jid.endsWith("@lid")) {
-		return jid;
+		return jidNormalizedUser(jid);
 	}
 	if (lidMap && lidMap[jid]) {
-		return lidMap[jid];
+		return jidNormalizedUser(lidMap[jid]);
 	}
 	const found = participants.find((p) => p.id === jid || p.lid === jid);
-	return found?.jid || found?.phoneNumber || found?.id || jid;
+	const resolved = found?.jid || found?.phoneNumber || found?.id || jid;
+	return jidNormalizedUser(resolved);
 }
 
 function safeParseMention(sock, text) {
@@ -585,9 +586,24 @@ export default async function serialize(sock, msg, store) {
 		if (!metadata) {
 			try {
 				metadata = await sock.groupMetadata(m.from);
+				if (metadata?.participants) {
+					metadata.participants = metadata.participants.map((p) => ({
+						...p,
+						jid: jidNormalizedUser(p.jid),
+						phoneNumber: jidNormalizedUser(p.phoneNumber),
+					}));
+				}
 				store.setGroupMetadata(m.from, metadata);
 			} catch {
 				metadata = null;
+			}
+		} else {
+			if (metadata.participants) {
+				metadata.participants = metadata.participants.map((p) => ({
+					...p,
+					jid: jidNormalizedUser(p.jid),
+					phoneNumber: jidNormalizedUser(p.phoneNumber),
+				}));
 			}
 		}
 		m.metadata = metadata || null;

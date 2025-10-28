@@ -5,7 +5,7 @@
 <img src="https://i.pinimg.com/736x/82/5c/b2/825cb2782b4ec2709b93bc8e128ba5ac.jpg" alt="Katsumi"/>
 </a>
   </p>
-  <p>Fast, modular WhatsApp bot built on Baileys. Plugin-system. Multi‑database.</p>
+  <p>Fast, modular WhatsApp bot built on <a href="https://github.com/WhiskeySockets/Baileys">Baileys</a>. Plugin-system. Multi‑database.</p>
   <p>
     <a href="https://github.com/nat9h/Katsumi"><img alt="Stars" src="https://img.shields.io/github/stars/nat9h/Katsumi?style=flat&logo=github"></a>
     <a href="https://github.com/nat9h/Katsumi/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/nat9h/Katsumi"></a>
@@ -95,7 +95,7 @@ On first run, scan the QR code or Pairing code with WhatsApp.
 Notes:
 
 - When `USE_MONGO=true`, ensure `MONGO_URI` is reachable.
-- If neither MySQL nor MongoDB is enabled, Katsumi falls back to a JSON store.
+- If neither MySQL or MongoDB is enabled, Katsumi falls back to a JSON store.
 
 **Docker (optional)**
 
@@ -119,15 +119,21 @@ docker run --env-file .env --name katsumi --restart unless-stopped katsumi
 
 ```
 Katsumi/
-├─ src/
-│  ├─ auth/
-│  ├─ core/
-│  ├─ database/
-│  ├─ lib/
-│  ├─ plugins/
-│  ├─ plugins.js
-│  └─ store.js
+├───src
+│   ├───config
+│   ├───core
+│   ├───lib
+│   │   ├───auth
+│   │   ├───clonebot
+│   │   ├───database
+│   │   │   └───models
+│   │   ├───schema
+│   │   └───scraper
+│   ├───plugins
+│   └───utils
+│       └───API
 ├─ ecosystem.config.cjs
+├─ eslint.config.mjs
 ├─ .env.example
 ├─ package.json
 └─ README.md
