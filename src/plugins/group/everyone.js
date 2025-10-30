@@ -1,4 +1,5 @@
 import { isMediaMessage, mimeMap } from "#lib/media";
+import { generateWAMessageFromContent, jidNormalizedUser } from "baileys";
 
 export default {
 	name: "hidetag",
@@ -23,10 +24,13 @@ export default {
 	 * @param {object} m
 	 * @param {object} options
 	 */
-	execute: async (m, { groupMetadata, text }) => {
+	execute: async (m, { text, sock }) => {
+		if (!m.metadata) {
+			return m.reply("Group metadata not available.");
+		}
+
 		const q = m.isQuoted ? m.quoted : m;
 		const type = q.type || "";
-		const mentions = groupMetadata.participants.map((p) => p.jid);
 		let mediaBuffer, mediaType;
 
 		if (isMediaMessage(type)) {
@@ -34,30 +38,56 @@ export default {
 				mediaBuffer = await q.download();
 				mediaType = mimeMap[type] || "document";
 			} catch (e) {
-				console.error("Error downloading media:", e);
+				console.error("Media download error:", e);
 			}
 		}
 
 		const message = text || q.text || q.caption || "";
 
+		if (!message && (!mediaType || !mediaBuffer)) {
+			return m.reply("Please provide text or reply to media!");
+		}
+
+		const mentions = m.metadata.participants
+			.map((p) => {
+				let jid = p.jid || p.phoneNumber || p.id;
+				return jid &&
+					typeof jid === "string" &&
+					jid.endsWith("@s.whatsapp.net")
+					? jidNormalizedUser(jid)
+					: null;
+			})
+			.filter(Boolean);
+
+		if (mentions.length === 0) {
+			return m.reply("No valid participants found to mention.");
+		}
+
+		const content = {
+			text: message,
+			contextInfo: { mentionedJid: mentions },
+		};
+
 		if (mediaType && mediaBuffer) {
-			const mediaMsg = { [mediaType]: mediaBuffer, mentions };
-			if (mediaType === "sticker" && message) {
-				await m.reply(mediaMsg);
-				return m.reply({ text: message, mentions });
+			content[mediaType] = mediaBuffer;
+			if (mediaType !== "sticker") {
+				content.caption = message;
+				delete content.text;
 			}
-			if (message && mediaType !== "sticker") {
-				mediaMsg.caption = message;
-			}
-			return m.reply(mediaMsg);
 		}
 
-		if (!message) {
-			return m.reply({
-				text: "Please provide text or reply to the media/message you want to hidetag!",
-			});
-		}
+		const msg = generateWAMessageFromContent(
+			m.from,
+			{ extendedTextMessage: content },
+			{
+				userJid: sock.user.id,
+				quoted: m,
+				ephemeralExpiration: m.expiration,
+			}
+		);
 
-		return m.reply({ text: message, mentions });
+		await sock.relayMessage(m.from, msg.message, {
+			messageId: msg.key.id,
+		});
 	},
 };
