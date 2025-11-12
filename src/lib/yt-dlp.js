@@ -19,7 +19,18 @@ export async function downloadYt(url, opts = {}) {
 	const outputExt = video ? "mp4" : "m4a";
 
 	const outFile = `/tmp/yt_${Date.now()}.${outputExt}`;
-	const args = ["-f", format, "-o", outFile, url];
+
+	const args = [
+		"--js-runtimes",
+		"deno",
+		"--remote-components",
+		"ejs:npm",
+		"-f",
+		format,
+		"-o",
+		outFile,
+		url,
+	];
 
 	try {
 		readFileSync(cookiesPath);
@@ -29,6 +40,8 @@ export async function downloadYt(url, opts = {}) {
 	}
 
 	const cmd = `yt-dlp ${args.map((a) => `"${a}"`).join(" ")}`;
+	console.log("[yt-dlp cmd]", cmd);
+
 	await execPromise(cmd, { maxBuffer: 300 * 1024 * 1024 });
 
 	const buffer = readFileSync(outFile);
