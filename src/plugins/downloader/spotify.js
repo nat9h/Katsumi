@@ -56,7 +56,7 @@ export default {
 				"*Spotify Downloader*\n\n_Sending audio, please wait..._"
 			);
 
-			const response = await fetch(result.url);
+			const response = await fetch(result.download_url);
 			const buffer = Buffer.from(await response.arrayBuffer());
 
 			return m.reply({
@@ -146,7 +146,7 @@ export default {
 			caption: antemi,
 		});
 
-		const response = await fetch(result.url);
+		const response = await fetch(result.download_url);
 		const buffer = Buffer.from(await response.arrayBuffer());
 
 		return m.reply({

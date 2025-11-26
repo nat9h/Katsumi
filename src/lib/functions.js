@@ -368,3 +368,30 @@ export function delayWithProgress(ms, callback) {
 		}, 100);
 	});
 }
+
+/**
+ * Formats a Date object to a detailed, human-readable string with UTC offset.
+ * @param {Date} [date] - The Date object to format (defaults to now)
+ * @returns {string} Formatted datetime string
+ */
+export function toDateTime(date = new Date()) {
+	if (!(date instanceof Date)) {
+		date = new Date(date);
+	}
+	if (isNaN(date)) {
+		throw new Error("Invalid date input to toDateTime()");
+	}
+
+	const offset = -date.getTimezoneOffset();
+	const sign = offset >= 0 ? "+" : "-";
+	const absOffset = Math.abs(offset);
+	const h = String(Math.floor(absOffset / 60)).padStart(2, "0");
+	const m = String(absOffset % 60).padStart(2, "0");
+	const tz = `${sign}${h}:${m}`;
+
+	return (
+		`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ` +
+		`${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")} ` +
+		`(UTC${tz})`
+	);
+}

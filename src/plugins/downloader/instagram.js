@@ -38,42 +38,15 @@ export default {
 			return m.reply(message);
 		}
 
-		const { meta } = result;
-		let caption =
-			"*📸 INSTAGRAM DOWNLOADER*\n\n" +
-			`*👤 User*: @${meta?.username || "-"}\n` +
-			`*📝 Caption*: ${meta?.title || "-"}\n` +
-			`*👍 Like*: ${meta?.like_count || 0}\n` +
-			`*🗓️ Upload*: ${meta?.taken_at ? new Date(meta.taken_at * 1000).toLocaleString("id-ID") : "-"}\n` +
-			`*🔗 Source*: ${meta?.source || "N/A"}`;
-
-		if (meta?.comments?.length > 0) {
-			const commentsText = meta.comments
-				.slice(0, 5)
-				.map((c, i) => `*${i + 1}.* @${c.username}: ${c.text}`)
-				.join("\n");
-			const remaining = meta.comment_count - 5;
-			caption += `\n\n💬 *Comments*:\n${commentsText}`;
-			if (remaining > 0) {
-				caption += `\nand ${remaining} another comments...`;
-			}
-		}
-
-		const downloadMedia = async (url) => {
-			const response = await fetch(url);
-			const buffer = Buffer.from(await response.arrayBuffer());
-			const type = await fileTypeFromBuffer(buffer);
-			const mime = type?.mime || "application/octet-stream";
-			const mediaType = mime.startsWith("video") ? "video" : "image";
-			return { [mediaType]: buffer };
+		const download = async (url) => {
+			const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
+			const type = await fileTypeFromBuffer(buf);
+			const key = type?.mime?.startsWith("video") ? "video" : "image";
+			return { [key]: buf };
 		};
 
-		const firstMedia = await downloadMedia(result.urls[0].url);
-		await m.reply({ ...firstMedia, caption: caption.trim() });
-
-		for (let i = 1; i < result.urls.length; i++) {
-			const mediaData = await downloadMedia(result.urls[i].url);
-			await m.reply(mediaData);
+		for (const item of result?.contents) {
+			await m.reply(await download(item.url));
 		}
 	},
 };

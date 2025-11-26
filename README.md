@@ -191,32 +191,36 @@ npm run prettier  # format
 ```
 
 ## Troubleshooting
+
 - **YouTube downloads fail with "Signature solving failed" or "Requested format is not available"**  
   This means `yt-dlp` cannot solve YouTube's JavaScript challenges. You must set up a JavaScript runtime and enable EJS components:
+    - Install **Deno** (recommended):
+        ```bash
+        curl -fsSL https://deno.land/install.sh | sh
+        ```
+    - Ensure `yt-dlp` is updated (latest):
+        ```bash
+        yt-dlp --update-to nightly
+        ```
+        or
 
-  - Install **Deno** (recommended):
     ```bash
-    curl -fsSL https://deno.land/install.sh | sh
+      python -m pip install -U --pre "yt-dlp[default]"
     ```
-  - Ensure `yt-dlp` is updated (latest):
-    ```bash
-    yt-dlp --update-to nightly
-    ```
-	or
-	```bash
-    python -m pip install -U --pre "yt-dlp[default]"
-    ```
+
     > The `[default]` extra installs `yt-dlp-ejs` (challenge solver scripts).
+    - **OR** use remote EJS (if you can't install `yt-dlp-ejs`):
+      Add to `~/.config/yt-dlp/config`:
+        ```ini
+        --js-runtimes deno
+        --remote-components ejs:npm
+        ```
+        Test with:
 
-  - **OR** use remote EJS (if you can't install `yt-dlp-ejs`):
-    Add to `~/.config/yt-dlp/config`:
-    ```ini
-    --js-runtimes deno
-    --remote-components ejs:npm
+    ```bash
+    yt-dlp --js-runtimes deno --remote-components ejs:npm -f "bestaudio" "https://youtu.be/mzB1VGEGcSU"
     ```
-  Test with:
-  ```bash
-  yt-dlp --js-runtimes deno --remote-components ejs:npm -f "bestaudio" "https://youtu.be/mzB1VGEGcSU"
+
 - No QR: widen the terminal and check network; pairing code mode is supported.
 - MySQL auth errors: verify host/user/password and database.
 - Mongo errors: verify `MONGO_URI` and that `USE_MONGO=true`.
