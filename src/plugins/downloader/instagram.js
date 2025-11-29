@@ -13,10 +13,6 @@ export default {
 	cooldown: 5,
 	limit: false,
 	react: true,
-	botAdmin: false,
-	group: false,
-	private: false,
-	owner: false,
 
 	async execute(m, { api }) {
 		const input =
@@ -41,12 +37,24 @@ export default {
 		const download = async (url) => {
 			const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
 			const type = await fileTypeFromBuffer(buf);
-			const key = type?.mime?.startsWith("video") ? "video" : "image";
-			return { [key]: buf };
+			return { buf, isVideo: type?.mime?.startsWith("video") };
 		};
 
-		for (const item of result?.contents) {
-			await m.reply(await download(item.url));
+		const {
+			username,
+			title,
+			like_count = 0,
+			comment_count = 0,
+			taken_at,
+		} = result.metadata || {};
+		const caption = `*@${username || "-"}*\n${title || "-"}\n${like_count} likes • ${comment_count} comments\n${taken_at ? new Date(taken_at * 1000).toLocaleString("id-ID") : ""}`;
+
+		for (const [i, { url }] of result.contents.entries()) {
+			const { buf, isVideo } = await download(url);
+			await m.reply({
+				[isVideo ? "video" : "image"]: buf,
+				...(i === 0 && { caption }),
+			});
 		}
 	},
 };
