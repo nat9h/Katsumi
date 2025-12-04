@@ -1,4 +1,4 @@
-import fesnuk from "#lib/scraper/facebook";
+import fesnuk from "#lib/scrapers/facebook";
 
 export default {
 	name: "facebook",
