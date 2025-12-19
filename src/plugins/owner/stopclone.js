@@ -21,7 +21,7 @@ export default {
 
 		if (!arg) {
 			return m.reply(
-				"⚠️ Please enter the *phone number* or *session ID* you want to stop.\n\n" +
+				"Please enter the *phone number* or *session ID* you want to stop.\n\n" +
 					"Example:\n" +
 					`*${m.prefix + m.command}* 628xxxxxxxxxx\n` +
 					`*${m.prefix + m.command}* <session_id>`
@@ -35,7 +35,7 @@ export default {
 
 		if (!found) {
 			return m.reply(
-				"🚫 Session not found. Please check the number or session ID."
+				"Session not found. Please check the number or session ID."
 			);
 		}
 
@@ -49,7 +49,7 @@ export default {
 
 		return m.reply(
 			[
-				"🛑 *CloneBot Session Stopped & Deleted!*",
+				"*CloneBot Session Stopped & Deleted!*",
 				`• *Session ID:* ${found._id}`,
 				`• *Phone:* +${found.phone}`,
 				"",

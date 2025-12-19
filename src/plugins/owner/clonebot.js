@@ -23,7 +23,7 @@ export default {
 		if (!phone || phone.length < 9) {
 			return m.reply(
 				[
-					"❌ *Invalid phone number!*",
+					"*Invalid phone number!*",
 					"Please enter a valid phone number *with country code*, for example:",
 					"```",
 					`${m.prefix || ""}${m.command} 628xxxxxxxxxx`,
@@ -37,7 +37,7 @@ export default {
 			if (!onWa?.length) {
 				return m.reply(
 					[
-						"❌ *This phone number is not registered on WhatsApp!*",
+						"*This phone number is not registered on WhatsApp!*",
 						"Please double-check the number and try again.",
 					].join("\n")
 				);
@@ -45,13 +45,13 @@ export default {
 		} catch (err) {
 			return m.reply(
 				[
-					"❌ *Failed to check WhatsApp registration:*",
+					"*Failed to check WhatsApp registration:*",
 					err.message || err,
 				].join("\n")
 			);
 		}
 
-		await m.reply(`⏳ *Creating a new CloneBot session for* +${phone}...`);
+		await m.reply(`*Creating a new CloneBot session for* +${phone}...`);
 
 		const clone = new CloneBot(phone);
 
@@ -63,7 +63,7 @@ export default {
 				if (result.code) {
 					await m.reply(
 						[
-							"✅ *CloneBot Pairing Code*",
+							"*CloneBot Pairing Code*",
 							"",
 							`• *Number:* +${phone}`,
 							`• *Pairing Code:* \`${result.code}\``,
@@ -79,7 +79,7 @@ export default {
 				} else if (result.connected) {
 					await m.reply(
 						[
-							"🎉 *CloneBot Connected!*",
+							"*CloneBot Connected!*",
 							`• *Number:* @${phone}`,
 							`• *Session:* ${result.sessionName}`,
 							"",
@@ -90,10 +90,9 @@ export default {
 			},
 			async (err) => {
 				await m.reply(
-					[
-						"❌ *Failed to pair or connect:*",
-						err.message || err,
-					].join("\n")
+					["*Failed to pair or connect:*", err.message || err].join(
+						"\n"
+					)
 				);
 			}
 		);
