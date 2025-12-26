@@ -807,10 +807,7 @@ export default async function serialize(sock, msg, store) {
 					"gi"
 				).test(m.quoted.body)
 					? m.quoted.body.match(
-							new RegExp(
-								"^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]",
-								"gi"
-							)
+							new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi")
 						)[0]
 					: "";
 				m.quoted.command =

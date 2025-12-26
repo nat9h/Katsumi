@@ -6,9 +6,9 @@ export default {
 	execute: () => {},
 	periodic: {
 		enabled: false,
-		type: "message", // this example for type message
+		type: "message",
 		run: async function (m) {
-			if ((m.body || "").toLowerCase().includes("tes")) {
+			if (/tes/i.test(m.body || "")) {
 				await m.reply("tis");
 			}
 		},

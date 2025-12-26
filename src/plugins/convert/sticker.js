@@ -168,7 +168,7 @@ export default {
 		}
 
 		if (input.length > 0 && isMedia) {
-			const url = await uploader.providers.netorare.upload(mediaBuffer);
+			const url = await uploader.providers.catbox.upload(mediaBuffer);
 			const res = await fetch(
 				`https://api.memegen.link/images/custom/${encodeURIComponent(teks1)}/${encodeURIComponent(teks2)}.png?background=${url}`,
 				{ responseType: "arraybuffer" }

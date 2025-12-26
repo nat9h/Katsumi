@@ -83,6 +83,9 @@ class PluginManager {
 			}
 
 			await Promise.all(pluginLoadPromises);
+
+			await this.applyPeriodicSettingsFromDB();
+
 			setAllCommands(this.getAllCommands());
 			print.info(`🚀 Successfully loaded ${this.plugins.length} plugins`);
 			this.logActivePeriodicTasks();
@@ -95,6 +98,22 @@ class PluginManager {
 		return this.plugins.flatMap((plugin) =>
 			plugin.command.map((cmd) => cmd.toLowerCase())
 		);
+	}
+
+	async applyPeriodicSettingsFromDB() {
+		try {
+			const settings = await db.SettingsModel.getSettings();
+			for (const plugin of this.plugins) {
+				if (plugin.periodic && typeof plugin.name === "string") {
+					const key = plugin.name.toLowerCase();
+					if (typeof settings[key] === "boolean") {
+						plugin.periodic.enabled = settings[key];
+					}
+				}
+			}
+		} catch (e) {
+			print.error("Failed to apply periodic settings from DB:", e);
+		}
 	}
 
 	logActivePeriodicTasks() {
@@ -481,6 +500,7 @@ class PluginManager {
 			api,
 			db,
 			store: this.store,
+			pluginManager: this,
 		};
 
 		try {
@@ -558,6 +578,49 @@ class PluginManager {
 		}
 	}
 
+	startPeriodicTask(plugin) {
+		const periodic = plugin.periodic;
+
+		if (
+			!periodic ||
+			periodic.type !== "interval" ||
+			typeof periodic.run !== "function" ||
+			!periodic.interval
+		) {
+			return;
+		}
+
+		const exists = this.periodicTasks.find((t) => t.name === plugin.name);
+		if (exists) {
+			return;
+		}
+
+		const timer = setInterval(
+			() =>
+				periodic.run(undefined, {
+					sock: this.sock,
+					pluginManager: this,
+				}),
+			periodic.interval
+		);
+
+		this.periodicTasks.push({ name: plugin.name, timer });
+		print.debug(
+			`⏰ [Scheduler] Task '${plugin.name}' scheduled every ${periodic.interval / 1000}s`
+		);
+	}
+
+	stopPeriodicTask(name) {
+		const index = this.periodicTasks.findIndex((t) => t.name === name);
+		if (index === -1) {
+			return;
+		}
+
+		clearInterval(this.periodicTasks[index].timer);
+		this.periodicTasks.splice(index, 1);
+		print.debug(`🛑 [Scheduler] Task '${name}' stopped`);
+	}
+
 	/**
 	 * Only periodic with type: 'interval' is scheduled here.
 	 * Periodic with type: 'message' is called in message handler.
@@ -567,33 +630,23 @@ class PluginManager {
 		print.debug(
 			`🚦 [Scheduler] Initiating periodic task scheduling for ${this.plugins.length} plugins...`
 		);
+
 		this.plugins.forEach((plugin) => {
 			const periodic = plugin.periodic;
 			if (!periodic) {
 				return;
 			}
+
+			const enabled = !!periodic.enabled;
+
 			if (
-				periodic.enabled &&
+				enabled &&
 				periodic.type === "interval" &&
 				typeof periodic.run === "function"
 			) {
-				print.debug(
-					`🔁 [Scheduler] Registering periodic (interval) task: ${plugin.name}`
-				);
-				const timer = setInterval(
-					() =>
-						periodic.run(undefined, {
-							sock,
-							pluginManager: this,
-						}),
-					periodic.interval
-				);
-				this.periodicTasks.push({ name: plugin.name, timer });
-				print.debug(
-					`⏰ [Scheduler] Task '${plugin.name}' scheduled to run every ${periodic.interval / 1000} seconds.`
-				);
+				this.startPeriodicTask(plugin);
 			} else if (
-				periodic.enabled &&
+				enabled &&
 				periodic.type &&
 				periodic.type !== "interval" &&
 				periodic.type !== "message"
@@ -603,6 +656,7 @@ class PluginManager {
 				);
 			}
 		});
+
 		if (!this.periodicTasks.length) {
 			print.debug(
 				"⚠️ [Scheduler] No periodic tasks registered. All clear!"

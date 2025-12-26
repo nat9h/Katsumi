@@ -11,7 +11,7 @@ export default {
 	hidden: true,
 	usage: "$prefix$command <feature> <on|off>",
 
-	async execute(m, { args, plugins }) {
+	async execute(m, { args, plugins, pluginManager }) {
 		const [rawFeature, rawValue] = args;
 		const feature = (rawFeature || "").toLowerCase();
 		const value = (rawValue || "").toLowerCase();
@@ -40,6 +40,28 @@ export default {
 		const update = {};
 		update[feature] = value === "on";
 		await SettingsModel.updateSettings(update);
+
+		const targetPlugin = plugins.find(
+			(p) =>
+				typeof p.name === "string" && p.name.toLowerCase() === feature
+		);
+
+		if (targetPlugin && targetPlugin.periodic) {
+			const enabled = value === "on";
+			targetPlugin.periodic.enabled = enabled;
+
+			if (
+				pluginManager &&
+				typeof pluginManager.startPeriodicTask === "function"
+			) {
+				if (enabled) {
+					pluginManager.startPeriodicTask(targetPlugin);
+				} else {
+					pluginManager.stopPeriodicTask(targetPlugin.name);
+				}
+			}
+		}
+
 		m.reply(`Feature *${feature}* is now *${value.toUpperCase()}*`);
 	},
 };

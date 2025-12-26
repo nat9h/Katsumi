@@ -9,7 +9,7 @@ const exec = promisify(_exec).bind(cp);
 
 export default {
 	name: "autobackup",
-	command: [],
+	command: ["autobackup"],
 	execute: () => {},
 	ephemeralExpiration: 86400, // set ephemeral
 	hidden: true,
