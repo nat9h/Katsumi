@@ -18,7 +18,7 @@ export default {
 	private: false,
 	owner: false,
 
-	async execute(m, { api }) {
+	execute: async (m, { api }) => {
 		const input =
 			m.text && m.text.trim() !== ""
 				? m.text
