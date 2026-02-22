@@ -2,9 +2,9 @@ import Sticker from "#lib/sticker";
 
 export default {
 	name: "brat",
-	description: "Create a sticker brat.",
+	description: "Create a brat sticker.",
 	command: ["brat"],
-	usage: "$prefix$command <text> (-animated for text animated).",
+	usage: "$prefix$command <text>",
 	permissions: "all",
 	hidden: false,
 	failed: "Failed to %command: %error",
@@ -18,36 +18,31 @@ export default {
 	private: false,
 	owner: false,
 
-	async execute(m) {
+	execute: async (m, { args, sock }) => {
 		const input =
 			m.text && m.text.trim() !== ""
 				? m.text
 				: m.quoted && m.quoted.text
-					? m.quoted.text
-					: null;
+				? m.quoted.text
+				: null;
 
 		if (!input) {
 			return m.reply("Input text.");
 		}
 
-		const animated = /\s-animated\s*$/i.test(input);
-		const text = input.replace(/\s-animated\s*$/i, "").trim();
+		const text = input.trim();
 		if (!text) {
 			return m.reply("Please provide the text.");
 		}
 
-		const baseUrl = "https://inusoft-brat.hf.space/api/";
-		const url = `${baseUrl}${animated ? "bratvid" : "brat"}?text=${encodeURIComponent(text)}`;
+		const url = `https://shinana-brat.hf.space/?text=${encodeURIComponent(text)}`;
 
 		const res = await fetch(url);
 		if (!res.ok) {
-			throw new Error("Failed to fetch.");
+			throw new Error("Failed to fetch brat image.");
 		}
 
-		const { URL } = await res.json();
-		const buffer = Buffer.from(
-			await (await fetch(URL.trim())).arrayBuffer()
-		);
+		const buffer = Buffer.from(await res.arrayBuffer());
 
 		const sticker = await Sticker.create(buffer, {
 			packname: "@natsumiworld.",

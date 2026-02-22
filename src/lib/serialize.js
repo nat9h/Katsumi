@@ -622,14 +622,15 @@ export default async function serialize(sock, msg, store) {
 
 		const botJid = jidNormalizedUser(sock.user.id);
 		m.isAdmin = m.groupAdmins.some((admin) => {
-			const adminNum = (admin.id.match(/\d{8,}/) || [])[0];
+			const adminJid = admin.jid || admin.phoneNumber || admin.id;
+			const adminNum = (adminJid.match(/\d{8,}/) || [])[0];
 			const senderNum = m.sender
 				? (m.sender.match(/\d{8,}/) || [])[0]
 				: "";
 			return adminNum && senderNum && adminNum === senderNum;
 		});
 		m.isBotAdmin = m.groupAdmins.some((admin) => {
-			const adminJid = admin.jid || admin.id;
+			const adminJid = admin.jid || admin.phoneNumber || admin.id;
 			const adminNum = (adminJid.match(/\d{8,}/) || [])[0];
 			const botNum = (botJid.match(/\d{8,}/) || [])[0];
 			return adminNum && botNum && adminNum === botNum;
