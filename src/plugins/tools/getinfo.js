@@ -1,6 +1,7 @@
 export default {
 	name: "getinfo",
-	description: "Get full information from a WhatsApp Channel or Group invite link.",
+	description:
+		"Get full information from a WhatsApp Channel or Group invite link.",
 	command: ["getinfo"],
 	permissions: "all",
 	category: "tools",
@@ -12,50 +13,64 @@ export default {
 
 	execute: async (m, { sock }) => {
 		const text = m.text?.trim();
-		if (!text) return m.reply("Please provide a group or channel invite link.");
+		if (!text) {
+			return m.reply("Please provide a group or channel invite link.");
+		}
 
 		const formatDateTime = (timestamp) => {
-			if (!timestamp || timestamp === 0) return "Not available";
+			if (!timestamp || timestamp === 0) {
+				return "Not available";
+			}
 
 			const date = new Date(timestamp * 1000);
-			return date.toLocaleString("en-US", {
-				timeZone: "Asia/Jakarta",
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-				hour: "2-digit",
-				minute: "2-digit",
-				second: "2-digit",
-				hour12: false
-			}) + " WIB";
+			return (
+				date.toLocaleString("en-US", {
+					timeZone: "Asia/Jakarta",
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+					hour: "2-digit",
+					minute: "2-digit",
+					second: "2-digit",
+					hour12: false,
+				}) + " WIB"
+			);
 		};
 
 		const formatDateOnly = (timestamp) => {
-			if (!timestamp || timestamp === 0) return "Not available";
+			if (!timestamp || timestamp === 0) {
+				return "Not available";
+			}
 
 			const date = new Date(timestamp * 1000);
-			return date.toLocaleString("en-US", {
-				timeZone: "Asia/Jakarta",
-				year: "numeric",
-				month: "long",
-				day: "numeric"
-			}) + " WIB";
+			return (
+				date.toLocaleString("en-US", {
+					timeZone: "Asia/Jakarta",
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				}) + " WIB"
+			);
 		};
 
 		try {
 			if (text.includes("whatsapp.com/channel/")) {
-
 				const inviteCode = text
 					.split("whatsapp.com/channel/")[1]
 					?.split(/[\s?]/)[0];
 
-				if (!inviteCode) return m.reply("Invalid invite code.");
+				if (!inviteCode) {
+					return m.reply("Invalid invite code.");
+				}
 
-				const metadata = await sock.newsletterMetadata("invite", inviteCode);
+				const metadata = await sock.newsletterMetadata(
+					"invite",
+					inviteCode
+				);
 				const info = metadata.thread_metadata;
 
-				let caption = `📢 *CHANNEL INFORMATION*\n`;
-				caption += `━━━━━━━━━━━━━━━━━━\n\n`;
+				let caption = "📢 *CHANNEL INFORMATION*\n";
+				caption += "━━━━━━━━━━━━━━━━━━\n\n";
 
 				caption += `🆔 *Channel ID:* ${metadata.id}\n`;
 				caption += `📌 *State:* ${metadata.state?.type || "Unknown"}\n`;
@@ -89,18 +104,19 @@ export default {
 				return m.reply(caption);
 			}
 			if (text.includes("chat.whatsapp.com/")) {
-
 				const inviteCode = text
 					.split("chat.whatsapp.com/")[1]
 					?.split(/[\s?]/)[0];
 
-				if (!inviteCode) return m.reply("Invalid invite code.");
+				if (!inviteCode) {
+					return m.reply("Invalid invite code.");
+				}
 
 				const metadata = await sock.groupGetInviteInfo(inviteCode);
 
 				const totalMembers = metadata.participants?.length || 0;
 				const totalAdmins =
-					metadata.participants?.filter(p => p.admin)?.length || 0;
+					metadata.participants?.filter((p) => p.admin)?.length || 0;
 				const totalRegular = totalMembers - totalAdmins;
 
 				let ephemeralText = "Disabled";
@@ -118,8 +134,8 @@ export default {
 					}
 				}
 
-				let caption = `👥 *GROUP INFORMATION*\n`;
-				caption += `━━━━━━━━━━━━━━━━━━\n\n`;
+				let caption = "👥 *GROUP INFORMATION*\n";
+				caption += "━━━━━━━━━━━━━━━━━━\n\n";
 
 				caption += `🆔 *Group ID:* ${metadata.id}\n`;
 				caption += `📌 *Addressing Mode:* ${metadata.addressingMode || "Unknown"}\n`;

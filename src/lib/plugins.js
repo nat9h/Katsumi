@@ -350,26 +350,23 @@ class PluginManager {
 
 		let isGroupAdmin = false;
 		if (m.isGroup && m.metadata?.participants) {
-		
-			const clean = jid =>
-				typeof jid === "string"
-					? jid.replace(/\D/g, "")
-					: "";
-		
+			const clean = (jid) =>
+				typeof jid === "string" ? jid.replace(/\D/g, "") : "";
+
 			const senderNum = clean(m.sender);
-		
-			const participant = m.metadata.participants.find(p => {
+
+			const participant = m.metadata.participants.find((p) => {
 				const idNum = clean(p.id);
 				const phoneNum = clean(p.phoneNumber);
 				const jidNum = clean(p.jid);
-		
+
 				return (
 					idNum === senderNum ||
 					phoneNum === senderNum ||
 					jidNum === senderNum
 				);
 			});
-		
+
 			isGroupAdmin =
 				participant?.admin === "admin" ||
 				participant?.admin === "superadmin";

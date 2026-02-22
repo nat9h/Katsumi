@@ -32,11 +32,9 @@ export default {
 	 * @param {import('baileys').WASocket} context.sock - Active Baileys socket.
 	 * @returns {Promise<string>}
 	 */
-	/* eslint-disable no-unused-vars */
 	execute: async (m, { sock }) => {
-
 		if (!m.quoted || !m.quoted.message) {
-			return m.reply("❌ Please reply to a WhatsApp story!");
+			return m.reply("Please reply to a WhatsApp story!");
 		}
 
 		try {
@@ -58,7 +56,6 @@ export default {
 			await sock.relayMessage(m.from, content, {});
 
 			return "✅ Story successfully retrieved!";
-
 		} catch (err) {
 			throw new Error(err.message);
 		}

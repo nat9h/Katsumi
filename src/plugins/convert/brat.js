@@ -18,13 +18,13 @@ export default {
 	private: false,
 	owner: false,
 
-	execute: async (m, { args, sock }) => {
+	execute: async (m) => {
 		const input =
 			m.text && m.text.trim() !== ""
 				? m.text
 				: m.quoted && m.quoted.text
-				? m.quoted.text
-				: null;
+					? m.quoted.text
+					: null;
 
 		if (!input) {
 			return m.reply("Input text.");

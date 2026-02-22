@@ -22,7 +22,7 @@ export default {
 	 * @param {import("../../lib/serialize").default} m
 	 * @param {{ sock: import("baileys").WASocket }}
 	 */
-	execute: async (m, { args, sock }) => {
+	execute: async (m, { sock }) => {
 		let input = m.text?.trim();
 
 		if (!input && m.quoted?.text) {
