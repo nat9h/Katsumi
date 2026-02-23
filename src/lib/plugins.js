@@ -483,21 +483,28 @@ class PluginManager {
 		const groupMetadata = m.metadata || {};
 		const participants = groupMetadata.participants || [];
 
+		const getNum = (jid) =>
+			typeof jid === "string" ? jid.replace(/\D/g, "") : "";
+
 		const isAdmin =
 			m.isGroup &&
-			participants.some(
-				(p) =>
-					p.id === m.sender &&
-					(p.admin === "admin" || p.admin === "superadmin")
-			);
+			participants.some((p) => {
+				return (
+					(getNum(p.phoneNumber) === getNum(m.sender) ||
+						p.id === m.sender) &&
+					p.admin
+				);
+			});
 
 		const isBotAdmin =
 			m.isGroup &&
-			participants.some(
-				(p) =>
-					p.id === sock.user.id &&
-					(p.admin === "admin" || p.admin === "superadmin")
-			);
+			participants.some((p) => {
+				return (
+					(getNum(p.phoneNumber) === getNum(sock.user.id) ||
+						p.id === sock.user.id) &&
+					p.admin
+				);
+			});
 
 		const params = {
 			sock,

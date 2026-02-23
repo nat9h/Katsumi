@@ -24,6 +24,7 @@ import { join } from "node:path";
 import pino from "pino";
 
 const randomId = (length = 16) => randomBytes(length).toString("hex");
+const extractNumber = (jid) => (jid?.match(/\d{8,}/) || [])[0] || null;
 
 const parseMessage = (content) => {
 	content = extractMessageContent(content);
@@ -81,15 +82,20 @@ const parsePhoneNumber = (number) => {
  * @param {Array} participants - Group participants array
  * @returns {Object} - { lidJid: phoneNumber }
  */
-export function buildLidMap(participants = []) {
+export const buildLidMap = (participants = []) => {
 	const map = {};
 	for (const p of participants) {
-		if (typeof p.id === "string" && p.id.endsWith("@lid") && p.jid) {
-			map[p.id] = p.jid;
+		if (p.id && p.id.endsWith("@lid")) {
+			const lid = jidNormalizedUser(p.id);
+			const realJid = jidNormalizedUser(p.phoneNumber || p.jid);
+
+			if (lid && realJid) {
+				map[lid] = realJid;
+			}
 		}
 	}
 	return map;
-}
+};
 
 /**
  * Resolve a LID jid (e.g. xxx@lid) to a real jid (xxx@s.whatsapp.net) or phoneNumber.
@@ -98,17 +104,29 @@ export function buildLidMap(participants = []) {
  * @param {Object} lidMap - Optional lid-to-phoneNumber map
  * @returns {string} - Resolved jid/phoneNumber or original if not found
  */
-export function resolveLidToJid(jid, participants = [], lidMap = {}) {
-	if (!jid || typeof jid !== "string" || !jid.endsWith("@lid")) {
-		return jidNormalizedUser(jid);
+export const resolveLidToJid = (jid, participants = [], lidMap = {}) => {
+	if (!jid || typeof jid !== "string") {
+		return jid;
 	}
-	if (lidMap && lidMap[jid]) {
-		return jidNormalizedUser(lidMap[jid]);
+
+	const normalized = jidNormalizedUser(jid);
+
+	if (!normalized.endsWith("@lid")) {
+		return normalized;
 	}
-	const found = participants.find((p) => p.id === jid || p.lid === jid);
-	const resolved = found?.jid || found?.phoneNumber || found?.id || jid;
-	return jidNormalizedUser(resolved);
-}
+
+	if (lidMap[normalized]) {
+		return lidMap[normalized];
+	}
+
+	const found = participants.find((p) => p.id === normalized);
+
+	if (found) {
+		return jidNormalizedUser(found.phoneNumber || found.jid);
+	}
+
+	return normalized;
+};
 
 function safeParseMention(sock, text) {
 	return typeof sock.parseMention === "function"
@@ -621,19 +639,15 @@ export default async function serialize(sock, msg, store) {
 			: [];
 
 		const botJid = jidNormalizedUser(sock.user.id);
-		m.isAdmin = m.groupAdmins.some((admin) => {
-			const adminJid = admin.jid || admin.phoneNumber || admin.id;
-			const adminNum = (adminJid.match(/\d{8,}/) || [])[0];
-			const senderNum = m.sender
-				? (m.sender.match(/\d{8,}/) || [])[0]
-				: "";
-			return adminNum && senderNum && adminNum === senderNum;
+		const senderNum = extractNumber(m.sender);
+		const botNum = extractNumber(botJid);
+		m.isAdmin = m.groupAdmins.some((a) => {
+			const adminNum = extractNumber(a.phoneNumber || a.jid);
+			return adminNum && adminNum === senderNum;
 		});
-		m.isBotAdmin = m.groupAdmins.some((admin) => {
-			const adminJid = admin.jid || admin.phoneNumber || admin.id;
-			const adminNum = (adminJid.match(/\d{8,}/) || [])[0];
-			const botNum = (botJid.match(/\d{8,}/) || [])[0];
-			return adminNum && botNum && adminNum === botNum;
+		m.isBotAdmin = m.groupAdmins.some((a) => {
+			const adminNum = extractNumber(a.phoneNumber || a.jid);
+			return adminNum && adminNum === botNum;
 		});
 	} else {
 		m.metadata = null;
@@ -696,7 +710,8 @@ export default async function serialize(sock, msg, store) {
 			...(m.msg?.contextInfo?.mentionedJid || []),
 			...(m.msg?.contextInfo?.groupMentions?.map((v) => v.groupJid) ||
 				[]),
-		];
+		].map((jid) => resolveLidToJid(jid, m.metadata?.participants, lidMap));
+
 		m.body =
 			m.msg?.text ||
 			m.msg?.conversation ||
