@@ -760,6 +760,17 @@ export default async function serialize(sock, msg, store) {
 
 	const senderNum = (m.sender.match(/\d{8,}/) || [])[0];
 	m.isOwner = senderNum && BOT_CONFIG.ownerJids.includes(senderNum);
+	// todo: implement owner handling if LID
+	if (!m.isOwner && m.sender.endsWith("@lid")) {
+		const contacts =
+			sock.contacts instanceof Map
+				? Object.fromEntries(sock.contacts)
+				: sock.contacts;
+		m.isOwner = BOT_CONFIG.ownerJids.some((num) => {
+			const ownerJid = jidNormalizedUser(num + "@s.whatsapp.net");
+			return contacts?.[ownerJid]?.lid === m.sender;
+		});
+	}
 
 	if (m.message) {
 		m.type = getContentType(m.message) || Object.keys(m.message)[0];

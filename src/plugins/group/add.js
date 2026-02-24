@@ -57,11 +57,15 @@ export default {
 				await m.reply(
 					`Link has been successfully sent to @${displayNumber}, please wait for the user to join the group.`
 				);
-				await sock.sendMessage(jid, {
-					text:
-						"https://chat.whatsapp.com/" +
-						(await sock.groupInviteCode(m.from)),
-				});
+				await sock.sendMessage(
+					jid,
+					{
+						text:
+							"https://chat.whatsapp.com/" +
+							(await sock.groupInviteCode(m.from)),
+					},
+					{ ephemeralExpiration: m.expiration }
+				);
 			}
 
 			if (res.status == 403) {
