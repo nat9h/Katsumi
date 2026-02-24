@@ -626,12 +626,9 @@ export default async function serialize(sock, msg, store) {
 
 	if (msg.key) {
 		m.key = msg.key;
-
-		// Tetap gunakan remoteJid asli untuk routing (from), karena bisa jadi LID
 		m.from = m.key.remoteJid.startsWith("status")
 			? jidNormalizedUser(m.key?.participant || msg.participant)
 			: jidNormalizedUser(m.key.remoteJid);
-
 		m.fromMe = m.key.fromMe;
 		m.id = m.key.id;
 		m.device = /^3A/.test(m.id)

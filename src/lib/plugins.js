@@ -646,6 +646,10 @@ class PluginManager {
 		print.debug(`🛑 [Scheduler] Task '${name}' stopped`);
 	}
 
+	/**
+	 * Only periodic with type: 'interval' is scheduled here.
+	 * Periodic with type: 'message' is called in message handler.
+	 */
 	scheduleAllPeriodicTasks(sock) {
 		this.sock = sock;
 		print.debug(
