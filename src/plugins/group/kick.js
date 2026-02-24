@@ -21,26 +21,35 @@ export default {
 	 * @param {object} m - The serialized message object.
 	 */
 	async execute(m, { sock, groupMetadata }) {
-		const user = m?.quoted?.sender || m.mentions[0];
+		let user = m?.quoted?.sender || m.mentions[0];
 		if (!user) {
 			return m.reply("Reply or tag a user");
 		}
 
-		const groupAdmins = groupMetadata?.participants
-			.filter((participant) => participant.admin)
-			.map((participant) => participant.jid);
+		const participant = groupMetadata?.participants.find((p) =>
+			[p.id, p.jid, p.phoneNumber].includes(user)
+		);
 
-		if (groupAdmins.includes(user)) {
+		if (!participant) {
+			return m.reply("User not found in group metadata.");
+		}
+
+		const userJid =
+			participant.phoneNumber || participant.jid || participant.id;
+
+		if (participant.admin) {
 			return m.reply("You can't kick an admin");
 		}
 
 		await m.reply({
-			text: `Kicked @${user.replace(/[^0-9]/g, "")} from ${groupMetadata.subject}`,
-			mentions: [user],
+			text: `Kicked @${userJid.split("@")[0]} from ${groupMetadata.subject}`,
+			mentions: [userJid],
 		});
 
 		await sock
-			.groupParticipantsUpdate(m.from, [user], "remove")
-			.catch(() => {});
+			.groupParticipantsUpdate(m.from, [userJid], "remove")
+			.catch((e) => {
+				console.error("Kick Error:", e);
+			});
 	},
 };

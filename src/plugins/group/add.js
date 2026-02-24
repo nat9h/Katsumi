@@ -34,60 +34,74 @@ export default {
 		if (!input) {
 			return m.reply("Reply, tag or number user.");
 		}
-		const p = await sock.onWhatsApp(input.trim());
-		if (p.length == 0) {
+		const [result] = await sock.onWhatsApp(input.trim());
+		if (!result) {
 			return m.reply("User not found.");
 		}
-		const jid = sock.decodeJid(p[0].jid);
+		const jid = sock.decodeJid(result.jid);
 		const meta = await sock.groupMetadata(m.from);
-		const member = meta.participants.find((u) => u.id == jid);
-		if (member?.id) {
+		const member = meta.participants.find(
+			(u) => u.id === jid || u.phoneNumber === jid
+		);
+		if (member) {
 			return m.reply("User already in group.");
 		}
 		const resp = await sock.groupParticipantsUpdate(m.from, [jid], "add");
+		const displayNumber = jid.split("@")[0];
 		for (let res of resp) {
 			if (res.status == 421) {
 				m.reply(res.content.content[0].tag);
 			}
+
 			if (res.status == 408) {
 				await m.reply(
-					`Link has been successfully sent to @${res.jid}, please wait for the user to join the group.`
+					`Link has been successfully sent to @${displayNumber}, please wait for the user to join the group.`
 				);
-				await sock.sendMessage(res.jid, {
+				await sock.sendMessage(jid, {
 					text:
 						"https://chat.whatsapp.com/" +
 						(await sock.groupInviteCode(m.from)),
 				});
 			}
-			if (res.status == 403) {
-				await m.reply(`Invite message has been sent to @${res.jid}`);
-				const { code, expiration } = res.content.content[0].attrs;
-				const pp = await sock
-					.profilePictureUrl(m.from)
-					.catch(() => null);
-				const gp = await getFile(pp);
-				const msgs = generateWAMessageFromContent(
-					res.jid,
-					WAProto.Message.fromObject({
-						groupInviteMessage: {
-							groupJid: m.from,
-							inviteCode: code,
-							inviteExpiration: toNumber(expiration),
-							groupName: await sock.getName(m.from),
-							jpegThumbnail: gp ? gp.data : null,
-							caption: "Invitation to join my WhatsApp group",
-						},
-					}),
-					{ userJid: sock.user.jid }
-				);
 
-				await sock.sendMessage(
-					res.jid,
-					{
-						forward: msgs,
-					},
-					{ ephemeralExpiration: m.expiration }
+			if (res.status == 403) {
+				await m.reply(
+					`Invite message has been sent to @${displayNumber}`
 				);
+				const inviteContent = res.content?.content?.[0];
+				if (inviteContent?.attrs) {
+					const { code, expiration } = inviteContent.attrs;
+					const pp = await sock
+						.profilePictureUrl(m.from)
+						.catch(() => null);
+					const gp = await getFile(pp);
+					const msgs = generateWAMessageFromContent(
+						jid,
+						WAProto.Message.fromObject({
+							groupInviteMessage: {
+								groupJid: m.from,
+								inviteCode: code,
+								inviteExpiration: toNumber(expiration),
+								groupName: await sock.getName(m.from),
+								jpegThumbnail: gp ? gp.data : null,
+								caption: "Invitation to join my WhatsApp group",
+							},
+						}),
+						{ userJid: sock.user.id }
+					);
+
+					await sock.sendMessage(
+						jid,
+						{ forward: msgs },
+						{ ephemeralExpiration: m.expiration }
+					);
+				} else {
+					console.error(
+						"Failed to parse invite code from response:",
+						res
+					);
+					m.reply("Failed to generate invite message.");
+				}
 			}
 		}
 	},

@@ -167,10 +167,10 @@ class PluginManager {
 			);
 
 			watcher.on("error", (error) => {
-				print.error("❌ Error in watch:", error);
+				print.error("Error in watch:", error);
 			});
 		} catch (error) {
-			print.error("❌ Failed to start watching plugin directory:", error);
+			print.error("Failed to start watching plugin directory:", error);
 		}
 	}
 
@@ -192,8 +192,8 @@ class PluginManager {
 			description: "No description provided",
 			permissions: "all",
 			hidden: false,
-			failed: "❌ Failed executing %command: %error",
-			wait: "⏳ Processing your request...",
+			failed: "Failed executing %command: %error",
+			wait: "Processing your request...",
 			category: "general",
 			cooldown: 0,
 			limit: false,
@@ -360,10 +360,14 @@ class PluginManager {
 				const phoneNum = clean(p.phoneNumber);
 				const jidNum = clean(p.jid);
 
+				const isLidMatch =
+					m.sender.endsWith("@lid") && p.id === m.sender;
+
 				return (
 					idNum === senderNum ||
 					phoneNum === senderNum ||
-					jidNum === senderNum
+					jidNum === senderNum ||
+					isLidMatch
 				);
 			});
 
@@ -642,10 +646,6 @@ class PluginManager {
 		print.debug(`🛑 [Scheduler] Task '${name}' stopped`);
 	}
 
-	/**
-	 * Only periodic with type: 'interval' is scheduled here.
-	 * Periodic with type: 'message' is called in message handler.
-	 */
 	scheduleAllPeriodicTasks(sock) {
 		this.sock = sock;
 		print.debug(

@@ -50,17 +50,22 @@ export default {
 
 		const mentions = m.metadata.participants
 			.map((p) => {
-				let jid = p.jid || p.phoneNumber || p.id;
-				return jid &&
-					typeof jid === "string" &&
-					jid.endsWith("@s.whatsapp.net")
-					? jidNormalizedUser(jid)
-					: null;
+				const target = p.phoneNumber || p.jid;
+				if (
+					target &&
+					typeof target === "string" &&
+					target.endsWith("@s.whatsapp.net")
+				) {
+					return jidNormalizedUser(target);
+				}
+				return null;
 			})
 			.filter(Boolean);
 
 		if (mentions.length === 0) {
-			return m.reply("No valid participants found to mention.");
+			return m.reply(
+				"No valid participants with phone numbers found to mention."
+			);
 		}
 
 		const content = {

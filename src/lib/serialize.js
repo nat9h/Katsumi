@@ -78,9 +78,11 @@ const parsePhoneNumber = (number) => {
 };
 
 /**
- * Build a fast lookup map of lid jid to phoneNumber.
- * @param {Array} participants - Group participants array
- * @returns {Object} - { lidJid: phoneNumber }
+ * Builds a fast lookup map from LID JIDs to standard WhatsApp JIDs.
+ * Useful for converting group participant IDs from LID format into phone-number JIDs.
+ *
+ * @param {Array<{id?: string, jid?: string, phoneNumber?: string}>} [participants=[]] - Group participants list from metadata.
+ * @returns {Object<string, string>} A map object with LID as the key and standard JID as the value.
  */
 export const buildLidMap = (participants = []) => {
 	const map = {};
@@ -88,7 +90,6 @@ export const buildLidMap = (participants = []) => {
 		if (p.id && p.id.endsWith("@lid")) {
 			const lid = jidNormalizedUser(p.id);
 			const realJid = jidNormalizedUser(p.phoneNumber || p.jid);
-
 			if (lid && realJid) {
 				map[lid] = realJid;
 			}
@@ -98,11 +99,13 @@ export const buildLidMap = (participants = []) => {
 };
 
 /**
- * Resolve a LID jid (e.g. xxx@lid) to a real jid (xxx@s.whatsapp.net) or phoneNumber.
- * @param {string} jid - The jid to resolve
- * @param {Array} participants - Group participants
- * @param {Object} lidMap - Optional lid-to-phoneNumber map
- * @returns {string} - Resolved jid/phoneNumber or original if not found
+ * Resolves an LID JID (User Layer ID) into a standard WhatsApp JID (@s.whatsapp.net).
+ * This function checks the lookup map first, then falls back to searching the participants array if not found.
+ *
+ * @param {string} jid - The JID to resolve (can be an LID or a standard JID).
+ * @param {Array<{id?: string, jid?: string, phoneNumber?: string}>} [participants=[]] - Group participants list (optional, for fallback search).
+ * @param {Object<string, string>} [lidMap={}] - Lookup map produced by `buildLidMap` (optional, for performance).
+ * @returns {string} The standard JID if found, otherwise the original/normalized JID (LID).
  */
 export const resolveLidToJid = (jid, participants = [], lidMap = {}) => {
 	if (!jid || typeof jid !== "string") {
@@ -122,12 +125,57 @@ export const resolveLidToJid = (jid, participants = [], lidMap = {}) => {
 	const found = participants.find((p) => p.id === normalized);
 
 	if (found) {
-		return jidNormalizedUser(found.phoneNumber || found.jid);
+		const realJid = jidNormalizedUser(found.phoneNumber || found.jid);
+		return realJid || normalized;
 	}
 
 	return normalized;
 };
 
+/**
+ * Helper: Resolves an LID into a standard JID using the socket contact list (sock.contacts).
+ * Primarily used for Private Chats (PN) where group metadata is not available.
+ *
+ * @param {string} lid - The LID to resolve.
+ * @param {import('baileys').WASocket} sock - Baileys socket instance containing the `contacts` property.
+ * @returns {string} The standard JID if found in contacts, otherwise the original LID.
+ */
+const resolveLidFromContacts = (lid, sock) => {
+	if (!lid || !lid.endsWith("@lid")) {
+		return lid;
+	}
+
+	if (sock?.contacts) {
+		const contacts =
+			sock.contacts instanceof Map
+				? Object.fromEntries(sock.contacts)
+				: sock.contacts;
+
+		for (const jid in contacts) {
+			const contact = contacts[jid];
+			if (contact?.lid === lid) {
+				return jidNormalizedUser(jid);
+			}
+		}
+
+		if (contacts[lid]) {
+			const contact = contacts[lid];
+			if (contact?.id && !contact.id.endsWith("@lid")) {
+				return jidNormalizedUser(contact.id);
+			}
+		}
+	}
+	return lid;
+};
+
+/**
+ * Helper: Safely parses mentions (tags) from text.
+ * Checks whether `parseMention` exists on the socket before calling it.
+ *
+ * @param {import('baileys').WASocket} sock - Baileys socket instance.
+ * @param {string} text - Text that contains mentions (e.g., "Hi @6281234567890").
+ * @returns {string[]} Array of parsed JIDs. Returns an empty array if an error occurs or the method is unavailable.
+ */
 function safeParseMention(sock, text) {
 	return typeof sock.parseMention === "function"
 		? sock.parseMention(text)
@@ -578,9 +626,12 @@ export default async function serialize(sock, msg, store) {
 
 	if (msg.key) {
 		m.key = msg.key;
+
+		// Tetap gunakan remoteJid asli untuk routing (from), karena bisa jadi LID
 		m.from = m.key.remoteJid.startsWith("status")
 			? jidNormalizedUser(m.key?.participant || msg.participant)
 			: jidNormalizedUser(m.key.remoteJid);
+
 		m.fromMe = m.key.fromMe;
 		m.id = m.key.id;
 		m.device = /^3A/.test(m.id)
@@ -661,24 +712,45 @@ export default async function serialize(sock, msg, store) {
 
 	m.participantLid = jidNormalizedUser(rawParticipant);
 
-	m.participant =
-		m.isGroup && m.metadata
-			? resolveLidToJid(
-					jidNormalizedUser(rawParticipant),
-					m.metadata.participants,
-					lidMap
-				)
-			: jidNormalizedUser(rawParticipant);
+	if (m.isGroup && m.metadata) {
+		m.participant = resolveLidToJid(
+			jidNormalizedUser(rawParticipant),
+			m.metadata.participants,
+			lidMap
+		);
+	} else {
+		m.participant = jidNormalizedUser(rawParticipant);
+	}
 
 	if (!m.participant) {
 		m.participant = "";
 	}
 
-	m.sender = m.fromMe
-		? jidNormalizedUser(sock.user.id)
+	let rawSender = m.fromMe
+		? sock.user.id
 		: m.isGroup && m.participant
 			? m.participant
 			: m.from;
+
+	if (rawSender.endsWith("@lid")) {
+		if (m.isGroup && m.metadata) {
+			const resolved = resolveLidToJid(
+				rawSender,
+				m.metadata.participants,
+				lidMap
+			);
+			if (resolved !== rawSender) {
+				rawSender = resolved;
+			}
+		} else {
+			const resolved = resolveLidFromContacts(rawSender, sock);
+			if (resolved !== rawSender) {
+				rawSender = resolved;
+			}
+		}
+	}
+
+	m.sender = jidNormalizedUser(rawSender);
 
 	m.pushName = msg.pushName;
 
@@ -777,28 +849,35 @@ export default async function serialize(sock, msg, store) {
 								? "desktop"
 								: "unknown";
 				m.quoted.isGroup = m.quoted.from.endsWith("@g.us");
-				m.quoted.participant =
-					jidNormalizedUser(m.msg.contextInfo.participant) || false;
 
 				const quotedRawParticipant =
 					typeof m.msg.contextInfo.participant === "string"
 						? m.msg.contextInfo.participant
 						: "";
 
-				m.quoted.participantLid =
-					jidNormalizedUser(quotedRawParticipant);
-
 				let _quotedSender = jidNormalizedUser(
 					quotedRawParticipant || m.quoted.from
 				);
-				m.quoted.sender =
-					m.isGroup && m.metadata
-						? resolveLidToJid(
-								_quotedSender,
-								m.metadata.participants,
-								lidMap
-							)
-						: _quotedSender;
+
+				if (_quotedSender.endsWith("@lid")) {
+					if (m.isGroup && m.metadata) {
+						_quotedSender = resolveLidToJid(
+							_quotedSender,
+							m.metadata.participants,
+							lidMap
+						);
+					} else {
+						_quotedSender = resolveLidFromContacts(
+							_quotedSender,
+							sock
+						);
+					}
+				}
+
+				m.quoted.participant = jidNormalizedUser(_quotedSender);
+				m.quoted.participantLid =
+					jidNormalizedUser(quotedRawParticipant);
+				m.quoted.sender = m.quoted.participant;
 
 				m.quoted.mentions = [
 					...(m.quoted.msg?.contextInfo?.mentionedJid || []),
