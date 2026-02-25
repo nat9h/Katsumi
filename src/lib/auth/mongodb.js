@@ -64,7 +64,6 @@ export const useMongoDbAuthState = async (
 
 	const collection = await connectToMongoDB(mongoUri, database);
 
-
 	/**
 	 * Sanitizes a file name to be safely used in a MongoDB query.
 	 * @param {string} file - The file name to sanitize.
@@ -73,7 +72,7 @@ export const useMongoDbAuthState = async (
 	const fixFileName = (file) =>
 		file?.replace(/\//g, "__")?.replace(/:/g, "-") || "";
 
-		/**
+	/**
 	 * Reads data from MongoDB based on the file name.
 	 * @param {string} fileName - The file name (key) of the data to read.
 	 * @returns {Promise<any>} The parsed data from JSON.
@@ -89,7 +88,7 @@ export const useMongoDbAuthState = async (
 		}
 	};
 
-		/**
+	/**
 	 * Writes or updates data in MongoDB.
 	 * @param {any} datajson - The data to be written.
 	 * @param {string} fileName - The file name (key) for the data.
@@ -111,7 +110,7 @@ export const useMongoDbAuthState = async (
 		}
 	};
 
-		/**
+	/**
 	 * Deletes data from MongoDB based on the file name.
 	 * @param {string} fileName - The file name (key) of the data to delete.
 	 */
@@ -120,7 +119,7 @@ export const useMongoDbAuthState = async (
 		await collection.deleteOne(query);
 	};
 
-		/**
+	/**
 	 * Deletes all data associated with this session identifier.
 	 */
 	const clearAll = async () => {

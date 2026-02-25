@@ -697,15 +697,8 @@ export default async function serialize(sock, msg, store) {
 					}))
 			: [];
 
-		const botPn = await resolveToPn(sock.user.id, { sock, idMap });
-		const botNum = extractNumber(botPn);
-
 		m.isAdmin = false;
-		m.isBotAdmin = m.groupAdmins.some((a) => {
-			const adminPn = a.phoneNumber || a.jid || a.id;
-			const adminNum = extractNumber(adminPn);
-			return adminNum && botNum && adminNum === botNum;
-		});
+		m.isBotAdmin = false;
 	} else {
 		m.metadata = null;
 		m._idMap = idMap;
@@ -783,7 +776,9 @@ export default async function serialize(sock, msg, store) {
 	if (m.pushName) {
 		const contact = store.getContact(m.sender);
 		if (!contact || contact.notify !== m.pushName) {
-			store.updateContacts([{ id: m.sender, notify: m.pushName }]);
+			store.updateContacts([
+				{ id: m.sender, notify: m.pushName, isContact: true },
+			]);
 		}
 	}
 
