@@ -81,6 +81,13 @@ export const print = async (m, store) => {
 				colorize(Colors.FgWhite, `[Command]: ${m.prefix}${m.command}`)
 			);
 		}
+		// for debug only, u can delete this code
+		console.log(
+			colorize(
+				Colors.FgMagenta,
+				`[Identity] mode=${m.metadata?.addressingMode || "-"} | senderPn=${m.senderPn || "-"} | senderLid=${m.senderLid || "-"} | participantPn=${m.participantPn || "-"} | participantLid=${m.participantLid || "-"}`
+			)
+		);
 		console.log(colorize(Colors.FgWhite, "----------------------------"));
 	} catch (error) {
 		log("ERROR", "Failed to print message", error);

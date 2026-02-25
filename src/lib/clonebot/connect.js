@@ -3,6 +3,7 @@ import Message from "#core/message";
 import { useMongoDbAuthState } from "#lib/auth/mongodb";
 import { CloneSessionModel } from "#lib/database/models/cloneSessions";
 import PluginManager from "#lib/plugins";
+import { Client } from "#lib/serialize";
 import Store from "#lib/store";
 import NodeCache from "@cacheable/node-cache";
 import {
@@ -20,11 +21,13 @@ export class CloneBot {
 	constructor(phone, options = {}) {
 		this.phone = phone;
 		this.sessionId = randomBytes(5).toString("hex");
-		this.sessionName = `clone-${phone}-${this.sessionId}`;
+		this.sessionName =
+			options.sessionName || `clone-${phone}-${this.sessionId}`;
 		this.mongoUrl = process.env.MONGO_URI;
 		this.maxReconnect = options.maxReconnect || 5;
 		this.reconnectCount = 0;
 		this.sock = null;
+		this._gmRefetchTimers = new Map();
 		this.groupMetadataCache = new NodeCache({
 			stdTTL: 60 * 60,
 			checkperiod: 120,
@@ -49,15 +52,19 @@ export class CloneBot {
 			);
 		}
 
+		await this.store.load();
+		this.store.savePeriodically();
+
 		const { state, saveCreds, removeCreds } = await useMongoDbAuthState(
 			this.mongoUrl,
 			this.sessionName,
 			process.env.MONGO_CLONE_DB,
 			process.env.MONGO_CLONE_COLLECTION
 		);
+
 		const { version } = await fetchLatestBaileysVersion();
 
-		this.sock = makeWASocket({
+		let sock = makeWASocket({
 			version,
 			browser: Browsers.macOS("Safari"),
 			logger: pino({ level: "silent" }),
@@ -69,33 +76,42 @@ export class CloneBot {
 				),
 			},
 			printQRInTerminal: false,
-			getMessage: async (key) =>
-				this.store.loadMessage(key.remoteJid, key.id)?.message || null,
+			getMessage: async (key) => {
+				const jid = jidNormalizedUser(key.remoteJid);
+				return this.store.loadMessage(jid, key.id)?.message || null;
+			},
 			getGroupMetadata: async (jid) => {
-				const normalizedJid = jidNormalizedUser(jid);
-				let metadata = this.groupMetadataCache.get(normalizedJid);
+				const gjid = jidNormalizedUser(jid);
+
+				let metadata = this.groupMetadataCache.get(gjid);
 				if (metadata) {
 					return metadata;
 				}
-				metadata = this.store.getGroupMetadata(normalizedJid);
+
+				metadata = this.store.getGroupMetadata(gjid);
 				if (metadata) {
-					this.groupMetadataCache.set(normalizedJid, metadata);
+					this.groupMetadataCache.set(gjid, metadata);
 					return metadata;
 				}
+
 				try {
-					metadata = await this.sock.groupMetadata(jid);
-					this.groupMetadataCache.set(normalizedJid, metadata);
-					this.store.setGroupMetadata(normalizedJid, metadata);
-					return metadata;
+					metadata = await sock.groupMetadata(gjid);
+					if (metadata) {
+						this.groupMetadataCache.set(gjid, metadata);
+						this.store.setGroupMetadata(gjid, metadata);
+					}
+					return metadata || null;
 				} catch {
 					return null;
 				}
 			},
 		});
 
-		this.sock.isClonebot = true;
+		sock = Client({ sock, store: this.store });
+		sock.isClonebot = true;
+		this.sock = sock;
+		this.pluginManager.scheduleAllPeriodicTasks(this.sock);
 		this.sock.ev.on("creds.update", saveCreds);
-
 		this.sock.ev.on("messages.upsert", (data) =>
 			this.messageHandler.process(this.sock, data)
 		);
@@ -111,64 +127,38 @@ export class CloneBot {
 		this.sock.ev.on(
 			"group-participants.update",
 			async ({ id, participants, action }) => {
-				const normalizedJid = jidNormalizedUser(id);
-				let metadata =
-					this.groupMetadataCache.get(normalizedJid) ||
-					this.store.getGroupMetadata(normalizedJid);
+				const gjid = jidNormalizedUser(id);
+				const list = (Array.isArray(participants) ? participants : [])
+					.filter(
+						(p) =>
+							typeof p === "string" &&
+							p &&
+							p !== "[object Object]"
+					)
+					.map(jidNormalizedUser);
 
-				if (!metadata) {
-					try {
-						metadata = await this.sock.groupMetadata(id);
-					} catch {
-						return;
-					}
+				if (list.length) {
+					console.log(
+						`[CLONE] gp.update ${gjid} ${action} ${list.join(", ")}`
+					);
 				}
 
-				const normalizedParticipants =
-					participants.map(jidNormalizedUser);
-				switch (action) {
-					case "add":
-						metadata.participants.push(
-							...normalizedParticipants.map((id) => ({
-								id,
-								admin: null,
-							}))
-						);
-						break;
-					case "promote":
-						metadata.participants.forEach((p) => {
-							if (
-								normalizedParticipants.includes(
-									jidNormalizedUser(p.id)
-								)
-							) {
-								p.admin = "admin";
+				clearTimeout(this._gmRefetchTimers.get(gjid));
+				this._gmRefetchTimers.set(
+					gjid,
+					setTimeout(async () => {
+						try {
+							const metadata =
+								await this.sock.groupMetadata(gjid);
+							if (metadata) {
+								this.groupMetadataCache.set(gjid, metadata);
+								this.store.setGroupMetadata(gjid, metadata);
 							}
-						});
-						break;
-					case "demote":
-						metadata.participants.forEach((p) => {
-							if (
-								normalizedParticipants.includes(
-									jidNormalizedUser(p.id)
-								)
-							) {
-								p.admin = null;
-							}
-						});
-						break;
-					case "remove":
-						metadata.participants = metadata.participants.filter(
-							(p) =>
-								!normalizedParticipants.includes(
-									jidNormalizedUser(p.id)
-								)
-						);
-						break;
-				}
-
-				this.groupMetadataCache.set(normalizedJid, metadata);
-				this.store.setGroupMetadata(normalizedJid, metadata);
+						} catch {
+							// ignore
+						}
+					}, 500)
+				);
 			}
 		);
 
@@ -185,14 +175,17 @@ export class CloneBot {
 				} catch (e) {
 					await removeCreds();
 					await CloneSessionModel.remove(this.sessionName);
+					this.store.stopSaving();
 					onError?.(e);
 				}
 			}
+
 			if (connection === "open") {
 				this.reconnectCount = 0;
 				await CloneSessionModel.add(this.sessionName, this.phone);
 				onSuccess?.({ connected: true, sessionName: this.sessionName });
 			}
+
 			if (connection === "close") {
 				const status = lastDisconnect?.error?.output?.statusCode;
 				const shouldReconnect =
@@ -203,23 +196,29 @@ export class CloneBot {
 				if (status === DisconnectReason.loggedOut || status === 401) {
 					await removeCreds();
 					await CloneSessionModel.remove(this.sessionName);
+					this.store.stopSaving();
 					onError?.(
 						new Error(
 							"Session expired or logged out. Please re-pair."
 						)
 					);
-				} else if (shouldReconnect) {
+					return;
+				}
+
+				if (shouldReconnect) {
 					this.reconnectCount++;
-					setTimeout(() => {
-						this.start(onUpdate, onSuccess, onError);
-					}, 3000);
+					setTimeout(
+						() => this.start(onUpdate, onSuccess, onError),
+						3000
+					);
 				} else {
 					await removeCreds();
 					await CloneSessionModel.remove(this.sessionName);
+					this.store.stopSaving();
 					onError?.(
 						lastDisconnect?.error ||
 							new Error(
-								"Connection closed. Please restart the clone session."
+								"Connection closed. Please restart clone session."
 							)
 					);
 				}

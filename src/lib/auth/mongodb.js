@@ -54,24 +54,19 @@ const connectToMongoDB = async (
  */
 export const useMongoDbAuthState = async (
 	mongoUri,
-	identifier = "default",
+	opts = "default",
 	database
 ) => {
+	const identifier =
+		typeof opts === "string"
+			? opts
+			: opts?.session || opts?.identifier || "default";
+
 	const collection = await connectToMongoDB(mongoUri, database);
 
-	/**
-	 * Sanitizes a file name to be safely used in a MongoDB query.
-	 * @param {string} file - The file name to sanitize.
-	 * @returns {string} The sanitized file name.
-	 */
 	const fixFileName = (file) =>
 		file?.replace(/\//g, "__")?.replace(/:/g, "-") || "";
 
-	/**
-	 * Reads data from MongoDB based on the file name.
-	 * @param {string} fileName - The file name (key) of the data to read.
-	 * @returns {Promise<any>} The parsed data from JSON.
-	 */
 	const readData = async (fileName) => {
 		try {
 			const query = { filename: fixFileName(fileName), identifier };
@@ -83,11 +78,6 @@ export const useMongoDbAuthState = async (
 		}
 	};
 
-	/**
-	 * Writes or updates data in MongoDB.
-	 * @param {any} datajson - The data to be written.
-	 * @param {string} fileName - The file name (key) for the data.
-	 */
 	const writeData = async (datajson, fileName) => {
 		try {
 			const query = { filename: fixFileName(fileName), identifier };
@@ -105,33 +95,13 @@ export const useMongoDbAuthState = async (
 		}
 	};
 
-	/**
-	 * Deletes data from MongoDB based on the file name.
-	 * @param {string} fileName - The file name (key) of the data to delete.
-	 */
 	const removeData = async (fileName) => {
-		try {
-			const query = { filename: fixFileName(fileName), identifier };
-			await collection.deleteOne(query);
-		} catch (error) {
-			print.error(`Failed to delete data for file: ${fileName}`, error);
-			throw error;
-		}
+		const query = { filename: fixFileName(fileName), identifier };
+		await collection.deleteOne(query);
 	};
 
-	/**
-	 * Deletes all data associated with this session identifier.
-	 */
 	const clearAll = async () => {
-		try {
-			await collection.deleteMany({ identifier });
-		} catch (error) {
-			print.error(
-				`Failed to delete all data for identifier: ${identifier}`,
-				error
-			);
-			throw error;
-		}
+		await collection.deleteMany({ identifier });
 	};
 
 	const creds = (await readData("creds.json")) || initAuthCreds();

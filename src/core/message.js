@@ -48,7 +48,7 @@ class Message {
 
 		for (const msg of messages) {
 			try {
-				if (!msg.message) {
+				if (!msg?.message) {
 					continue;
 				}
 
@@ -58,15 +58,22 @@ class Message {
 
 				const m = await serialize(sock, msg, this.store);
 
-				this.store.saveMessage(m.from, msg);
+				if (!m) {
+					continue;
+				}
 
-				if (db?.UserModel?.setUser) {
-					await db.UserModel.setUser(m.sender, { name: m.pushName });
+				if (m.from) {
+					this.store.saveMessage(m.from, msg);
+				}
+
+				const userId = m.senderPn || m.sender;
+				if (db?.UserModel?.setUser && userId) {
+					await db.UserModel.setUser(userId, { name: m.pushName });
 				}
 
 				await print(m, sock);
 
-				if (!m || !m.body) {
+				if (!m.body) {
 					continue;
 				}
 

@@ -33,6 +33,110 @@ const messageCache = new NodeCache({
 	checkperiod: 120,
 });
 
+const norm = (jid) => (jid ? jidNormalizedUser(jid) : jid);
+const isLid = (jid) =>
+	typeof jid === "string" && /@lid$|@hosted\.lid$/.test(jid);
+const isPn = (jid) =>
+	typeof jid === "string" && jid.endsWith("@s.whatsapp.net");
+
+function ensureLidIndex(obj) {
+	if (!obj.__lidIndex || typeof obj.__lidIndex !== "object") {
+		obj.__lidIndex = {};
+	}
+	return obj.__lidIndex;
+}
+
+function canonicalContactKey(contact) {
+	const id = norm(contact?.id);
+	const pn = norm(contact?.phoneNumber);
+
+	if (pn && isPn(pn)) {
+		return pn;
+	}
+	if (id && isPn(id)) {
+		return id;
+	}
+	return id;
+}
+
+function extractLid(contact) {
+	const lid = norm(contact?.lid);
+	const id = norm(contact?.id);
+	if (lid && isLid(lid)) {
+		return lid;
+	}
+	if (id && isLid(id)) {
+		return id;
+	}
+	return null;
+}
+
+function normalizeGroupMetadata(metadata) {
+	if (!metadata || typeof metadata !== "object") {
+		return metadata;
+	}
+	const id = norm(metadata.id);
+	const participants = Array.isArray(metadata.participants)
+		? metadata.participants.map((p) => ({
+				...p,
+				id: norm(p?.id || p?.jid),
+				phoneNumber: norm(p?.phoneNumber),
+				lid: norm(p?.lid),
+				jid: norm(p?.jid),
+			}))
+		: metadata.participants;
+
+	return { ...metadata, id, participants };
+}
+
+/**
+ * Store contacts in a map by:
+ * - primary key: contact.id (normalized)
+ * - alias key: contact.lid (normalized) -> points to same contact doc
+ */
+function upsertContactIntoMap(
+	mapObj,
+	contact,
+	{ merge = false, forceIsContact = false } = {}
+) {
+	if (!contact || typeof contact !== "object") {
+		return;
+	}
+
+	const key = canonicalContactKey(contact);
+	if (!key) {
+		return;
+	}
+
+	const existing = mapObj[key] || {};
+	const next = merge ? { ...existing, ...contact } : { ...contact };
+
+	next.id = key;
+	next.isContact = forceIsContact
+		? true
+		: existing.isContact || contact.isContact || true;
+
+	const lid = extractLid(contact);
+	const pn = norm(contact?.phoneNumber);
+	if (isPn(key) && lid) {
+		next.lid = lid;
+	}
+	if (isLid(key) && pn) {
+		next.phoneNumber = pn;
+	}
+
+	mapObj[key] = next;
+
+	const idx = ensureLidIndex(mapObj);
+	if (lid && isPn(key)) {
+		idx[lid] = key;
+	}
+
+	if (lid && mapObj[lid] && lid !== key) {
+		delete mapObj[lid];
+	}
+}
+
 /**
  * Represents a local store for session data, backed by JSON files.
  */
@@ -65,6 +169,7 @@ class Local {
 	async load() {
 		await mkdir(this.sessionName, { recursive: true });
 		this.contacts = (await this._loadJson(this.path.contacts)) || {};
+		ensureLidIndex(this.contacts);
 		this.groupMetadata = (await this._loadJson(this.path.metadata)) || {};
 		this.messages = {};
 	}
@@ -149,8 +254,7 @@ class Local {
 	 */
 	updateContacts(update) {
 		for (const contact of update) {
-			const id = jidNormalizedUser(contact.id);
-			this.contacts[id] = { ...(this.contacts[id] || {}), ...contact };
+			upsertContactIntoMap(this.contacts, contact, { merge: true });
 		}
 	}
 
@@ -160,8 +264,10 @@ class Local {
 	 */
 	upsertContacts(update) {
 		for (const contact of update) {
-			const id = jidNormalizedUser(contact.id);
-			this.contacts[id] = { ...contact, isContact: true };
+			upsertContactIntoMap(this.contacts, contact, {
+				merge: true,
+				forceIsContact: true,
+			});
 		}
 	}
 
@@ -171,11 +277,12 @@ class Local {
 	 */
 	updateGroupMetadata(updates) {
 		for (const update of updates) {
-			const id = update.id;
-			if (this.groupMetadata[id]) {
+			const id = norm(update.id);
+			if (id && this.groupMetadata[id]) {
 				this.groupMetadata[id] = {
 					...this.groupMetadata[id],
 					...update,
+					id,
 				};
 			}
 		}
@@ -187,7 +294,7 @@ class Local {
 	 * @returns {Object|undefined}
 	 */
 	getGroupMetadata(jid) {
-		return this.groupMetadata[jidNormalizedUser(jid)];
+		return this.groupMetadata[norm(jid)];
 	}
 
 	/**
@@ -196,7 +303,8 @@ class Local {
 	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
-		this.groupMetadata[jidNormalizedUser(jid)] = metadata;
+		const id = norm(jid);
+		this.groupMetadata[id] = normalizeGroupMetadata(metadata);
 	}
 
 	/**
@@ -205,7 +313,19 @@ class Local {
 	 * @returns {Object|undefined}
 	 */
 	getContact(jid) {
-		return this.contacts[jidNormalizedUser(jid)];
+		const key = norm(jid);
+		if (!key) {
+			return undefined;
+		}
+
+		if (isLid(key)) {
+			const idx = ensureLidIndex(this.contacts);
+			const pnKey = idx[key];
+			if (pnKey && this.contacts[pnKey]) {
+				return this.contacts[pnKey];
+			}
+		}
+		return this.contacts[key];
 	}
 
 	/**
@@ -214,7 +334,7 @@ class Local {
 	 * @param {Object} message
 	 */
 	saveMessage(jid, message) {
-		const key = `${jidNormalizedUser(jid)}:${message.key.id}`;
+		const key = `${norm(jid)}:${message.key.id}`;
 		messageCache.set(key, message);
 	}
 
@@ -225,7 +345,7 @@ class Local {
 	 * @returns {Object|null}
 	 */
 	loadMessage(jid, id) {
-		return messageCache.get(`${jidNormalizedUser(jid)}:${id}`) || null;
+		return messageCache.get(`${norm(jid)}:${id}`) || null;
 	}
 }
 
@@ -285,10 +405,25 @@ class Mongo {
 			this.coll.groupMetadata.find().toArray(),
 		]);
 
-		contacts.forEach((c) => groupMetadataCache.set(c.id, stripMongoId(c)));
-		groupMetadata.forEach((g) =>
-			groupMetadataCache.set(g.id, stripMongoId(g))
-		);
+		contacts.forEach((c) => {
+			const doc = stripMongoId(c);
+			const id = norm(doc.id);
+			if (!id) {
+				return;
+			}
+			groupMetadataCache.set(id, { ...doc, id, isContact: true });
+			const lid = norm(doc.lid);
+			if (lid && isLid(lid)) {
+				groupMetadataCache.set(lid, groupMetadataCache.get(id));
+			}
+		});
+
+		groupMetadata.forEach((g) => {
+			const doc = normalizeGroupMetadata(stripMongoId(g));
+			if (doc?.id) {
+				groupMetadataCache.set(doc.id, doc);
+			}
+		});
 	}
 
 	/**
@@ -299,7 +434,27 @@ class Mongo {
 		await this._connect();
 		const all = allCacheValues(groupMetadataCache);
 
-		const contacts = all.filter((v) => v && v.isContact);
+		const rawContacts = all.filter((v) => v && v.isContact);
+		const byId = new Map();
+
+		for (const c of rawContacts) {
+			let id = norm(c.id);
+			const pn = norm(c.phoneNumber);
+
+			if (id && isLid(id) && pn && isPn(pn)) {
+				id = pn;
+			}
+
+			if (!id) {
+				continue;
+			}
+
+			if (!byId.has(id)) {
+				byId.set(id, c);
+			}
+		}
+
+		const contacts = Array.from(byId.values());
 		const groups = all.filter(
 			(v) => v && typeof v.id === "string" && v.id.endsWith("@g.us")
 		);
@@ -307,6 +462,20 @@ class Mongo {
 		if (contacts.length > 0) {
 			const bulkOps = contacts.map((c) => {
 				const doc = stripMongoId(c);
+				doc.id = norm(doc.id);
+				doc.phoneNumber = norm(doc.phoneNumber);
+				doc.lid = norm(doc.lid);
+
+				if (
+					doc.id &&
+					isLid(doc.id) &&
+					doc.phoneNumber &&
+					isPn(doc.phoneNumber)
+				) {
+					doc.lid = doc.lid || doc.id;
+					doc.id = doc.phoneNumber;
+				}
+
 				return {
 					updateOne: {
 						filter: { id: doc.id },
@@ -320,7 +489,8 @@ class Mongo {
 
 		if (groups.length > 0) {
 			const bulkOps = groups.map((g) => {
-				const doc = stripMongoId(g);
+				const doc = stripMongoId(normalizeGroupMetadata(g));
+				doc.id = norm(doc.id);
 				return {
 					updateOne: {
 						filter: { id: doc.id },
@@ -365,12 +535,30 @@ class Mongo {
 	 */
 	updateContacts(update) {
 		for (const contact of update) {
-			const id = jidNormalizedUser(contact.id);
-			const existing = groupMetadataCache.get(id) || {};
-			groupMetadataCache.set(id, {
+			const key = canonicalContactKey(contact);
+			if (!key) {
+				continue;
+			}
+
+			const existing = groupMetadataCache.get(key) || {};
+			const merged = {
 				...stripMongoId(existing),
 				...stripMongoId(contact),
-			});
+				id: key,
+				isContact: existing.isContact || contact.isContact || true,
+			};
+
+			const lid = extractLid(contact);
+			if (lid && isPn(key)) {
+				merged.lid = lid;
+			}
+
+			groupMetadataCache.set(key, merged);
+
+			// alias in-memory (optional)
+			if (lid && isPn(key)) {
+				groupMetadataCache.set(lid, groupMetadataCache.get(key));
+			}
 		}
 	}
 
@@ -380,11 +568,22 @@ class Mongo {
 	 */
 	upsertContacts(update) {
 		for (const contact of update) {
-			const id = jidNormalizedUser(contact.id);
-			groupMetadataCache.set(id, {
-				...stripMongoId(contact),
-				isContact: true,
-			});
+			const key = canonicalContactKey(contact);
+			if (!key) {
+				continue;
+			}
+
+			const doc = { ...stripMongoId(contact), id: key, isContact: true };
+
+			const lid = extractLid(contact);
+			if (lid && isPn(key)) {
+				doc.lid = lid;
+			}
+
+			groupMetadataCache.set(key, doc);
+			if (lid && isPn(key)) {
+				groupMetadataCache.set(lid, groupMetadataCache.get(key));
+			}
 		}
 	}
 
@@ -394,12 +593,13 @@ class Mongo {
 	 */
 	updateGroupMetadata(updates) {
 		for (const update of updates) {
-			const id = update.id;
-			const existing = groupMetadataCache.get(id);
-			if (existing) {
+			const id = norm(update.id);
+			const existing = id ? groupMetadataCache.get(id) : null;
+			if (existing && id) {
 				groupMetadataCache.set(id, {
 					...stripMongoId(existing),
 					...stripMongoId(update),
+					id,
 				});
 			}
 		}
@@ -411,7 +611,7 @@ class Mongo {
 	 * @returns {Object|undefined}
 	 */
 	getGroupMetadata(jid) {
-		return groupMetadataCache.get(jidNormalizedUser(jid));
+		return groupMetadataCache.get(norm(jid));
 	}
 
 	/**
@@ -420,7 +620,11 @@ class Mongo {
 	 * @param {Object} metadata
 	 */
 	setGroupMetadata(jid, metadata) {
-		groupMetadataCache.set(jidNormalizedUser(jid), stripMongoId(metadata));
+		const id = norm(jid);
+		groupMetadataCache.set(
+			id,
+			stripMongoId(normalizeGroupMetadata(metadata))
+		);
 	}
 
 	/**
@@ -429,7 +633,7 @@ class Mongo {
 	 * @returns {Object|undefined}
 	 */
 	getContact(jid) {
-		return groupMetadataCache.get(jidNormalizedUser(jid));
+		return groupMetadataCache.get(norm(jid));
 	}
 
 	/**
@@ -438,7 +642,7 @@ class Mongo {
 	 * @param {Object} message
 	 */
 	saveMessage(jid, message) {
-		const key = `${jidNormalizedUser(jid)}:${message.key.id}`;
+		const key = `${norm(jid)}:${message.key.id}`;
 		messageCache.set(key, message);
 	}
 
@@ -449,7 +653,7 @@ class Mongo {
 	 * @returns {Object|null}
 	 */
 	loadMessage(jid, id) {
-		return messageCache.get(`${jidNormalizedUser(jid)}:${id}`) || null;
+		return messageCache.get(`${norm(jid)}:${id}`) || null;
 	}
 }
 
@@ -470,10 +674,12 @@ class Store {
 	load() {
 		return this.backend.load();
 	}
+
 	/** @returns {Promise<void>} */
 	save() {
 		return this.backend.save();
 	}
+
 	/**
 	 * @param {number} [interval]
 	 */
@@ -483,24 +689,28 @@ class Store {
 	stopSaving() {
 		return this.backend.stopSaving();
 	}
+
 	/**
 	 * @param {Array<Object>} update
 	 */
 	updateContacts(update) {
 		return this.backend.updateContacts(update);
 	}
+
 	/**
 	 * @param {Array<Object>} update
 	 */
 	upsertContacts(update) {
 		return this.backend.upsertContacts(update);
 	}
+
 	/**
 	 * @param {Array<Object>} updates
 	 */
 	updateGroupMetadata(updates) {
 		return this.backend.updateGroupMetadata(updates);
 	}
+
 	/**
 	 * @param {string} jid
 	 * @returns {Object|undefined}
@@ -508,6 +718,7 @@ class Store {
 	getGroupMetadata(jid) {
 		return this.backend.getGroupMetadata(jid);
 	}
+
 	/**
 	 * @param {string} jid
 	 * @param {Object} metadata
@@ -515,6 +726,7 @@ class Store {
 	setGroupMetadata(jid, metadata) {
 		return this.backend.setGroupMetadata(jid, metadata);
 	}
+
 	/**
 	 * @param {string} jid
 	 * @returns {Object|undefined}
@@ -522,6 +734,7 @@ class Store {
 	getContact(jid) {
 		return this.backend.getContact(jid);
 	}
+
 	/**
 	 * @param {string} jid
 	 * @param {Object} message
@@ -529,6 +742,7 @@ class Store {
 	saveMessage(jid, message) {
 		return this.backend.saveMessage(jid, message);
 	}
+
 	/**
 	 * @param {string} jid
 	 * @param {string} id

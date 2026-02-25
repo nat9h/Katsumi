@@ -12,11 +12,11 @@ export async function fetchBuffer(string, options = {}) {
 	try {
 		if (/^https?:\/\//i.test(string)) {
 			let data = await axios.get(string, {
+				responseType: "arraybuffer",
+				...options,
 				headers: {
 					...(options.headers || {}),
 				},
-				responseType: "arraybuffer",
-				...options,
 			});
 
 			let buffer = data?.data;

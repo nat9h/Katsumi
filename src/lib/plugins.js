@@ -27,6 +27,15 @@ class PluginManager {
 		this.periodicTasks = [];
 	}
 
+	/**
+	 * Stable key for user-scoped cache/queue.
+	 * Prefer PN if available (m.senderPn), fallback PN/LID.
+	 * Prevents split identities when WA returns LID sometimes and PN other times.
+	 */
+	getStableSenderKey(m) {
+		return m?.senderPn || m?.sender || m?.senderLid || "";
+	}
+
 	async loadPlugins() {
 		this.plugins = [];
 		const pluginsDir = join(__dirname, "../plugins");
@@ -214,17 +223,20 @@ class PluginManager {
 	}
 
 	async enqueueCommand(sock, m) {
-		const senderJid = m.sender;
-
-		if (!this.commandQueues.has(senderJid)) {
-			this.commandQueues.set(senderJid, []);
+		const senderKey = this.getStableSenderKey(m);
+		if (!senderKey) {
+			return;
 		}
 
-		const queue = this.commandQueues.get(senderJid);
+		if (!this.commandQueues.has(senderKey)) {
+			this.commandQueues.set(senderKey, []);
+		}
+
+		const queue = this.commandQueues.get(senderKey);
 
 		if (queue.length >= this.MAX_QUEUE_PER_USER) {
 			print.debug(
-				`🚫 Queue full for ${senderJid}. Dropping command: ${m.command}`
+				`🚫 Queue full for ${senderKey}. Dropping command: ${m.command}`
 			);
 			return;
 		}
@@ -235,39 +247,39 @@ class PluginManager {
 
 		if (isDuplicate) {
 			print.debug(
-				`♻ Skipped duplicate command: ${m.command} from ${senderJid}`
+				`♻ Skipped duplicate command: ${m.command} from ${senderKey}`
 			);
 			return;
 		}
 
 		queue.push({ sock, m });
 		print.debug(
-			`📥 Enqueued: ${m.prefix}${m.command} for ${senderJid} (Queue: ${queue.length})`
+			`📥 Enqueued: ${m.prefix}${m.command} for ${senderKey} (Queue: ${queue.length})`
 		);
 
-		if (!this.processingStatus.get(senderJid)) {
-			this.processQueue(senderJid);
+		if (!this.processingStatus.get(senderKey)) {
+			this.processQueue(senderKey);
 		}
 	}
 
-	async processQueue(senderJid) {
-		this.processingStatus.set(senderJid, true);
-		const queue = this.commandQueues.get(senderJid) || [];
+	async processQueue(senderKey) {
+		this.processingStatus.set(senderKey, true);
+		const queue = this.commandQueues.get(senderKey) || [];
 
 		if (queue.length === 0) {
-			this.processingStatus.set(senderJid, false);
+			this.processingStatus.set(senderKey, false);
 			return;
 		}
 
 		const { sock, m } = queue.shift();
-		const command = m.command.toLowerCase();
+		const command = (m.command || "").toLowerCase();
 		const plugin = this.plugins.find((p) =>
 			p.command.some((cmd) => cmd.toLowerCase() === command)
 		);
 
 		try {
 			if (!plugin) {
-				return this.continueQueue(senderJid);
+				return this.continueQueue(senderKey);
 			}
 
 			const checks = [
@@ -280,20 +292,20 @@ class PluginManager {
 
 			const results = await Promise.all(checks);
 			if (results.some((result) => result)) {
-				return this.continueQueue(senderJid);
+				return this.continueQueue(senderKey);
 			}
 
 			await this.sendPreExecutionActions(plugin, m, sock);
 			await this.executePlugin(plugin, sock, m);
 		} catch (error) {
-			print.error(`🔥 Processing error for ${senderJid}:`, error);
+			print.error(`🔥 Processing error for ${senderKey}:`, error);
 		} finally {
-			this.continueQueue(senderJid);
+			this.continueQueue(senderKey);
 		}
 	}
 
-	continueQueue(senderJid) {
-		setImmediate(() => this.processQueue(senderJid));
+	continueQueue(senderKey) {
+		setImmediate(() => this.processQueue(senderKey));
 	}
 
 	async checkCooldown(plugin, m) {
@@ -301,7 +313,9 @@ class PluginManager {
 			return false;
 		}
 
-		const cooldownKey = `${m.sender}:${plugin.name}`;
+		const senderKey = this.getStableSenderKey(m);
+		const cooldownKey = `${senderKey}:${plugin.name}`;
+
 		if (this.cooldowns.has(cooldownKey)) {
 			const expiry = this.cooldowns.getTtl(cooldownKey);
 			let seconds = plugin.cooldown;
@@ -342,6 +356,11 @@ class PluginManager {
 		return false;
 	}
 
+	/**
+	 * LID/PN-safe permission checks.
+	 * In v7, participants use id + optional phoneNumber/lid. Admin role is in p.admin.
+	 * See Baileys group participant extraction & dual identity notes.
+	 */
 	async checkPermissions(plugin, m, sock) {
 		const isOwner = m.isOwner;
 		const isClonebot =
@@ -349,26 +368,32 @@ class PluginManager {
 			(typeof sock !== "undefined" && sock.isClonebot);
 
 		let isGroupAdmin = false;
-		if (m.isGroup && m.metadata?.participants) {
-			const clean = (jid) =>
-				typeof jid === "string" ? jid.replace(/\D/g, "") : "";
 
-			const senderNum = clean(m.sender);
+		if (m.isGroup && m.metadata?.participants) {
+			const digits = (v) =>
+				typeof v === "string" ? v.replace(/\D/g, "") : "";
+
+			const senderPn = m.senderPn || m.sender;
+			const senderLid =
+				m.senderLid ||
+				(typeof m.sender === "string" &&
+				/@lid$|@hosted\.lid$/.test(m.sender)
+					? m.sender
+					: null);
+			const senderNum = digits(senderPn);
 
 			const participant = m.metadata.participants.find((p) => {
-				const idNum = clean(p.id);
-				const phoneNum = clean(p.phoneNumber);
-				const jidNum = clean(p.jid);
+				const pid = p?.id;
+				const pNum =
+					digits(p?.phoneNumber) ||
+					(pid && !/@lid$|@hosted\.lid$/.test(pid)
+						? digits(pid)
+						: "");
 
-				const isLidMatch =
-					m.sender.endsWith("@lid") && p.id === m.sender;
+				const pnMatch = senderNum && pNum && senderNum === pNum;
+				const lidMatch = senderLid && pid && senderLid === pid;
 
-				return (
-					idNum === senderNum ||
-					phoneNum === senderNum ||
-					jidNum === senderNum ||
-					isLidMatch
-				);
+				return pnMatch || lidMatch;
 			});
 
 			isGroupAdmin =
@@ -432,7 +457,6 @@ class PluginManager {
 			if (plugin.react) {
 				await m.react("ℹ️");
 			}
-
 			return true;
 		}
 		return false;
@@ -443,7 +467,8 @@ class PluginManager {
 			return false;
 		}
 
-		const limitKey = `${m.sender}:${plugin.name}`;
+		const senderKey = this.getStableSenderKey(m);
+		const limitKey = `${senderKey}:${plugin.name}`;
 		const usageCount = (this.usageLimits.get(limitKey) || 0) + 1;
 
 		if (usageCount > plugin.dailyLimit) {
@@ -487,28 +512,8 @@ class PluginManager {
 		const groupMetadata = m.metadata || {};
 		const participants = groupMetadata.participants || [];
 
-		const getNum = (jid) =>
-			typeof jid === "string" ? jid.replace(/\D/g, "") : "";
-
-		const isAdmin =
-			m.isGroup &&
-			participants.some((p) => {
-				return (
-					(getNum(p.phoneNumber) === getNum(m.sender) ||
-						p.id === m.sender) &&
-					p.admin
-				);
-			});
-
-		const isBotAdmin =
-			m.isGroup &&
-			participants.some((p) => {
-				return (
-					(getNum(p.phoneNumber) === getNum(sock.user.id) ||
-						p.id === sock.user.id) &&
-					p.admin
-				);
-			});
+		const isAdmin = !!m.isAdmin;
+		const isBotAdmin = !!m.isBotAdmin;
 
 		const params = {
 			sock,
@@ -520,6 +525,7 @@ class PluginManager {
 			prefix: m.prefix,
 			isOwner: m.isOwner,
 			groupMetadata,
+			participants,
 			isAdmin,
 			isBotAdmin,
 			api,
@@ -530,19 +536,20 @@ class PluginManager {
 
 		try {
 			print.info(
-				`⚡ Executing: ${plugin.name} by ${m.pushName} [${m.sender}]`
+				`⚡ Executing: ${plugin.name} by ${m.pushName} [${m.senderPn || m.sender}]`
 			);
 
 			if (plugin.execute.length === 1) {
 				await plugin.execute(m);
 			} else {
-				const { m, ...rest } = params;
-				await plugin.execute(m, rest);
+				const { m: _m, ...rest } = params;
+				await plugin.execute(_m, rest);
 			}
 
 			if (plugin.cooldown > 0) {
+				const senderKey = this.getStableSenderKey(m);
 				this.cooldowns.set(
-					`${m.sender}:${plugin.name}`,
+					`${senderKey}:${plugin.name}`,
 					true,
 					plugin.cooldown
 				);
@@ -640,7 +647,6 @@ class PluginManager {
 		if (index === -1) {
 			return;
 		}
-
 		clearInterval(this.periodicTasks[index].timer);
 		this.periodicTasks.splice(index, 1);
 		print.debug(`🛑 [Scheduler] Task '${name}' stopped`);
@@ -715,6 +721,7 @@ class PluginManager {
 			isBotAdmin: m.isBotAdmin,
 			api,
 		};
+
 		for (const plugin of this.plugins) {
 			if (typeof plugin.after === "function") {
 				try {

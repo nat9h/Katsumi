@@ -16,14 +16,22 @@ export async function autoLoadCloneBots() {
 			continue;
 		}
 
-		const bot = new CloneBot(session.phone);
+		const bot = new CloneBot(session.phone, {
+			sessionName: session._id,
+			maxReconnect: 5,
+		});
 
 		bot.start(
-			() => {},
+			() => {}, // onUpdate
 			(result) => {
-				if (result.connected) {
+				if (result?.connected) {
 					print.info(
 						`[CLONE] CloneBot session active for ${session.phone}`
+					);
+				}
+				if (result?.code) {
+					print.info(
+						`[CLONE] Pairing code for ${session.phone}: ${result.code}`
 					);
 				}
 			},

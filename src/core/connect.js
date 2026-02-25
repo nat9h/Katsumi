@@ -27,12 +27,10 @@ class Connect {
 	constructor() {
 		this.sock = null;
 		this.sessionName = BOT_CONFIG.sessionName;
-
 		this.groupMetadataCache = new NodeCache({
 			stdTTL: 60 * 60,
 			checkperiod: 120,
 		});
-
 		this.pluginManager = new PluginManager(BOT_CONFIG);
 		this.store = new Store(this.sessionName);
 		this.message = new Message(
@@ -60,6 +58,7 @@ class Connect {
 		const qrMode = process.env.QR === "true";
 		const botNumber = process.env.BOT_NUMBER;
 		let usePairingCode = false;
+
 		if (!state.creds.registered) {
 			if (!qrMode) {
 				if (!botNumber) {
@@ -106,14 +105,14 @@ class Connect {
 				}
 
 				try {
-					metadata = await this.sock.groupMetadata(jid);
+					metadata = await this.sock.groupMetadata(normalizedJid);
 					this.groupMetadataCache.set(normalizedJid, metadata);
 					this.store.setGroupMetadata(normalizedJid, metadata);
-					print.debug(`Cached metadata for group: ${jid}`);
+					print.debug(`Cached metadata for group: ${normalizedJid}`);
 					return metadata;
 				} catch (e) {
 					print.error(
-						`Failed to fetch group metadata for ${jid}:`,
+						`Failed to fetch group metadata for ${normalizedJid}:`,
 						e
 					);
 					return null;
@@ -125,12 +124,11 @@ class Connect {
 			qrTimeout: usePairingCode ? undefined : 60000,
 			printQRInTerminal: qrMode,
 			msgRetryCounterCache,
+			defaultQueryTimeoutMs: undefined,
 		});
 
 		this.sock = Client({ sock: this.sock, store: this.store });
-
 		this.pluginManager.scheduleAllPeriodicTasks(this.sock);
-
 		this.sock.ev.on("creds.update", saveCreds);
 		this.sock.ev.on("contacts.update", (update) => {
 			this.store.updateContacts(update);
@@ -183,8 +181,11 @@ class Connect {
 				const shouldReconnect =
 					lastDisconnect?.error?.output?.statusCode !==
 					DisconnectReason.loggedOut;
+
 				print.warn(
-					`Connection closed for session ${this.sessionName}. Reason: ${lastDisconnect?.error?.message || "Unknown"}. Reconnecting: ${shouldReconnect}`
+					`Connection closed for session ${this.sessionName}. Reason: ${
+						lastDisconnect?.error?.message || "Unknown"
+					}. Reconnecting: ${shouldReconnect}`
 				);
 
 				if (
@@ -235,66 +236,45 @@ class Connect {
 		this.sock.ev.on(
 			"group-participants.update",
 			async ({ id, participants, action }) => {
-				const participantJids = participants
-					.map((p) => (typeof p === "string" ? p : p?.id))
-					.filter(Boolean)
+				const normalizedGroupJid = jidNormalizedUser(id);
+				const participantJids = (
+					Array.isArray(participants) ? participants : []
+				)
+					.filter(
+						(p) =>
+							typeof p === "string" &&
+							p &&
+							p !== "[object Object]"
+					)
 					.map(jidNormalizedUser);
 
 				print.info(
-					`Group participants updated for ${id}: ${action} ${participantJids.join(", ")}`
+					`Group participants updated for ${normalizedGroupJid}: ${action} ${participantJids.join(
+						", "
+					)}`
 				);
-
-				const normalizedJid = jidNormalizedUser(id);
-				let metadata =
-					this.groupMetadataCache.get(normalizedJid) ||
-					this.store.getGroupMetadata(normalizedJid);
-
-				if (!metadata) {
-					try {
-						metadata = await this.sock.groupMetadata(id);
-					} catch (e) {
-						print.error(`Failed to fetch metadata for ${id}:`, e);
-						return;
-					}
-				}
-
-				switch (action) {
-					case "add":
-						participantJids.forEach((pid) => {
-							if (
-								!metadata.participants.some((p) => p.id === pid)
-							) {
-								metadata.participants.push({
-									id: pid,
-									admin: null,
-								});
-							}
-						});
-						break;
-					case "promote":
-						metadata.participants.forEach((p) => {
-							if (participantJids.includes(p.id)) {
-								p.admin = "admin";
-							}
-						});
-						break;
-					case "demote":
-						metadata.participants.forEach((p) => {
-							if (participantJids.includes(p.id)) {
-								p.admin = null;
-							}
-						});
-						break;
-					case "remove":
-						metadata.participants = metadata.participants.filter(
-							(p) => !participantJids.includes(p.id)
+				try {
+					const metadata =
+						await this.sock.groupMetadata(normalizedGroupJid);
+					if (metadata) {
+						this.groupMetadataCache.set(
+							normalizedGroupJid,
+							metadata
 						);
-						break;
+						this.store.setGroupMetadata(
+							normalizedGroupJid,
+							metadata
+						);
+						print.debug(
+							`Refetched & cached metadata for group: ${normalizedGroupJid}`
+						);
+					}
+				} catch (e) {
+					print.error(
+						`Failed to refetch metadata for ${normalizedGroupJid}:`,
+						e
+					);
 				}
-
-				this.groupMetadataCache.set(normalizedJid, metadata);
-				this.store.setGroupMetadata(normalizedJid, metadata);
-				print.debug(`Updated group metadata cache for ${id}`);
 			}
 		);
 	}

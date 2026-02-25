@@ -12,12 +12,6 @@ const AUTH_BACKENDS = {
 	LOCAL: "local",
 };
 
-/**
- * Handles authentication state for different backends (MongoDB, MySQL, Local File).
- *
- * @param {string} sessionName - Unique name for the session.
- * @returns {Promise<{state: any, saveCreds: Function, removeCreds: Function}>}
- */
 export default async function getAuthState(sessionName) {
 	const authStore = process.env.AUTH_STORE?.toLowerCase();
 	const useMongo = process.env.USE_MONGO_AUTH === "true";
@@ -43,8 +37,9 @@ export default async function getAuthState(sessionName) {
 			}
 			const { state, saveCreds, removeCreds } = await useMongoDbAuthState(
 				mongoUrl,
-				{ session: sessionName }
+				sessionName
 			);
+
 			return { state, saveCreds, removeCreds };
 		}
 
@@ -58,7 +53,9 @@ export default async function getAuthState(sessionName) {
 
 		case AUTH_BACKENDS.LOCAL:
 		default: {
-			const authPath = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
+			const base = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
+			const authPath = join(base, sessionName);
+
 			const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
 			const removeCreds = async () => {
