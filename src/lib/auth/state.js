@@ -12,6 +12,12 @@ const AUTH_BACKENDS = {
 	LOCAL: "local",
 };
 
+/**
+ * Handles authentication state for different backends (MongoDB, MySQL, Local File).
+ *
+ * @param {string} sessionName - Unique name for the session.
+ * @returns {Promise<{state: any, saveCreds: Function, removeCreds: Function}>}
+ */
 export default async function getAuthState(sessionName) {
 	const authStore = process.env.AUTH_STORE?.toLowerCase();
 	const useMongo = process.env.USE_MONGO_AUTH === "true";
