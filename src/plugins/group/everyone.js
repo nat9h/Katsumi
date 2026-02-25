@@ -1,5 +1,4 @@
 import { isMediaMessage, mimeMap } from "#lib/media";
-import { generateWAMessageFromContent, jidNormalizedUser } from "baileys";
 
 export default {
 	name: "hidetag",
@@ -12,7 +11,7 @@ export default {
 	category: "group",
 	cooldown: 3,
 	limit: false,
-	usage: "$prefix$command <text>",
+	usage: "$prefix$command <text> (or reply media)",
 	react: false,
 	botAdmin: false,
 	group: true,
@@ -20,79 +19,58 @@ export default {
 	owner: false,
 
 	/**
-	 * @param {import('baileys').WASocket} sock
-	 * @param {object} m
-	 * @param {object} options
+	 * @param {object} m serialized message
+	 * @param {{ text: string, sock: import('baileys').WASocket }} ctx
 	 */
-	execute: async (m, { text, sock }) => {
-		if (!m.metadata) {
+	execute: async (m, { text, sock, groupMetadata }) => {
+		if (!groupMetadata?.participants?.length) {
 			return m.reply("Group metadata not available.");
 		}
 
 		const q = m.isQuoted ? m.quoted : m;
-		const type = q.type || "";
-		let mediaBuffer, mediaType;
+		const type = q?.type || "";
 
-		if (isMediaMessage(type)) {
-			try {
-				mediaBuffer = await q.download();
-				mediaType = mimeMap[type] || "document";
-			} catch (e) {
-				console.error("Media download error:", e);
-			}
+		const message =
+			(typeof text === "string" && text.trim()) ||
+			q?.text ||
+			q?.caption ||
+			m.body ||
+			"";
+
+		const mentions = await sock.getGroupMentionJids(groupMetadata, {
+			preferPn: true,
+		});
+
+		if (!mentions.length) {
+			return m.reply("No valid participants found to mention.");
 		}
 
-		const message = text || q.text || q.caption || "";
+		let mediaBuffer = null;
+		let mediaType = null;
 
-		if (!message && (!mediaType || !mediaBuffer)) {
+		if (isMediaMessage(type)) {
+			mediaBuffer = await q.download();
+			mediaType = mimeMap[type] || "document";
+		}
+
+		if (!message && !(mediaType && mediaBuffer)) {
 			return m.reply("Please provide text or reply to media!");
 		}
 
-		const mentions = m.metadata.participants
-			.map((p) => {
-				const target = p.phoneNumber || p.jid;
-				if (
-					target &&
-					typeof target === "string" &&
-					target.endsWith("@s.whatsapp.net")
-				) {
-					return jidNormalizedUser(target);
-				}
-				return null;
-			})
-			.filter(Boolean);
-
-		if (mentions.length === 0) {
-			return m.reply(
-				"No valid participants with phone numbers found to mention."
-			);
-		}
-
-		const content = {
-			text: message,
-			contextInfo: { mentionedJid: mentions },
-		};
+		const payload = { mentions };
 
 		if (mediaType && mediaBuffer) {
-			content[mediaType] = mediaBuffer;
-			if (mediaType !== "sticker") {
-				content.caption = message;
-				delete content.text;
+			payload[mediaType] = mediaBuffer;
+			if (mediaType !== "sticker" && message) {
+				payload.caption = message;
 			}
+		} else {
+			payload.text = message;
 		}
 
-		const msg = generateWAMessageFromContent(
-			m.from,
-			{ extendedTextMessage: content },
-			{
-				userJid: sock.user.id,
-				quoted: m,
-				ephemeralExpiration: m.expiration,
-			}
-		);
-
-		await sock.relayMessage(m.from, msg.message, {
-			messageId: msg.key.id,
+		await sock.sendMessage(m.from, payload, {
+			quoted: m,
+			ephemeralExpiration: m.expiration,
 		});
 	},
 };

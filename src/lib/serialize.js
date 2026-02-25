@@ -580,6 +580,59 @@ export function Client({ sock, store }) {
 			enumerable: false,
 		},
 
+		getGroupMentionJids: {
+			/**
+			 * Return list of JIDs to mention for a group.
+			 * Prefer PN (@s.whatsapp.net) if possible; fallback to LID if not.
+			 * Uses resolveToPn() which chains: hint -> metadata map -> lidMapping store. :contentReference[oaicite:1]{index=1}
+			 *
+			 * @param {import('baileys').GroupMetadata} metadata
+			 * @param {{ preferPn?: boolean }} [opts]
+			 * @returns {Promise<string[]>}
+			 */
+			async value(metadata, opts = {}) {
+				const preferPn = opts.preferPn !== false;
+				const isPn = (jid) =>
+					typeof jid === "string" && jid.endsWith("@s.whatsapp.net");
+
+				const participants = metadata?.participants || [];
+				const idMap = buildIdentityMap(participants);
+
+				const out = [];
+				const seen = new Set();
+
+				for (const p of participants) {
+					const base =
+						normJid(p?.phoneNumber) ||
+						normJid(p?.jid) ||
+						normJid(p?.id) ||
+						normJid(p?.lid);
+
+					if (!base) {
+						continue;
+					}
+
+					let chosen = base;
+
+					if (preferPn) {
+						chosen = await resolveToPn(base, { sock, idMap });
+					}
+
+					if (preferPn && chosen && !isPn(chosen)) {
+						chosen = base;
+					}
+
+					if (chosen && !seen.has(chosen)) {
+						seen.add(chosen);
+						out.push(chosen);
+					}
+				}
+
+				return out;
+			},
+			enumerable: true,
+		},
+
 		copyNForward: {
 			async value(jid, message, forwardingScore = true, options = {}) {
 				let m = generateForwardMessageContent(
