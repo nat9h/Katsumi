@@ -48,7 +48,7 @@ export default {
 			fs.writeFileSync(inputPath, buffer);
 
 			execSync(
-				`ffmpeg -y -i "${inputPath}" -af "atempo=0.8,asetrate=44100*0.9,aresample=44100" -vn "${outputPath}"`,
+				`ffmpeg -y -i "${inputPath}" -map_metadata -1 -vn -af "asetrate=44100*0.9,aresample=44100,atempo=0.85" -b:a 192k "${outputPath}"`,
 				{ stdio: "ignore" }
 			);
 

@@ -48,7 +48,7 @@ export default {
 			fs.writeFileSync(inputPath, buffer);
 
 			execSync(
-				`ffmpeg -y -i "${inputPath}" -af "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.75" -vn "${outputPath}"`,
+				`ffmpeg -y -i "${inputPath}" -map_metadata -1 -vn -af "afftfilt=real='hypot(re,im)':imag='0',aecho=0.8:0.9:40:0.3,aresample=44100" -b:a 192k "${outputPath}"`,
 				{ stdio: "ignore" }
 			);
 
