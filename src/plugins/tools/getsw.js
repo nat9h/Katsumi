@@ -1,7 +1,7 @@
 export default {
 	name: "getsw",
 	description: "Retrieve and resend WhatsApp story (group or personal).",
-	command: ["getsw", "ambilsw"],
+	command: ["getsw", "gsw"],
 	permissions: "all",
 	category: "tools",
 	cooldown: 3,

@@ -2,7 +2,7 @@ export default {
 	name: "getinfo",
 	description:
 		"Get full information from a WhatsApp Channel or Group invite link.",
-	command: ["getinfo"],
+	command: ["getinfo", "inspect"],
 	permissions: "all",
 	category: "tools",
 	cooldown: 5,
