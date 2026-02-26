@@ -1,4 +1,4 @@
-import deepinfra from "#lib/scrapers/deepseek";
+import GptService from "#lib/scrapers/gptservice";
 
 export default {
 	name: "gpt",
@@ -22,7 +22,7 @@ export default {
 	 * @param {import("../../lib/serialize").default} m
 	 * @param {{ sock: import("baileys").WASocket }}
 	 */
-	execute: async (m, { sock }) => {
+	execute: async (m) => {
 		let input = m.text?.trim();
 
 		if (!input && m.quoted?.text) {
@@ -33,32 +33,10 @@ export default {
 			return m.reply("Please enter a question or message.");
 		}
 
-		if (!sock.deepseek) {
-			sock.deepseek = {};
-		}
-		if (!sock.deepseek[m.sender]) {
-			sock.deepseek[m.sender] = [];
-		}
-
-		sock.deepseek[m.sender].push({
-			role: "user",
-			content: input,
-		});
-
 		try {
-			const res = await deepinfra(
-				"deepseek-ai/DeepSeek-V3.1",
-				sock.deepseek[m.sender]
-			);
-
-			sock.deepseek[m.sender].push({
-				role: "assistant",
-				content: res,
+			const res = await GptService.process(input, {
+				prompt: "Now your name is Surya and you will always reply to messages in a contemporary style, not too many emojis and not over the top, just short and cool replies.",
 			});
-
-			if (sock.deepseek[m.sender].length > 20) {
-				sock.deepseek[m.sender] = sock.deepseek[m.sender].slice(-20);
-			}
 
 			await m.reply(res);
 		} catch (err) {
