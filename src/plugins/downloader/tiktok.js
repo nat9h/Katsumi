@@ -59,7 +59,25 @@ export default {
 		await m.reply({
 			video: { url: download.original },
 			caption: msg.trim(),
+			annotations: [
+				{
+					embeddedContent: {
+						embeddedMusic: {
+							musicContentMediaId: "12",
+							songId: "11",
+							author: download.music_info?.author || "-",
+							title: download.music_info?.title || "-",
+							artistAttribution: input,
+						},
+					},
+					embeddedAction: true,
+				},
+			],
 		});
+		// await m.reply({
+		// 	video: { url: download.original },
+		// 	caption: msg.trim(),
+		// });
 		await m.reply({
 			audio: { url: download.music },
 			mimetype: "audio/mpeg",

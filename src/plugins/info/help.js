@@ -14,14 +14,21 @@ export default {
 	execute: async (m, { plugins, isOwner, sock }) => {
 		const categories = new Map();
 
+		const collator = new Intl.Collator("id", {
+			sensitivity: "base",
+			numeric: true,
+		});
+
 		for (const plugin of plugins) {
 			if (plugin.hidden || (plugin.owner && !isOwner)) {
 				continue;
 			}
-			if (!categories.has(plugin.category)) {
-				categories.set(plugin.category, []);
+			const key = (plugin.category || "general").toLowerCase().trim();
+
+			if (!categories.has(key)) {
+				categories.set(key, []);
 			}
-			categories.get(plugin.category).push(plugin);
+			categories.get(key).push(plugin);
 		}
 
 		let response = "";
@@ -29,11 +36,25 @@ export default {
 		if (m.args.length === 0) {
 			response += `Hello, @${m.sender.replace(/[^0-9]/g, "")}!\n\n`;
 			response += "_𓆩♡𓆪 *Available Commands:*_\n";
-			for (const [category, cmds] of categories.entries()) {
+
+			const sortedCategories = [...categories.entries()].sort(
+				([a], [b]) => collator.compare(a, b)
+			);
+
+			for (const [category, cmds] of sortedCategories) {
 				const categoryName =
 					category.charAt(0).toUpperCase() + category.slice(1);
+
 				response += `\nꕥ ${categoryName}\n`;
-				for (const cmd of cmds) {
+
+				const sortedCmds = [...cmds].sort((a, b) =>
+					collator.compare(
+						a?.command?.[0] || "",
+						b?.command?.[0] || ""
+					)
+				);
+
+				for (const cmd of sortedCmds) {
 					const aliases =
 						cmd.command.length > 1
 							? ` _(alias: ${cmd.command.slice(1).join(", ")})_`
@@ -45,6 +66,7 @@ export default {
 			response += `\nꕥ _Tip: \`${m.prefix}help [command or category]\` for details._`;
 		} else {
 			const query = m.args[0].toLowerCase();
+
 			const plugin = plugins.find((p) =>
 				p.command.some((cmd) => cmd.toLowerCase() === query)
 			);
@@ -53,9 +75,15 @@ export default {
 				response += `ꕥ Command: *${plugin.name}*\n\n`;
 				response += `• *Description:* ${plugin.description}\n`;
 				response += `• *Aliases:*  \`${plugin.command.join(", ")}\`\n`;
-				response += `• *Category:* ${plugin.category.charAt(0).toUpperCase() + plugin.category.slice(1)}\n`;
+				response += `• *Category:* ${
+					plugin.category.charAt(0).toUpperCase() +
+					plugin.category.slice(1)
+				}\n`;
+
 				if (plugin.usage) {
-					response += `• *Usage:* \`${plugin.usage.replace("$prefix", m.prefix).replace("$command", plugin.command[0])}\`\n`;
+					response += `• *Usage:* \`${plugin.usage
+						.replace("$prefix", m.prefix)
+						.replace("$command", plugin.command[0])}\`\n`;
 				}
 				if (plugin.cooldown > 0) {
 					response += `• *Cooldown:* ${plugin.cooldown}s\n`;
@@ -85,8 +113,16 @@ export default {
 			} else if (categories.has(query)) {
 				const categoryName =
 					query.charAt(0).toUpperCase() + query.slice(1);
-				const categoryPlugins = categories.get(query);
-				response += `ꕥ *${categoryName} Commands:*\n`;
+
+				const categoryPlugins = [...categories.get(query)].sort(
+					(a, b) =>
+						collator.compare(
+							a?.command?.[0] || "",
+							b?.command?.[0] || ""
+						)
+				);
+
+				response += `ꕥ *${categoryName} Commands:*\n\n`;
 				for (const cmd of categoryPlugins) {
 					const aliases =
 						cmd.command.length > 1
@@ -94,7 +130,7 @@ export default {
 							: "";
 					response += `•  *${m.prefix}${cmd.command[0]}*${aliases}: ${cmd.description}\n`;
 				}
-				response += `\n\n_Explore more: \`${m.prefix}help <command>\`_`;
+				response += `\n_Explore more: \`${m.prefix}help <command>\`_`;
 			} else {
 				response = `*Not Found*\n│\n🙁 Sorry, *${query}* not found.\n\n_Type:_ \`${m.prefix}help\` _to see all commands._\n`;
 			}
