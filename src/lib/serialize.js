@@ -4,7 +4,6 @@ import { getPrefix } from "#lib/prefix";
 import Sticker from "#lib/sticker";
 import { to_audio } from "#utils/converter";
 import {
-	STORIES_JID,
 	WAProto,
 	areJidsSameUser,
 	chatModificationToAppPatch,
@@ -12,6 +11,7 @@ import {
 	extractMessageContent,
 	generateForwardMessageContent,
 	generateWAMessage,
+	generateWAMessageContent,
 	generateWAMessageFromContent,
 	getContentType,
 	jidDecode,
@@ -263,97 +263,40 @@ export function Client({ sock, store }) {
 		},
 
 		sendStatusMentions: {
-			async value(content, jids, opts = {}) {
-				const targetJid = [];
-				const statusJidList = [sock.user.id];
+			async value(groupIds, content, opts = {}) {
+				const sent = [];
 
-				const formatJid = (jid) => ({
-					tag: "to",
-					attrs: { jid },
-					content: undefined,
-				});
+				for (const gid of groupIds) {
+					const messageSecret = randomBytes(32);
 
-				const processJid = async (jid) => {
-					if (jid.endsWith("@g.us")) {
-						targetJid.push(formatJid(jid));
-						const groupData = await store.getGroupMetadata(jid);
-						statusJidList.push(
-							...groupData.participants.map((j) => j.id)
-						);
-					} else {
-						jid = jid.replace(/\D/g, "") + "@s.whatsapp.net";
-						targetJid.push(formatJid(jid));
-						statusJidList.push(jid);
-					}
-				};
+					const inside = await generateWAMessageContent(content, {
+						upload: sock.waUploadToServer,
+						...(opts.generate || {}),
+					});
 
-				await Promise.all(jids.map(processJid));
-
-				const media = await generateWAMessage(STORIES_JID, content, {
-					upload: sock.waUploadToServer,
-					...opts,
-				});
-
-				const additionalNodes = [
-					{
-						tag: "meta",
-						attrs: {},
-						content: [
-							{
-								tag: "mentioned_users",
-								attrs: {},
-								content: targetJid,
-							},
-						],
-					},
-				];
-
-				await sock.relayMessage(STORIES_JID, media.message, {
-					messageId: media.key.id,
-					statusJidList,
-					additionalNodes,
-				});
-
-				await Promise.all(
-					targetJid.map(async (val) => {
-						const jid = val.attrs.jid;
-						const msgType = jid.endsWith("@g.us")
-							? "groupStatusMentionMessage"
-							: "statusMentionMessage";
-						const msg = await generateWAMessageFromContent(
-							jid,
-							{
-								[msgType]: {
-									message: {
-										protocolMessage: {
-											key: media.key,
-											type: 25,
-										},
-									},
+					const msg = generateWAMessageFromContent(
+						gid,
+						{
+							messageContextInfo: { messageSecret },
+							groupStatusMessageV2: {
+								message: {
+									...inside,
+									messageContextInfo: { messageSecret },
 								},
 							},
-							{}
-						);
+						},
+						{ userJid: sock.user.id }
+					);
 
-						const attrsType = jid.endsWith("@g.us")
-							? "is_group_status_mention"
-							: "is_status_mention";
-						if (!opts.silent) {
-							await sock.relayMessage(jid, msg.message, {
-								additionalNodes: [
-									{
-										tag: "meta",
-										attrs: { [attrsType]: "true" },
-										content: undefined,
-									},
-								],
-							});
-						}
-					})
-				);
+					await sock.relayMessage(gid, msg.message, {
+						messageId: msg.key.id,
+					});
+					sent.push(gid);
+				}
 
-				return media;
+				return sent;
 			},
+			enumerable: false,
 		},
 
 		decodeJid: {
