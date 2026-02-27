@@ -1,5 +1,5 @@
-import { sleep } from "#lib/functions";
 import { Pinterest } from "#lib/scrapers/pinterest";
+import { sleep } from "#lib/functions";
 
 export default {
 	name: "pinterest",
