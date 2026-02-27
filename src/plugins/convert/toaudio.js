@@ -11,7 +11,7 @@ export default {
 	category: "convert",
 	cooldown: 5,
 	limit: false,
-	usage: "$prefix$command reply sticker",
+	usage: "$prefix$command reply media",
 	react: true,
 	botAdmin: false,
 	group: false,

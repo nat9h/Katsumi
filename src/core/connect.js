@@ -124,7 +124,6 @@ class Connect {
 			qrTimeout: usePairingCode ? undefined : 60000,
 			printQRInTerminal: qrMode,
 			msgRetryCounterCache,
-			defaultQueryTimeoutMs: undefined,
 		});
 
 		this.sock = Client({ sock: this.sock, store: this.store });

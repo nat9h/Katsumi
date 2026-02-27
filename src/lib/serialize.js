@@ -1126,12 +1126,17 @@ export default async function serialize(sock, msg, store) {
 
 	m.download = async () => await sock.downloadMedia(m);
 
-	m.isUrl =
-		((m.body &&
-			m.body.match(
-				/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
-			)) ||
-			[])[0] || "";
+	// m.isUrl =
+	// 	((m.body &&
+	// 		m.body.match(
+	// 			/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
+	// 		)) ||
+	// 		[])[0] || "";
+
+	m.isUrl = (text = "") =>
+		/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi.test(
+			String(text)
+		);
 
 	return m;
 }

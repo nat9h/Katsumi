@@ -4,7 +4,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import crypto from "node:crypto";
 import { tmpdir } from "node:os";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { join } from "path";
 
 const supported_audio_args = {
@@ -185,5 +185,88 @@ export async function webpToImage(buffer) {
 		} catch (err) {
 			reject(err);
 		}
+	});
+}
+
+// audio effects
+const audio_effects = {
+	bass: { out: "bass", filter: "bass=g=20:f=110:w=0.6" },
+	blown: {
+		out: "blown",
+		filter: "acrusher=level_in=4:level_out=5:bits=8:mode=log:aa=1",
+	},
+	deep: {
+		out: "deep",
+		filter: "asetrate=44100*0.7,aresample=44100,atempo=1.3",
+	},
+	earrape: {
+		out: "earrape",
+		filter: "volume=10,bass=g=30:f=80:w=0.6,acrusher=level_in=8:level_out=12:bits=4:mode=log:aa=1",
+	},
+	echo: { out: "echo", filter: "aecho=0.8:0.88:60:0.4" },
+	fast: { out: "fast", filter: "atempo=1.5" },
+	fat: {
+		out: "fat",
+		filter: "bass=g=15:f=60:w=0.8,lowpass=f=3000,volume=1.5",
+	},
+	nightcore: {
+		out: "nightcore",
+		filter: "asetrate=44100*1.25,aresample=44100,atempo=1.1",
+	},
+	reverse: { out: "reverse", filter: "areverse" },
+	robot: {
+		out: "robot",
+		filter: "afftfilt=real='hypot(re,im)':imag='0',aecho=0.8:0.9:40:0.3,aresample=44100",
+	},
+	slowed: {
+		out: "slow",
+		filter: "asetrate=44100*0.9,aresample=44100,atempo=0.85",
+	},
+	smooth: {
+		out: "smooth",
+		filter: "lowpass=f=4500,bass=g=2:f=120,treble=g=-1:f=3000,volume=1.2",
+	},
+	chimpunk: {
+		out: "squirrel",
+		filter: "asetrate=44100*1.5,aresample=44100,atempo=1.1",
+	},
+};
+
+export function getAudioEffectCommands() {
+	return Object.keys(audio_effects);
+}
+
+export async function audioEffects(inputBuffer, effectName) {
+	const key = (effectName || "").toLowerCase();
+	const effect = audio_effects[key];
+	if (!effect) {
+		const available = Object.keys(audio_effects).join(", ");
+		throw new Error(
+			`Unknown effect: ${effectName}\nAvailable: ${available}`
+		);
+	}
+
+	return new Promise((resolve, reject) => {
+		const outStream = new PassThrough();
+		const chunks = [];
+
+		outStream.on("data", (c) => chunks.push(c));
+		outStream.on("end", () => resolve(Buffer.concat(chunks)));
+		outStream.on("error", reject);
+
+		ffmpeg()
+			.input(bufferToStream(inputBuffer))
+			.noVideo()
+			.outputOptions([
+				"-map_metadata",
+				"-1",
+				"-af",
+				effect.filter,
+				"-b:a",
+				"192k",
+			])
+			.format("mp3")
+			.on("error", reject)
+			.pipe(outStream, { end: true });
 	});
 }
