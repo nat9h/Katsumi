@@ -7,6 +7,7 @@
  * @author Natsyn
  * @license MIT
  */
+import { readFile } from "node:fs/promises";
 import https from "node:https";
 import qs from "node:querystring";
 
@@ -65,6 +66,14 @@ function pickBestImageUrl(p) {
 		p?.images?.["236x"]?.url ||
 		null
 	);
+}
+
+function lensFind() {
+	if (typeof Blob === "undefined" || typeof FormData === "undefined") {
+		throw new Error(
+			"Blob/FormData not found. Use Node 18+ or polyfill with 'undici'."
+		);
+	}
 }
 
 /**
@@ -372,5 +381,77 @@ export class Pinterest {
 			finalUrl,
 			pinId,
 		};
+	}
+
+	async lensFile(filePath, opt = {}) {
+		lensFind();
+
+		const filename = opt.filename ?? "pinterest.jpg";
+		const crop = opt.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+
+		const buf = await readFile(filePath);
+		const blob = new Blob([buf]);
+
+		const form = new FormData();
+		form.append("image", blob, filename);
+		form.append("x", String(crop.x));
+		form.append("y", String(crop.y));
+		form.append("w", String(crop.w));
+		form.append("h", String(crop.h));
+		form.append("base_scheme", "https");
+
+		const rsp = await fetch(
+			"https://api.pinterest.com/v3/visual_search/extension/image/",
+			{
+				method: "PUT",
+				body: form,
+				headers: {
+					"User-Agent":
+						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+				},
+			}
+		);
+
+		const json = await rsp.json().catch(() => null);
+
+		if (
+			rsp.status !== 200 ||
+			!json ||
+			json.status !== "success" ||
+			!Array.isArray(json.data) ||
+			json.data.length === 0
+		) {
+			const hint =
+				json?.message ||
+				json?.error ||
+				`HTTP ${rsp.status} ${rsp.statusText}`;
+			throw new Error(`Lens search failed: ${hint}`);
+		}
+
+		return json.data.map((it) => ({
+			id: it.id ?? null,
+			page: it.id ? `https://www.pinterest.com/pin/${it.id}/` : null,
+			image:
+				it.image_large_url ??
+				it.image_medium_url ??
+				it.image_square_url ??
+				null,
+			image_large: it.image_large_url ?? null,
+			image_medium: it.image_medium_url ?? null,
+			image_square: it.image_square_url ?? null,
+			title: it.title && it.title.trim() ? it.title.trim() : null,
+			description:
+				it.description && it.description.trim()
+					? it.description.trim()
+					: null,
+			link: it.link ?? it.tracked_link ?? null,
+			domain: it.domain ?? null,
+			is_video: Boolean(it.is_video),
+			repin_count:
+				typeof it.repin_count === "number" ? it.repin_count : null,
+			created_at: it.created_at ?? null,
+			is_uploaded:
+				typeof it.is_uploaded === "boolean" ? it.is_uploaded : null,
+		}));
 	}
 }

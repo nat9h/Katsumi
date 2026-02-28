@@ -1,7 +1,7 @@
 import Sticker from "#lib/sticker";
 import { execSync } from "child_process";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 export default {
 	name: "brat",
@@ -53,7 +53,7 @@ export default {
 		}
 
 		const words = input.split(" ");
-		const tempDir = path.join(process.cwd(), "temp");
+		const tempDir = path.join(process.cwd(), "tmp");
 
 		if (!fs.existsSync(tempDir)) {
 			fs.mkdirSync(tempDir, { recursive: true });

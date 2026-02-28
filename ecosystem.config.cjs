@@ -3,7 +3,7 @@ module.exports = {
 		{
 			script: "src/main.js",
 			name: "Katsumi",
-			node_args: "--env-file .env --max-old-space-size=256",
+			node_args: "--watch --env-file .env --max-old-space-size=256",
 			max_memory_restart: "300M",
 			exp_backoff_restart_delay: 1000,
 			min_uptime: 5000,

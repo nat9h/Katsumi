@@ -2,21 +2,6 @@ import Connect from "#core/connect";
 import { autoLoadCloneBots } from "#lib/clonebot/load";
 import { Colors, colorize } from "#lib/colors";
 import print from "#lib/print";
-import fs from "fs";
-import path from "path";
-
-function ensureTempDir() {
-	const tempDir = path.join(process.cwd(), "temp");
-
-	if (!fs.existsSync(tempDir)) {
-		fs.mkdirSync(tempDir, { recursive: true });
-		print.info(colorize(Colors.FgGreen, "📁 Temp folder created"));
-	} else {
-		print.debug(colorize(Colors.FgGray, "📁 Temp folder ready"));
-	}
-
-	return tempDir;
-}
 
 function centerText(text, width = 55) {
 	const pad = Math.max(0, Math.floor((width - text.length) / 2));
@@ -69,7 +54,6 @@ const bot = new Connect();
 try {
 	console.log(art());
 	await animateStartup();
-	ensureTempDir();
 	print.info("Bot started & periodic task scheduled!");
 
 	await bot.start();

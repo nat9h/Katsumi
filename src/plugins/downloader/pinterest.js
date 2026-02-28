@@ -1,4 +1,7 @@
+import { sleep } from "#lib/functions";
 import { Pinterest } from "#lib/scrapers/pinterest";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 export default {
 	name: "pinterest",
@@ -9,6 +12,7 @@ export default {
 		"$prefix$command https://pin.it/xxxx",
 		"$prefix$command chitoge kirisaki",
 		"$prefix$command chitoge kirisaki -10",
+		"$prefix$command reply image (lens)",
 	].join("\n"),
 	permissions: "all",
 	hidden: false,
@@ -31,6 +35,75 @@ export default {
 					? String(m.quoted.url || m.quoted.text).trim()
 					: null;
 
+		const delayMs = 4000;
+
+		const p = new Pinterest();
+
+		const q = m.isQuoted ? m.quoted : m;
+		const mime = q?.type || q?.mimetype || q?.mime || "";
+
+		if (/image/i.test(mime)) {
+			const tmpPath = "./tmp/pinterest.jpg";
+			const bytes = await q.download?.();
+			if (!bytes) {
+				return m.reply("Failed to download image.");
+			}
+
+			await fs.mkdir(path.dirname(tmpPath), { recursive: true });
+			await fs.writeFile(tmpPath, Buffer.from(bytes));
+
+			const results = await p.lensFile(tmpPath, {
+				filename: "pinterest.jpg",
+				crop: { x: 0, y: 0, w: 1, h: 1 },
+			});
+
+			if (!results?.length) {
+				return m.reply("Lens: Not found.");
+			}
+
+			const top = results.slice(0, 10); // max 25
+
+			const text =
+				"*_🔎 PINTEREST LENS_*\n\n" +
+				`*Result*: ${top.length}/${results.length}\n\n` +
+				top
+					.map((it, i) => {
+						const title = it.title || "-";
+						const desc = (it.description || "-").slice(0, 160);
+
+						return (
+							`*${i + 1}.* ${title}\n` +
+							`• *Image*: ${it.page || "-"}\n` +
+							`• *Large*: ${it.image_large || "-"}\n` +
+							`• *Medium*: ${it.image_medium || "-"}\n` +
+							`• *Square*: ${it.image_square || "-"}\n` +
+							`• *Domain*: ${it.domain || "-"}\n` +
+							`• *Link*: ${it.link || "-"}\n` +
+							`• *Desc*: ${desc}\n` +
+							`• *Repin*: ${it.repin_count ?? "-"} | *Uploaded*: ${it.is_uploaded ?? "-"} | *Video*: ${it.is_video ? "yes" : "no"}`
+						);
+					})
+					.join("\n\n");
+
+			const it = top[0];
+			const imageUrl =
+				it.image_large ||
+				it.image ||
+				it.image_medium ||
+				it.image_square;
+
+			if (!imageUrl) {
+				return m.reply(text.trim());
+			}
+
+			await m.reply({
+				image: { url: imageUrl },
+				caption: text.trim(),
+			});
+			await fs.unlink(tmpPath).catch(() => {});
+			return;
+		}
+
 		if (!input) {
 			return m.reply(
 				"Input query or link Pinterest.\n" +
@@ -39,8 +112,6 @@ export default {
 					`- *${m.prefix + m.command}* https://pin.it/xxxx`
 			);
 		}
-
-		const p = new Pinterest();
 
 		if (m.isUrl(input) && isPinterestLink(input)) {
 			const info = await p.download(input);
@@ -92,7 +163,6 @@ export default {
 		);
 
 		const shouldDelay = picked.length > 1;
-		const delayMs = 1200;
 
 		for (let i = 0; i < picked.length; i++) {
 			const item = picked[i];
