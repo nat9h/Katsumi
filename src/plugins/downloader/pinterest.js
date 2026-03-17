@@ -13,7 +13,7 @@ export default {
 		"$prefix$command chitoge kirisaki",
 		"$prefix$command chitoge kirisaki -10",
 		"$prefix$command reply image (lens)",
-	].join("\n"),
+	],
 	permissions: "all",
 	hidden: false,
 	failed: "Failed to execute %command: %error",

@@ -82,7 +82,9 @@ export class Mediafire {
 			c === " " || c === "\n" || c === "\r" || c === "\t" || c === "\f";
 
 		const skipSpaces = () => {
-			while (i < len && isSpace(inside[i])) i++;
+			while (i < len && isSpace(inside[i])) {
+				i++;
+			}
 		};
 
 		const readName = () => {

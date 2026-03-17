@@ -193,6 +193,14 @@ class PluginManager {
 			print.warn(`⚠ Skipped invalid plugin: ${filename}`);
 			return false;
 		}
+
+		if (!this.isValidUsage(plugin.usage)) {
+			print.warn(
+				`⚠ Invalid usage format in plugin: ${filename}. Expected string or string[]`
+			);
+			return false;
+		}
+
 		return true;
 	}
 
@@ -436,14 +444,18 @@ class PluginManager {
 		return false;
 	}
 
-	formatUsage(usage, m) {
+	getUsageText(usage) {
 		if (!usage) {
 			return "";
 		}
+		return Array.isArray(usage) ? usage.join("\n") : String(usage);
+	}
 
+	formatUsage(usage, m) {
 		const lines = Array.isArray(usage) ? usage : [usage];
 
 		return lines
+			.filter(Boolean)
 			.map((line) =>
 				String(line)
 					.replace(/\$prefix/g, m.prefix)
@@ -452,17 +464,20 @@ class PluginManager {
 			.join("\n");
 	}
 
+	isValidUsage(usage) {
+		return (
+			usage === undefined ||
+			typeof usage === "string" ||
+			(Array.isArray(usage) &&
+				usage.every((item) => typeof item === "string"))
+		);
+	}
+
 	async checkUsage(plugin, m) {
-		if (
-			!plugin.usage ||
-			(Array.isArray(plugin.usage) && plugin.usage.length === 0)
-		) {
+		const usageText = this.getUsageText(plugin.usage);
+		if (!usageText) {
 			return false;
 		}
-
-		const usageText = Array.isArray(plugin.usage)
-			? plugin.usage.join("\n")
-			: String(plugin.usage);
 
 		const args = m.args;
 		const hasRequiredArgs = usageText.includes("<");
@@ -480,6 +495,7 @@ class PluginManager {
 			}
 			return true;
 		}
+
 		return false;
 	}
 

@@ -81,9 +81,23 @@ export default {
 				}\n`;
 
 				if (plugin.usage) {
-					response += `• *Usage:* \`${plugin.usage
-						.replace("$prefix", m.prefix)
-						.replace("$command", plugin.command[0])}\`\n`;
+					const usageLines = (
+						Array.isArray(plugin.usage)
+							? plugin.usage
+							: String(plugin.usage).split("\n")
+					)
+						.flatMap((line) => String(line).split("\n"))
+						.map((line) => line.trim())
+						.filter(Boolean)
+						.map((line) =>
+							line
+								.replace(/\$prefix/g, m.prefix)
+								.replace(/\$command/g, plugin.command[0])
+						);
+
+					response += `• *Usage:*\n${usageLines
+						.map((line) => `  \`${line}\``)
+						.join("\n")}\n`;
 				}
 				if (plugin.cooldown > 0) {
 					response += `• *Cooldown:* ${plugin.cooldown}s\n`;
