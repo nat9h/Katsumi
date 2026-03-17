@@ -1,7 +1,13 @@
 import Sticker from "#lib/sticker";
 import { execSync } from "child_process";
-import fs from "node:fs";
-import path from "node:path";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
 
 export default {
 	name: "brat",
@@ -53,10 +59,10 @@ export default {
 		}
 
 		const words = input.split(" ");
-		const tempDir = path.join(process.cwd(), "tmp");
+		const tempDir = join(process.cwd(), "tmp");
 
-		if (!fs.existsSync(tempDir)) {
-			fs.mkdirSync(tempDir, { recursive: true });
+		if (!existsSync(tempDir)) {
+			mkdirSync(tempDir, { recursive: true });
 		}
 
 		const time = Date.now();
@@ -73,13 +79,13 @@ export default {
 				}
 
 				const buffer = Buffer.from(await res.arrayBuffer());
-				const framePath = path.join(tempDir, `${time}_${i}.png`);
+				const framePath = join(tempDir, `${time}_${i}.png`);
 
-				fs.writeFileSync(framePath, buffer);
+				writeFileSync(framePath, buffer);
 				framePaths.push(framePath);
 			}
 
-			const listPath = path.join(tempDir, `${time}.txt`);
+			const listPath = join(tempDir, `${time}.txt`);
 			let listContent = "";
 
 			for (let i = 0; i < framePaths.length; i++) {
@@ -96,9 +102,9 @@ export default {
 			listContent += `file '${lastFrame}'\n`;
 			listContent += `file '${lastFrame}'\n`;
 
-			fs.writeFileSync(listPath, listContent);
+			writeFileSync(listPath, listContent);
 
-			const outputWebp = path.join(tempDir, `${time}.webp`);
+			const outputWebp = join(tempDir, `${time}.webp`);
 
 			execSync(
 				`ffmpeg -y -f concat -safe 0 -i ${listPath} \
@@ -106,7 +112,7 @@ export default {
 				-loop 0 -an -vsync vfr -c:v libwebp ${outputWebp}`
 			);
 
-			const stickerBuffer = fs.readFileSync(outputWebp);
+			const stickerBuffer = readFileSync(outputWebp);
 
 			const sticker = await Sticker.create(stickerBuffer, {
 				packname: "@natsumiworld.",
@@ -116,9 +122,9 @@ export default {
 
 			await m.reply({ sticker });
 
-			framePaths.forEach((f) => fs.unlinkSync(f));
-			fs.unlinkSync(listPath);
-			fs.unlinkSync(outputWebp);
+			framePaths.forEach((f) => unlinkSync(f));
+			unlinkSync(listPath);
+			unlinkSync(outputWebp);
 		} catch (err) {
 			console.log(err);
 			m.reply("Failed to create animated brat.");

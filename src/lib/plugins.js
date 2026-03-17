@@ -436,22 +436,43 @@ class PluginManager {
 		return false;
 	}
 
+	formatUsage(usage, m) {
+		if (!usage) {
+			return "";
+		}
+
+		const lines = Array.isArray(usage) ? usage : [usage];
+
+		return lines
+			.map((line) =>
+				String(line)
+					.replace(/\$prefix/g, m.prefix)
+					.replace(/\$command/g, m.command)
+			)
+			.join("\n");
+	}
+
 	async checkUsage(plugin, m) {
-		if (!plugin.usage) {
+		if (
+			!plugin.usage ||
+			(Array.isArray(plugin.usage) && plugin.usage.length === 0)
+		) {
 			return false;
 		}
 
+		const usageText = Array.isArray(plugin.usage)
+			? plugin.usage.join("\n")
+			: String(plugin.usage);
+
 		const args = m.args;
-		const hasRequiredArgs = plugin.usage.includes("<");
-		const requiresQuoted = plugin.usage.toLowerCase().includes("quoted");
+		const hasRequiredArgs = usageText.includes("<");
+		const requiresQuoted = usageText.toLowerCase().includes("quoted");
 
 		if (
 			(hasRequiredArgs && !args.length && !m.isQuoted) ||
 			(requiresQuoted && !m.isQuoted)
 		) {
-			const usage = plugin.usage
-				.replace("$prefix", m.prefix)
-				.replace("$command", m.command);
+			const usage = this.formatUsage(plugin.usage, m);
 
 			await m.reply(`📝 Usage:\n\`\`\`${usage}\`\`\``);
 			if (plugin.react) {
