@@ -8,6 +8,9 @@ export default [
 	{
 		ignores: [
 			"node_modules",
+			"auth_info_baileys",
+			"sessions",
+			"wa-proto",
 			"__tests__/**/*.test.js",
 			// ignore __mocks__ directory
 			"*/__mocks__/",
@@ -17,6 +20,7 @@ export default [
 	pluginJs.configs.recommended,
 	{
 		rules: {
+			"no-control-regex": "off",
 			curly: ["error"],
 			"no-else-return": ["error", { allowElseIf: false }],
 			quotes: ["error", "double", { avoidEscape: true }],
