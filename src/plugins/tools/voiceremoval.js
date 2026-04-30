@@ -42,13 +42,11 @@ export default {
 		await m.reply({
 			audio: { url: result.instrumental },
 			mimetype: "audio/mpeg",
-			caption: "🎵 Instrumental",
 		});
 
 		await m.reply({
 			audio: { url: result.vocal },
 			mimetype: "audio/mpeg",
-			caption: "🎤 Vocal",
 		});
 	},
 };
