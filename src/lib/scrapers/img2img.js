@@ -7,7 +7,7 @@ const getRandomUserAgent = () => {
 	return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Safari/537.36`;
 };
 
-class Image2Image {
+export class Image2Image {
 	constructor() {
 		this.refreshIdentity();
 	}
@@ -117,6 +117,9 @@ class Image2Image {
 	}
 }
 
+/*
+ * momok kamu surya
+ * senna imut
 async function jembut() {
 	const service = new Image2Image();
 	const sourceImageUrl =
@@ -158,3 +161,4 @@ async function jembut() {
 }
 
 jembut();
+*/
