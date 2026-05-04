@@ -151,7 +151,7 @@ class Connect {
 					this.groupMetadataCache.set(normalizedJid, metadata);
 					this.store.setGroupMetadata(normalizedJid, metadata);
 					return metadata;
-				} catch (e) {
+				} catch {
 					return null;
 				}
 			},

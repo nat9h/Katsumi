@@ -126,8 +126,10 @@ export default {
 		try {
 			fs.unlinkSync(inputPath);
 			fs.unlinkSync(outputPath);
-		} catch {
-			console.error(`[Cleanup Warning] Failed delete temp file: ${err.message}`);
+		} catch (err) {
+			console.error(
+				`[Cleanup Warning] Failed delete temp file: ${err.message}`
+			);
 		}
 	},
 };

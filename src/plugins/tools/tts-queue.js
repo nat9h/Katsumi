@@ -32,7 +32,8 @@ export default {
 				"Please provide text to synthesize.\n" +
 					`Usage: ${m.prefix}tts [-l lang] <text>\n\n` +
 					"Available languages:\n" +
-					LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n") + "\n\n" +
+					LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n") +
+					"\n\n" +
 					`Example: ${m.prefix + m.command} -l 4 hello world`
 			);
 		}
@@ -50,18 +51,23 @@ export default {
 				LANG_LIST,
 				isNaN(maybeLang) ? maybeLang : parseInt(maybeLang)
 			);
-			
+
 			if (picked) {
 				lang = picked;
 			} else {
-				return m.reply(`Invalid language flag.\nAvailable languages:\n` + LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n"));
+				return m.reply(
+					"Invalid language flag.\nAvailable languages:\n" +
+						LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n")
+				);
 			}
-			
+
 			textToSpeak = input.replace(flagRegex, "").trim();
 		}
 
 		if (!textToSpeak) {
-			return m.reply("Please provide the text to synthesize after the language flag.");
+			return m.reply(
+				"Please provide the text to synthesize after the language flag."
+			);
 		}
 
 		const tts = new UmamusumeTTS();

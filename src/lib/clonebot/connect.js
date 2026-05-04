@@ -347,7 +347,7 @@ export class CloneBot {
 								this.groupMetadataCache.set(gjid, metadata);
 								this.store.setGroupMetadata(gjid, metadata);
 							}
-						} catch {
+						} catch (e) {
 							console.error(
 								`[CLONE] Failed to refetch metadata for ${gjid}:`,
 								e?.message || e
