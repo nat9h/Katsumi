@@ -3,28 +3,29 @@ import * as db from "#lib/database/index";
 import { setAllCommands } from "#lib/prefix";
 import print from "#lib/print";
 import Store from "#lib/store";
+import TaskScheduler from "#lib/taskScheduler";
 import { APIRequest as api } from "#utils/API/request";
 import NodeCache from "@cacheable/node-cache";
-import { readdirSync, watch } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath, pathToFileURL } from "url";
+import { readdirSync, watch } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 class PluginManager {
 	constructor(botConfig) {
+		this.botConfig = botConfig;
+		this.sessionName = BOT_CONFIG.sessionName || "natsumiworld";
+		this.store = new Store(this.sessionName);
+		this.scheduler = new TaskScheduler(this);
 		this.plugins = [];
-		this.sessionName = BOT_CONFIG.sessionName;
 		this.cooldowns = new NodeCache({ stdTTL: 60 * 60 });
 		this.usageLimits = new NodeCache({ stdTTL: 86400 });
-		this.botConfig = botConfig;
 		this.commandQueues = new Map();
 		this.processingStatus = new Map();
-		this.debounceTimeout = null;
-		this.store = new Store(this.sessionName);
 		this.MAX_QUEUE_PER_USER = 5;
-		this.periodicTasks = [];
+		this.reloadDebounces = new Map();
 	}
 
 	/**
@@ -49,137 +50,48 @@ class PluginManager {
 
 			print.info(`🌱 Loading plugins from: ${pluginsDir}`);
 
-			const pluginLoadPromises = [];
-
-			for (const folder of pluginFolders) {
+			const pluginLoadPromises = pluginFolders.flatMap((folder) => {
 				const folderPath = join(pluginsDir, folder);
 				const pluginFiles = readdirSync(folderPath).filter(
 					(file) => file.endsWith(".js") && !file.startsWith("_")
 				);
 
-				for (const file of pluginFiles) {
+				return pluginFiles.map(async (file) => {
 					const absolutePath = join(folderPath, file);
 					const pluginURL = pathToFileURL(absolutePath).href;
 
-					pluginLoadPromises.push(
-						(async () => {
-							try {
-								const module = await import(
-									`${pluginURL}?update=${Date.now()}`
-								);
-								const plugin = module.default;
+					try {
+						const module = await import(
+							`${pluginURL}?update=${Date.now()}`
+						);
+						const plugin = module.default;
 
-								if (!this.validatePlugin(plugin, file)) {
-									return;
-								}
+						if (!this.validatePlugin(plugin, file)) {
+							return;
+						}
 
-								this.configurePluginDefaults(plugin);
-								plugin.filePath = absolutePath;
-								this.plugins.push(plugin);
+						this.configurePluginDefaults(plugin);
+						plugin.filePath = absolutePath;
+						this.plugins.push(plugin);
 
-								print.info(
-									`✔ Loaded: ${plugin.name} (${plugin.command.join(", ")})`
-								);
-							} catch (error) {
-								print.error(
-									`❌ Failed to load ${file}:`,
-									error
-								);
-							}
-						})()
-					);
-				}
-			}
+						print.info(
+							`✔ Loaded: ${plugin.name} (${plugin.command.join(", ")})`
+						);
+					} catch (error) {
+						print.error(`❌ Failed to load ${file}:`, error);
+					}
+				});
+			});
 
 			await Promise.all(pluginLoadPromises);
 
-			await this.applyPeriodicSettingsFromDB();
+			await this.scheduler.applyPeriodicSettingsFromDB(this.plugins);
+			this.scheduler.logActiveTasks(this.plugins);
 
 			setAllCommands(this.getAllCommands());
 			print.info(`🚀 Successfully loaded ${this.plugins.length} plugins`);
-			this.logActivePeriodicTasks();
 		} catch (dirError) {
 			print.error("Plugin directory error:", dirError);
-		}
-	}
-
-	getAllCommands() {
-		return this.plugins.flatMap((plugin) =>
-			plugin.command.map((cmd) => cmd.toLowerCase())
-		);
-	}
-
-	async applyPeriodicSettingsFromDB() {
-		try {
-			const settings = await db.SettingsModel.getSettings();
-			for (const plugin of this.plugins) {
-				if (plugin.periodic && typeof plugin.name === "string") {
-					const key = plugin.name.toLowerCase();
-					if (typeof settings[key] === "boolean") {
-						plugin.periodic.enabled = settings[key];
-					}
-				}
-			}
-		} catch (e) {
-			print.error("Failed to apply periodic settings from DB:", e);
-		}
-	}
-
-	logActivePeriodicTasks() {
-		const periodicInterval = [];
-		const periodicMessage = [];
-		for (const plugin of this.plugins) {
-			const p = plugin.periodic;
-			if (p?.enabled && typeof p.run === "function") {
-				if (p.type === "interval") {
-					periodicInterval.push(plugin.name);
-				} else if (p.type === "message" || !p.type) {
-					periodicMessage.push(plugin.name);
-				}
-			}
-		}
-		if (periodicInterval.length) {
-			print.debug(
-				`🔁 [Scheduler] Active periodic (interval) tasks: ${periodicInterval.join(", ")}`
-			);
-		}
-		if (periodicMessage.length) {
-			print.debug(
-				`🔁 [MessageScheduler] Active periodic (message) tasks: ${periodicMessage.join(", ")}`
-			);
-		}
-	}
-
-	watchPlugins() {
-		const pluginsDir = join(__dirname, "../plugins");
-		print.info(`👀 Watching for plugin changes in: ${pluginsDir}`);
-
-		try {
-			const watcher = watch(
-				pluginsDir,
-				{ recursive: true },
-				(eventType, filename) => {
-					if (filename && filename.endsWith(".js")) {
-						print.info(
-							`🔃 Plugin change detected (Event: ${eventType}, File: ${filename}). Reloading...`
-						);
-
-						clearTimeout(this.debounceTimeout);
-						this.debounceTimeout = setTimeout(async () => {
-							await this.loadPlugins();
-							setAllCommands(this.getAllCommands());
-							this.stopAllPeriodicTasks();
-							this.scheduleAllPeriodicTasks(this.sock);
-						}, 200);
-					}
-				}
-			);
-
-			watcher.on("error", (error) => {
-				print.error("Error in watch:", error);
-			});
-		} catch (error) {
-			print.error("Failed to start watching plugin directory:", error);
 		}
 	}
 
@@ -193,14 +105,12 @@ class PluginManager {
 			print.warn(`⚠ Skipped invalid plugin: ${filename}`);
 			return false;
 		}
-
 		if (!this.isValidUsage(plugin.usage)) {
 			print.warn(
 				`⚠ Invalid usage format in plugin: ${filename}. Expected string or string[]`
 			);
 			return false;
 		}
-
 		return true;
 	}
 
@@ -223,11 +133,17 @@ class PluginManager {
 			owner: false,
 			experimental: false,
 		};
+		Object.assign(plugin, { ...defaults, ...plugin });
+	}
 
-		Object.keys(defaults).forEach((key) => {
-			plugin[key] =
-				plugin[key] !== undefined ? plugin[key] : defaults[key];
-		});
+	getAllCommands() {
+		return this.plugins.flatMap((plugin) =>
+			plugin.command.map((cmd) => cmd.toLowerCase())
+		);
+	}
+
+	getPlugins() {
+		return this.plugins;
 	}
 
 	async enqueueCommand(sock, m) {
@@ -252,7 +168,6 @@ class PluginManager {
 		const isDuplicate = queue.some(
 			(item) => item.m.command === m.command && item.m.args === m.args
 		);
-
 		if (isDuplicate) {
 			print.debug(
 				`♻ Skipped duplicate command: ${m.command} from ${senderKey}`
@@ -275,7 +190,8 @@ class PluginManager {
 		const queue = this.commandQueues.get(senderKey) || [];
 
 		if (queue.length === 0) {
-			this.processingStatus.set(senderKey, false);
+			this.processingStatus.delete(senderKey);
+			this.commandQueues.delete(senderKey);
 			return;
 		}
 
@@ -287,49 +203,56 @@ class PluginManager {
 
 		try {
 			if (!plugin) {
-				return this.continueQueue(senderKey);
+				return;
 			}
 
-			const checks = [
-				this.checkCooldown(plugin, m, sock),
-				this.checkEnvironment(plugin, m, sock),
+			const results = await Promise.all([
+				this.checkCooldown(plugin, m),
+				this.checkEnvironment(plugin, m),
 				this.checkPermissions(plugin, m, sock),
-				this.checkUsage(plugin, m, sock),
-				this.checkDailyLimit(plugin, m, sock),
-			];
+				this.checkUsage(plugin, m),
+				this.checkDailyLimit(plugin, m),
+			]);
 
-			const results = await Promise.all(checks);
-			if (results.some((result) => result)) {
-				return this.continueQueue(senderKey);
+			if (results.some(Boolean)) {
+				return;
 			}
 
-			await this.sendPreExecutionActions(plugin, m, sock);
+			await this.sendPreExecutionActions(plugin, m);
 			await this.executePlugin(plugin, sock, m);
 		} catch (error) {
 			print.error(`🔥 Processing error for ${senderKey}:`, error);
 		} finally {
-			this.continueQueue(senderKey);
+			setImmediate(() => this.processQueue(senderKey));
 		}
 	}
 
-	continueQueue(senderKey) {
-		setImmediate(() => this.processQueue(senderKey));
+	getQueueStatus() {
+		return {
+			totalQueues: this.commandQueues.size,
+			queues: Array.from(this.commandQueues.entries()).map(
+				([jid, queue]) => ({
+					jid,
+					count: queue.length,
+				})
+			),
+		};
 	}
 
 	async checkCooldown(plugin, m) {
 		if (plugin.cooldown <= 0) {
 			return false;
 		}
-
 		const senderKey = this.getStableSenderKey(m);
 		const cooldownKey = `${senderKey}:${plugin.name}`;
 
 		if (this.cooldowns.has(cooldownKey)) {
 			const expiry = this.cooldowns.getTtl(cooldownKey);
-			let seconds = plugin.cooldown;
-			if (typeof expiry === "number") {
-				seconds = Math.max(Math.ceil((expiry - Date.now()) / 1000), 0);
-			}
+			const seconds =
+				typeof expiry === "number"
+					? Math.max(Math.ceil((expiry - Date.now()) / 1000), 0)
+					: plugin.cooldown;
+
 			if (seconds > 0) {
 				await m.reply(
 					`⏳ Cooldown active! Please wait *${seconds}s* before using *${plugin.command[0]}* again`
@@ -345,7 +268,6 @@ class PluginManager {
 
 	async checkEnvironment(plugin, m) {
 		let error = null;
-
 		if (plugin.group && !m.isGroup) {
 			error = "🚫 Group-only command";
 		} else if (plugin.private && m.isGroup) {
@@ -371,37 +293,30 @@ class PluginManager {
 	 */
 	async checkPermissions(plugin, m, sock) {
 		const isOwner = m.isOwner;
-		const isClonebot =
-			(m.sock && m.sock.isClonebot) ||
-			(typeof sock !== "undefined" && sock.isClonebot);
-
+		const isClonebot = m.sock?.isClonebot || sock?.isClonebot;
 		let isGroupAdmin = false;
 
 		if (m.isGroup && m.metadata?.participants) {
 			const digits = (v) =>
 				typeof v === "string" ? v.replace(/\D/g, "") : "";
-
-			const senderPn = m.senderPn || m.sender;
+			const senderNum = digits(m.senderPn || m.sender);
 			const senderLid =
 				m.senderLid ||
 				(typeof m.sender === "string" &&
 				/@lid$|@hosted\.lid$/.test(m.sender)
 					? m.sender
 					: null);
-			const senderNum = digits(senderPn);
 
 			const participant = m.metadata.participants.find((p) => {
-				const pid = p?.id;
 				const pNum =
 					digits(p?.phoneNumber) ||
-					(pid && !/@lid$|@hosted\.lid$/.test(pid)
-						? digits(pid)
+					(p?.id && !/@lid$|@hosted\.lid$/.test(p.id)
+						? digits(p.id)
 						: "");
-
-				const pnMatch = senderNum && pNum && senderNum === pNum;
-				const lidMatch = senderLid && pid && senderLid === pid;
-
-				return pnMatch || lidMatch;
+				return (
+					(senderNum && pNum && senderNum === pNum) ||
+					(senderLid && p?.id && senderLid === p.id)
+				);
 			});
 
 			isGroupAdmin =
@@ -409,52 +324,48 @@ class PluginManager {
 				participant?.admin === "superadmin";
 		}
 
+		const replyReject = async (msg) => {
+			await m.reply(msg);
+			if (plugin.react) {
+				await m.react("❌");
+			}
+			return true;
+		};
+
 		if (plugin.owner && !isOwner) {
-			await m.reply("🔒 Owner-only command");
-			if (plugin.react) {
-				await m.react("❌");
-			}
-			return true;
+			return replyReject("🔒 Owner-only command");
 		}
-
-		if (plugin.owner && isClonebot && !m.isOwner) {
-			await m.reply("🔒 Owner-only command");
-			if (plugin.react) {
-				await m.react("❌");
-			}
-			return true;
+		if (plugin.owner && isClonebot && !isOwner) {
+			return replyReject("🔒 Owner-only command");
 		}
-
 		if (plugin.permissions === "admin" && !isGroupAdmin && !isOwner) {
-			await m.reply("👮‍♂️ Admin-only command");
-			if (plugin.react) {
-				await m.react("❌");
-			}
-			return true;
+			return replyReject("👮‍♂️ Admin-only command");
 		}
-
 		if (plugin.botAdmin && m.isGroup && !m.isBotAdmin) {
-			await m.reply("🤖 Bot needs admin privileges");
-			if (plugin.react) {
-				await m.react("❌");
-			}
-			return true;
+			return replyReject("🤖 Bot needs admin privileges");
 		}
 
 		return false;
 	}
 
+	isValidUsage(usage) {
+		return (
+			usage === undefined ||
+			typeof usage === "string" ||
+			(Array.isArray(usage) && usage.every((i) => typeof i === "string"))
+		);
+	}
+
 	getUsageText(usage) {
-		if (!usage) {
-			return "";
-		}
-		return Array.isArray(usage) ? usage.join("\n") : String(usage);
+		return usage
+			? Array.isArray(usage)
+				? usage.join("\n")
+				: String(usage)
+			: "";
 	}
 
 	formatUsage(usage, m) {
-		const lines = Array.isArray(usage) ? usage : [usage];
-
-		return lines
+		return (Array.isArray(usage) ? usage : [usage])
 			.filter(Boolean)
 			.map((line) =>
 				String(line)
@@ -464,38 +375,27 @@ class PluginManager {
 			.join("\n");
 	}
 
-	isValidUsage(usage) {
-		return (
-			usage === undefined ||
-			typeof usage === "string" ||
-			(Array.isArray(usage) &&
-				usage.every((item) => typeof item === "string"))
-		);
-	}
-
 	async checkUsage(plugin, m) {
 		const usageText = this.getUsageText(plugin.usage);
 		if (!usageText) {
 			return false;
 		}
 
-		const args = m.args;
 		const hasRequiredArgs = usageText.includes("<");
 		const requiresQuoted = usageText.toLowerCase().includes("quoted");
 
 		if (
-			(hasRequiredArgs && !args.length && !m.isQuoted) ||
+			(hasRequiredArgs && !m.args.length && !m.isQuoted) ||
 			(requiresQuoted && !m.isQuoted)
 		) {
-			const usage = this.formatUsage(plugin.usage, m);
-
-			await m.reply(`📝 Usage:\n\`\`\`${usage}\`\`\``);
+			await m.reply(
+				`📝 Usage:\n\`\`\`${this.formatUsage(plugin.usage, m)}\`\`\``
+			);
 			if (plugin.react) {
 				await m.react("ℹ️");
 			}
 			return true;
 		}
-
 		return false;
 	}
 
@@ -504,14 +404,15 @@ class PluginManager {
 			return false;
 		}
 
-		const senderKey = this.getStableSenderKey(m);
-		const limitKey = `${senderKey}:${plugin.name}`;
+		const limitKey = `${this.getStableSenderKey(m)}:${plugin.name}`;
 		const usageCount = (this.usageLimits.get(limitKey) || 0) + 1;
 
 		if (usageCount > plugin.dailyLimit) {
+			const resetTime = new Date(
+				new Date().setHours(24, 0, 0, 0)
+			).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 			await m.reply(
-				`📊 Daily limit reached! (${plugin.dailyLimit}/${plugin.dailyLimit})\n` +
-					`Resets in ${this.getResetTime()}`
+				`Daily limit reached! (${plugin.dailyLimit}/${plugin.dailyLimit})\nResets in ${resetTime}`
 			);
 			if (plugin.react) {
 				await m.react("🚫");
@@ -521,17 +422,6 @@ class PluginManager {
 
 		this.usageLimits.set(limitKey, usageCount);
 		return false;
-	}
-
-	getResetTime() {
-		const now = new Date();
-		const reset = new Date(now);
-		reset.setDate(reset.getDate() + 1);
-		reset.setHours(0, 0, 0, 0);
-		return reset.toLocaleTimeString([], {
-			hour: "2-digit",
-			minute: "2-digit",
-		});
 	}
 
 	async sendPreExecutionActions(plugin, m) {
@@ -545,13 +435,6 @@ class PluginManager {
 
 	async executePlugin(plugin, sock, m) {
 		const startTime = Date.now();
-
-		const groupMetadata = m.metadata || {};
-		const participants = groupMetadata.participants || [];
-
-		const isAdmin = !!m.isAdmin;
-		const isBotAdmin = !!m.isBotAdmin;
-
 		const params = {
 			sock,
 			m,
@@ -561,10 +444,10 @@ class PluginManager {
 			command: m.command,
 			prefix: m.prefix,
 			isOwner: m.isOwner,
-			groupMetadata,
-			participants,
-			isAdmin,
-			isBotAdmin,
+			groupMetadata: m.metadata || {},
+			participants: m.metadata?.participants || [],
+			isAdmin: !!m.isAdmin,
+			isBotAdmin: !!m.isBotAdmin,
 			api,
 			db,
 			store: this.store,
@@ -584,9 +467,8 @@ class PluginManager {
 			}
 
 			if (plugin.cooldown > 0) {
-				const senderKey = this.getStableSenderKey(m);
 				this.cooldowns.set(
-					`${senderKey}:${plugin.name}`,
+					`${this.getStableSenderKey(m)}:${plugin.name}`,
 					true,
 					plugin.cooldown
 				);
@@ -595,153 +477,19 @@ class PluginManager {
 			if (plugin.react) {
 				await m.react("✅");
 			}
-
-			const duration = Date.now() - startTime;
-			print.info(`✓ Executed ${plugin.name} in ${duration}ms`);
+			print.info(
+				`✓ Executed ${plugin.name} in ${Date.now() - startTime}ms`
+			);
 		} catch (error) {
 			print.error(`⚠ Plugin ${plugin.name} failed:`, error);
-
-			const fullCommand = m.prefix + m.command;
 			const errorMessage = plugin.failed
-				.replace("%command", fullCommand)
+				.replace("%command", m.prefix + m.command)
 				.replace("%error", error.message || "Internal error");
-
 			await m.reply(errorMessage);
-
 			if (plugin.react) {
 				await m.react("❌");
 			}
 		}
-	}
-
-	getPlugins() {
-		return this.plugins;
-	}
-
-	getQueueStatus() {
-		return {
-			totalQueues: this.commandQueues.size,
-			queues: Array.from(this.commandQueues.entries()).map(
-				([jid, queue]) => ({
-					jid,
-					count: queue.length,
-				})
-			),
-		};
-	}
-
-	async runPeriodicMessagePlugins(m, sock) {
-		for (const plugin of this.plugins) {
-			const periodic = plugin.periodic;
-			if (
-				periodic?.enabled &&
-				(periodic.type === "message" || !periodic.type) &&
-				typeof periodic.run === "function"
-			) {
-				try {
-					await periodic.run(m, { sock, pluginManager: this });
-				} catch (err) {
-					print.error(`[Periodic ${plugin.name}] Error:`, err);
-				}
-			}
-		}
-	}
-
-	startPeriodicTask(plugin) {
-		const periodic = plugin.periodic;
-
-		if (
-			!periodic ||
-			periodic.type !== "interval" ||
-			typeof periodic.run !== "function" ||
-			!periodic.interval
-		) {
-			return;
-		}
-
-		const exists = this.periodicTasks.find((t) => t.name === plugin.name);
-		if (exists) {
-			return;
-		}
-
-		const timer = setInterval(
-			() =>
-				periodic.run(undefined, {
-					sock: this.sock,
-					pluginManager: this,
-				}),
-			periodic.interval
-		);
-
-		this.periodicTasks.push({ name: plugin.name, timer });
-		print.debug(
-			`⏰ [Scheduler] Task '${plugin.name}' scheduled every ${periodic.interval / 1000}s`
-		);
-	}
-
-	stopPeriodicTask(name) {
-		const index = this.periodicTasks.findIndex((t) => t.name === name);
-		if (index === -1) {
-			return;
-		}
-		clearInterval(this.periodicTasks[index].timer);
-		this.periodicTasks.splice(index, 1);
-		print.debug(`🛑 [Scheduler] Task '${name}' stopped`);
-	}
-
-	/**
-	 * Only periodic with type: 'interval' is scheduled here.
-	 * Periodic with type: 'message' is called in message handler.
-	 */
-	scheduleAllPeriodicTasks(sock) {
-		this.sock = sock;
-		print.debug(
-			`🚦 [Scheduler] Initiating periodic task scheduling for ${this.plugins.length} plugins...`
-		);
-
-		this.plugins.forEach((plugin) => {
-			const periodic = plugin.periodic;
-			if (!periodic) {
-				return;
-			}
-
-			const enabled = !!periodic.enabled;
-
-			if (
-				enabled &&
-				periodic.type === "interval" &&
-				typeof periodic.run === "function"
-			) {
-				this.startPeriodicTask(plugin);
-			} else if (
-				enabled &&
-				periodic.type &&
-				periodic.type !== "interval" &&
-				periodic.type !== "message"
-			) {
-				print.warn(
-					`[Scheduler] WARNING: Plugin '${plugin.name}' uses unknown periodic type '${periodic.type}'`
-				);
-			}
-		});
-
-		if (!this.periodicTasks.length) {
-			print.debug(
-				"⚠️ [Scheduler] No periodic tasks registered. All clear!"
-			);
-		} else {
-			print.debug(
-				`✅ [Scheduler] All periodic interval tasks are now active. Total: ${this.periodicTasks.length}`
-			);
-		}
-	}
-
-	stopAllPeriodicTasks() {
-		for (const { timer } of this.periodicTasks) {
-			clearInterval(timer);
-		}
-		this.periodicTasks = [];
-		print.debug("🛑 All periodic interval tasks stopped.");
 	}
 
 	async handleAfterPlugins(m, sock) {
@@ -762,19 +510,115 @@ class PluginManager {
 		for (const plugin of this.plugins) {
 			if (typeof plugin.after === "function") {
 				try {
-					if (plugin.after.length === 1) {
-						await plugin.after(m);
-					} else {
-						await plugin.after(m, params);
-					}
+					await (plugin.after.length === 1
+						? plugin.after(m)
+						: plugin.after(m, params));
 				} catch (err) {
-					console.error(
+					print.error(
 						`Error in after() of plugin "${plugin.name}":`,
 						err
 					);
 				}
 			}
 		}
+	}
+
+	watchPlugins() {
+		const pluginsDir = join(__dirname, "../plugins");
+		print.info(`👀 Watching for plugin changes in: ${pluginsDir}`);
+
+		try {
+			const watcher = watch(
+				pluginsDir,
+				{ recursive: true },
+				(eventType, filename) => {
+					if (
+						!filename ||
+						!filename.endsWith(".js") ||
+						filename.startsWith("_")
+					) {
+						return;
+					}
+
+					if (this.reloadDebounces.has(filename)) {
+						clearTimeout(this.reloadDebounces.get(filename));
+					}
+
+					const timeout = setTimeout(async () => {
+						this.reloadDebounces.delete(filename);
+						await this.reloadSinglePlugin(filename, pluginsDir);
+					}, 300);
+
+					this.reloadDebounces.set(filename, timeout);
+				}
+			);
+
+			watcher.on("error", (error) =>
+				print.error("Error in watch:", error)
+			);
+		} catch (error) {
+			print.error("Failed to start watching plugin directory:", error);
+		}
+	}
+
+	async reloadSinglePlugin(filename, pluginsDir) {
+		const absolutePath = join(pluginsDir, filename);
+		const pluginURL = pathToFileURL(absolutePath).href;
+
+		try {
+			print.info(`🔃 Hot reloading specific plugin: ${filename}`);
+
+			const module = await import(`${pluginURL}?update=${Date.now()}`);
+			const newPlugin = module.default;
+
+			if (!this.validatePlugin(newPlugin, filename)) {
+				return;
+			}
+			this.configurePluginDefaults(newPlugin);
+			newPlugin.filePath = absolutePath;
+
+			const existingIndex = this.plugins.findIndex(
+				(p) => p.filePath === absolutePath
+			);
+
+			if (existingIndex !== -1) {
+				const oldPlugin = this.plugins[existingIndex];
+				if (oldPlugin.name) {
+					this.scheduler.stopTask(oldPlugin.name);
+				}
+				this.plugins[existingIndex] = newPlugin;
+				print.info(`Successfully updated plugin: ${newPlugin.name}`);
+			} else {
+				this.plugins.push(newPlugin);
+				print.info(`Successfully added new plugin: ${newPlugin.name}`);
+			}
+
+			await this.scheduler.applyPeriodicSettingsFromDB([newPlugin]);
+
+			if (
+				newPlugin.periodic?.enabled &&
+				newPlugin.periodic.type === "interval" &&
+				typeof newPlugin.periodic.run === "function"
+			) {
+				this.scheduler.startTask(newPlugin);
+			}
+
+			setAllCommands(this.getAllCommands());
+		} catch (error) {
+			print.error(`Failed to hot-reload ${filename}:`, error);
+		}
+	}
+
+	/**
+	 * Only periodic with type: 'interval' is scheduled here.
+	 * Periodic with type: 'message' is called in message handler.
+	 */
+	scheduleAllPeriodicTasks(sock) {
+		this.scheduler.scheduleAll(sock, this.plugins);
+	}
+
+	async runPeriodicMessagePlugins(m, sock) {
+		await this.scheduler.runMessageTasks(m, sock, this.plugins);
 	}
 }
 

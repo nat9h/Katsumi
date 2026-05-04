@@ -1,4 +1,5 @@
 import UmamusumeTTS from "#lib/scrapers/tts-queue";
+import { to_audio } from "#utils/converter";
 
 const LANG_LIST = ["日本語", "简体中文", "English", "Mix"];
 
@@ -6,7 +7,7 @@ export default {
 	name: "tts",
 	description: "Text-to-speech using Umamusume VITS voice models.",
 	command: ["tts"],
-	usage: "$prefix$command [lang] <text>",
+	usage: "$prefix$command [-l lang] <text>",
 	permissions: "all",
 	hidden: false,
 	failed: "Failed to %command: %error",
@@ -29,26 +30,38 @@ export default {
 		if (!input) {
 			return m.reply(
 				"Please provide text to synthesize.\n" +
-					`Usage: ${m.prefix}tts [lang] <text>\n\n` +
+					`Usage: ${m.prefix}tts [-l lang] <text>\n\n` +
 					"Available languages:\n" +
-					LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n")
+					LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n") + "\n\n" +
+					`Example: ${m.prefix + m.command} -l 4 hello world`
 			);
 		}
 
 		let lang = "日本語";
-		const langMatch = input.match(/^(\d+|[a-zA-Z\u3040-\u9fff]+)\s+(.+)/);
+		let textToSpeak = input;
+
+		const flagRegex = /(?:-l|--lang)\s+([^\s]+)/i;
+		const langMatch = input.match(flagRegex);
+
 		if (langMatch) {
 			const maybeLang = langMatch[1];
-			const rest = langMatch[2];
 			const tts = new UmamusumeTTS();
 			const picked = tts.pick(
 				LANG_LIST,
 				isNaN(maybeLang) ? maybeLang : parseInt(maybeLang)
 			);
+			
 			if (picked) {
 				lang = picked;
-				input = rest;
+			} else {
+				return m.reply(`Invalid language flag.\nAvailable languages:\n` + LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n"));
 			}
+			
+			textToSpeak = input.replace(flagRegex, "").trim();
+		}
+
+		if (!textToSpeak) {
+			return m.reply("Please provide the text to synthesize after the language flag.");
 		}
 
 		const tts = new UmamusumeTTS();
@@ -58,7 +71,7 @@ export default {
 
 		const sent = await m.reply(
 			"*TTS Voice Model*\n\n" +
-				`Text: _${input}_\n` +
+				`Text: _${textToSpeak}_\n` +
 				`Language: *${lang}*\n\n` +
 				"_Reply with the *number* of the voice model you wish to use._\n\n" +
 				"*Models:*\n" +
@@ -66,7 +79,7 @@ export default {
 		);
 
 		sock.tts[m.sender] = {
-			text: input,
+			text: textToSpeak,
 			lang,
 			messageId: sent.key.id,
 		};
@@ -113,8 +126,11 @@ export default {
 			noise: false,
 		});
 
+		const response = await fetch(result.audio.url);
+		const buffer = Buffer.from(await response.arrayBuffer());
+
 		await m.reply({
-			audio: { url: result.audio.url },
+			audio: await to_audio(buffer, "mp3"),
 			mimetype: "audio/mpeg",
 		});
 	},

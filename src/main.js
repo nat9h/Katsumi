@@ -59,11 +59,21 @@ try {
 	await bot.start();
 	await autoLoadCloneBots();
 
-	process.on("SIGINT", async () => {
+	process.once("SIGINT", async () => {
 		print.debug(colorize(Colors.FgYellow, "🛑 Stopping bot..."));
-		bot.pluginManager.stopAllPeriodicTasks();
-		print.debug(colorize(Colors.FgGreen, "✅ Bot stopped successfully"));
-		process.exit(0);
+
+		try {
+			bot.pluginManager.scheduler.stopAll();
+			bot.store?.stopSaving?.();
+
+			print.debug(
+				colorize(Colors.FgGreen, "✅ Bot stopped successfully")
+			);
+			process.exit(0);
+		} catch (error) {
+			print.error(colorize(Colors.FgRed, "Failed to stop bot:"), error);
+			process.exit(1);
+		}
 	});
 } catch (error) {
 	print.error(colorize(Colors.FgRed, "Failed to start WhatsApp Bot:"), error);

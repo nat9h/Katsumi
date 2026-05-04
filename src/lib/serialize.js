@@ -23,12 +23,15 @@ import { existsSync, promises, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Generate a random hexadecimal ID.
+ * Generate a random hexadecimal ID with a custom bot signature.
  *
- * @param {number} [length=16] Number of random bytes to generate.
- * @returns {string} Random hexadecimal string.
+ * @param {number} [length=32] Total length of the generated ID.
+ * @returns {string} Random hexadecimal string with 'KTSM' prefix.
  */
-const randomId = (length = 16) => randomBytes(length).toString("hex");
+const randomId = (length = 32) => {
+	const hex = randomBytes(length).toString("hex").toUpperCase();
+	return "KTSM" + hex.substring(4, length);
+};
 
 /**
  * Extract a phone-like numeric sequence from a JID.
@@ -50,14 +53,13 @@ const isLidJid = (jid) =>
 /**
  * Normalize a JID using Baileys utilities.
  *
- * @param {string | null | undefined} jid WhatsApp JID.
- * @returns {string | null | undefined} Normalized JID.
+ * @param {string | null | undefined} jid JID to normalize.
+ * @returns {string | null | undefined}
  */
 const normJid = (jid) => (jid ? jidNormalizedUser(jid) : jid);
 
 /**
  * Format a phone number into a more readable representation.
- * Currently supports basic Indonesian (+62) and US/Canada (+1) formatting.
  *
  * @param {string | number} number Raw phone number input.
  * @returns {string} Formatted phone number.
@@ -84,6 +86,7 @@ const parsePhoneNumber = (number) => {
 			return formatter(cleaned);
 		}
 	}
+
 	return String(number);
 };
 
@@ -145,6 +148,7 @@ class IdentityResolver {
 		if (!jid || !isLidJid(jid)) {
 			return jid;
 		}
+
 		if (pnHint && !isLidJid(pnHint)) {
 			return pnHint;
 		}
@@ -179,6 +183,7 @@ class IdentityResolver {
 		if (!jid || isLidJid(jid)) {
 			return jid;
 		}
+
 		if (lidHint && isLidJid(lidHint)) {
 			return lidHint;
 		}
@@ -205,11 +210,12 @@ class IdentityResolver {
 	 * @param {string[]} jids Mentioned JIDs.
 	 * @returns {Promise<string[]>}
 	 */
-	async resolveMentions(jids) {
+	async resolveMentions(jids = []) {
 		const resolved = await Promise.all(
 			jids.map((jid) => this.resolveToPn(jid))
 		);
-		return resolved.map(normJid);
+
+		return resolved.filter(Boolean).map(normJid);
 	}
 }
 
@@ -229,12 +235,15 @@ class MessageParser {
 		const handlers = [
 			(msg) => msg?.viewOnceMessageV2Extension?.message,
 			(msg) => msg?.viewOnceMessageV2?.message,
+			(msg) => msg?.viewOnceMessage?.message,
 			(msg) =>
+				msg?.protocolMessage?.type ===
+					proto.Message.ProtocolMessage.Type.MESSAGE_EDIT ||
 				msg?.protocolMessage?.type === 14
-					? msg.protocolMessage[getContentType(msg.protocolMessage)]
-					: msg,
+					? msg.protocolMessage.editedMessage
+					: null,
 			(msg) =>
-				msg?.message ? msg.message[getContentType(msg.message)] : msg,
+				msg?.message ? msg.message[getContentType(msg.message)] : null,
 		];
 
 		for (const handler of handlers) {
@@ -246,6 +255,231 @@ class MessageParser {
 		}
 
 		return content;
+	}
+
+	/**
+	 * Normalize expiration value.
+	 *
+	 * @param {any} value Raw expiration value.
+	 * @returns {number}
+	 */
+	static normalizeExpiration(value) {
+		const n = Number(value);
+		return Number.isFinite(n) && n > 0 ? n : 0;
+	}
+
+	/**
+	 * Get effective content node from a Baileys message.
+	 *
+	 * @param {any} message Raw or parsed message.
+	 * @returns {{ content: any, type: string, node: any }}
+	 */
+	static getContentNode(message) {
+		const content = extractMessageContent(message) || message || {};
+		const type =
+			getContentType(content) || Object.keys(content || {})[0] || "";
+		const node = type ? content?.[type] : content;
+
+		return { content, type, node };
+	}
+
+	/**
+	 * Extract ephemeral expiration from many possible message shapes.
+	 *
+	 * @param {any} message Raw or parsed message.
+	 * @returns {number}
+	 */
+	static getExpiration(message) {
+		if (!message || typeof message !== "object") {
+			return 0;
+		}
+
+		const candidates = [];
+		const add = (value) => {
+			if (value && typeof value === "object") {
+				candidates.push(value);
+			}
+		};
+
+		add(message);
+		add(extractMessageContent(message));
+		add(message?.ephemeralMessage);
+		add(message?.ephemeralMessage?.message);
+		add(message?.viewOnceMessage?.message);
+		add(message?.viewOnceMessageV2?.message);
+		add(message?.viewOnceMessageV2Extension?.message);
+		add(message?.editedMessage?.message);
+		add(message?.protocolMessage);
+		add(message?.protocolMessage?.editedMessage);
+
+		for (const candidate of candidates) {
+			const { content, node } = MessageParser.getContentNode(candidate);
+
+			const values = [
+				node?.contextInfo?.expiration,
+				content?.contextInfo?.expiration,
+				node?.ephemeralExpiration,
+				content?.ephemeralExpiration,
+				candidate?.ephemeralExpiration,
+				candidate?.protocolMessage?.ephemeralExpiration,
+			];
+
+			for (const value of values) {
+				const expiration = MessageParser.normalizeExpiration(value);
+				if (expiration) {
+					return expiration;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Get chat-level ephemeral expiration from store.
+	 *
+	 * @param {any} store Local store instance.
+	 * @param {string} jid Chat JID.
+	 * @returns {number}
+	 */
+	static getChatExpiration(store, jid) {
+		if (!store || !jid) {
+			return 0;
+		}
+
+		const chatCandidates = [
+			typeof store.getChat === "function" ? store.getChat(jid) : null,
+			store.chats?.[jid],
+			typeof store.chats?.get === "function"
+				? store.chats.get(jid)
+				: null,
+		];
+
+		for (const chat of chatCandidates) {
+			const expiration = MessageParser.normalizeExpiration(
+				chat?.ephemeralExpiration ||
+					chat?.ephemeral_expiration ||
+					chat?.disappearingMode?.duration
+			);
+
+			if (expiration) {
+				return expiration;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Extract edited-message payload from Baileys update shapes.
+	 *
+	 * Supports:
+	 * - protocolMessage MESSAGE_EDIT
+	 * - editedMessage.message from messages.update
+	 *
+	 * @param {any} message Raw or parsed message.
+	 * @returns {{ message: any, key: any, source: string } | null}
+	 */
+	static getEditedPayload(message) {
+		if (!message || typeof message !== "object") {
+			return null;
+		}
+
+		const MESSAGE_EDIT =
+			proto?.Message?.ProtocolMessage?.Type?.MESSAGE_EDIT ?? 14;
+
+		const content = extractMessageContent(message) || message;
+
+		const candidates = [
+			message,
+			content,
+			message?.protocolMessage,
+			content?.protocolMessage,
+			message?.editedMessage?.message?.protocolMessage,
+			content?.editedMessage?.message?.protocolMessage,
+		];
+
+		for (const candidate of candidates) {
+			const protocol = candidate?.protocolMessage || candidate;
+
+			if (
+				protocol?.editedMessage &&
+				(protocol?.type === MESSAGE_EDIT || protocol?.type === 14)
+			) {
+				return {
+					message: protocol.editedMessage,
+					key: protocol.key || null,
+					source: "protocolMessage",
+				};
+			}
+		}
+
+		if (content?.editedMessage?.message) {
+			return {
+				message: content.editedMessage.message,
+				key:
+					content.editedMessage.key ||
+					content.editedMessage.message?.protocolMessage?.key ||
+					null,
+				source: "editedMessage",
+			};
+		}
+
+		if (message?.editedMessage?.message) {
+			return {
+				message: message.editedMessage.message,
+				key:
+					message.editedMessage.key ||
+					message.editedMessage.message?.protocolMessage?.key ||
+					null,
+				source: "editedMessage",
+			};
+		}
+
+		return null;
+	}
+
+	/**
+	 * Merge old contextInfo into edited message when the edit payload loses it.
+	 *
+	 * @param {any} targetMessage Edited message.
+	 * @param {any} oldMessage Previous stored message.
+	 * @param {number} inheritedExpiration Expiration from old message/chat.
+	 * @returns {any}
+	 */
+	static mergeMissingContextInfo(
+		targetMessage,
+		oldMessage,
+		inheritedExpiration = 0
+	) {
+		if (!targetMessage || typeof targetMessage !== "object") {
+			return targetMessage;
+		}
+
+		const target = MessageParser.getContentNode(targetMessage);
+		const old = MessageParser.getContentNode(oldMessage);
+
+		if (!target.node || typeof target.node !== "object") {
+			return targetMessage;
+		}
+
+		const oldContext = old.node?.contextInfo || {};
+		const newContext = target.node?.contextInfo || {};
+		const expiration =
+			MessageParser.normalizeExpiration(newContext.expiration) ||
+			MessageParser.normalizeExpiration(oldContext.expiration) ||
+			MessageParser.normalizeExpiration(inheritedExpiration);
+
+		target.node.contextInfo = {
+			...oldContext,
+			...newContext,
+		};
+
+		if (expiration) {
+			target.node.contextInfo.expiration = expiration;
+		}
+
+		return targetMessage;
 	}
 
 	/**
@@ -294,18 +528,23 @@ class MessageParser {
 		if (!id) {
 			return "unknown";
 		}
+
 		if (/^3A/.test(id)) {
 			return "ios";
 		}
+
 		if (/^3EB/.test(id)) {
 			return "web";
 		}
+
 		if (/^.{21}/.test(id)) {
 			return "android";
 		}
+
 		if (/^.{18}/.test(id)) {
 			return "desktop";
 		}
+
 		return "unknown";
 	}
 
@@ -319,8 +558,14 @@ class MessageParser {
 		if (!id) {
 			return false;
 		}
+
+		if (id.startsWith("KTSM")) {
+			return true;
+		}
+
 		return (
 			(id.startsWith("BAE5") && id.length === 16) ||
+			(id.startsWith("3EB0") && (id.length === 12 || id.length === 20)) ||
 			(id.startsWith("B24E") && id.length === 20)
 		);
 	}
@@ -404,6 +649,7 @@ class ClientExtensions {
 								upload: sock.waUploadToServer,
 							}
 						);
+
 						img.message.messageContextInfo = {
 							messageSecret: randomBytes(32),
 							messageAssociation: {
@@ -411,6 +657,7 @@ class ClientExtensions {
 								parentMessageKey: album.key,
 							},
 						};
+
 						await sock.relayMessage(
 							img.key.remoteJid,
 							img.message,
@@ -439,12 +686,14 @@ class ClientExtensions {
 						{ clear: true },
 						jid
 					);
+
 					patch.syncAction.clearChatAction = {
 						messageRange: {
 							lastMessageTimestamp: msg.messageTimestamp,
 							messages,
 						},
 					};
+
 					patch.index[2] = "0";
 					return sock.appPatch(patch);
 				},
@@ -461,12 +710,14 @@ class ClientExtensions {
 				 */
 				async value(groupIds, content, opts = {}) {
 					const sent = [];
+
 					for (const gid of groupIds) {
 						const messageSecret = randomBytes(32);
 						const inside = await generateWAMessageContent(content, {
 							upload: sock.waUploadToServer,
 							...(opts.generate || {}),
 						});
+
 						const msg = generateWAMessageFromContent(
 							gid,
 							{
@@ -480,11 +731,14 @@ class ClientExtensions {
 							},
 							{ userJid: sock.user.id }
 						);
+
 						await sock.relayMessage(gid, msg.message, {
 							messageId: msg.key.id,
 						});
+
 						sent.push(gid);
 					}
+
 					return sent;
 				},
 			},
@@ -500,7 +754,9 @@ class ClientExtensions {
 					if (!jid || !/:\d+@/gi.test(jid)) {
 						return jid;
 					}
+
 					const decode = jidDecode(jid) || {};
+
 					return (
 						(decode.user &&
 							decode.server &&
@@ -519,13 +775,17 @@ class ClientExtensions {
 				 */
 				value(jid) {
 					const id = jidNormalizedUser(jid);
+
 					if (id.endsWith("g.us")) {
 						return store.getGroupMetadata(id)?.subject || id;
 					}
+
 					const contact = store.getContact(id);
+
 					if (!contact) {
 						return parsePhoneNumber("+" + id.split("@")[0]);
 					}
+
 					return (
 						contact?.name ||
 						contact?.notify ||
@@ -552,6 +812,7 @@ class ClientExtensions {
 							const cleaned = v.replace(/\D+/g, "");
 							const contactJid = `${cleaned}@s.whatsapp.net`;
 							const name = sock.getName(contactJid);
+
 							return {
 								displayName: name,
 								vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${name}\nFN:${name}\nitem1.TEL;waid=${cleaned}:${cleaned}\nEND:VCARD`,
@@ -562,7 +823,9 @@ class ClientExtensions {
 						jid,
 						{
 							contacts: {
-								displayName: `${list.length} Contact${list.length > 1 ? "s" : ""}`,
+								displayName: `${list.length} Contact${
+									list.length > 1 ? "s" : ""
+								}`,
 								contacts: list,
 							},
 						},
@@ -581,7 +844,7 @@ class ClientExtensions {
 				 */
 				value(text) {
 					return (
-						[...text.matchAll(/@([0-9]{5,16}|0)/g)].map(
+						[...String(text).matchAll(/@([0-9]{5,16}|0)/g)].map(
 							(v) => v[1] + "@s.whatsapp.net"
 						) || []
 					);
@@ -612,6 +875,7 @@ class ClientExtensions {
 							process.cwd(),
 							`${filename}.${mime.ext}`
 						);
+
 						await promises.writeFile(filePath, media);
 						return filePath;
 					}
@@ -638,6 +902,7 @@ class ClientExtensions {
 						ext,
 						size,
 					} = await Func.getFile(url);
+
 					const mimetype =
 						options?.mimetype ||
 						(/audio/i.test(mime) ? "audio/mpeg" : mime);
@@ -658,11 +923,13 @@ class ClientExtensions {
 							{ mimetype, data: buffer },
 							options
 						);
+
 						data = {
 							sticker: readFileSync(pathFile),
 							mimetype: "image/webp",
 							...options,
 						};
+
 						if (existsSync(pathFile)) {
 							await promises.unlink(pathFile);
 						}
@@ -685,14 +952,24 @@ class ClientExtensions {
 							...options,
 						};
 					} else {
-						data = { document: buffer, mimetype: mime, ...options };
+						data = {
+							document: buffer,
+							mimetype: mime,
+							...options,
+						};
 					}
 
-					return sock.sendMessage(jid, data, {
+					const sendOptions = {
 						quoted,
-						messageId: randomId(32),
+						messageId: options?.messageId || randomId(32),
 						...options,
-					});
+					};
+
+					if (!sendOptions.ephemeralExpiration) {
+						delete sendOptions.ephemeralExpiration;
+					}
+
+					return sock.sendMessage(jid, data, sendOptions);
 				},
 				enumerable: true,
 			},
@@ -744,6 +1021,7 @@ class ClientExtensions {
 						sender = copy.key.participant =
 							sender || copy.key.participant;
 					}
+
 					if (copy.key.remoteJid.includes("@s.whatsapp.net")) {
 						sender = sender || copy.key.remoteJid;
 					} else if (copy.key.remoteJid.includes("@broadcast")) {
@@ -752,6 +1030,7 @@ class ClientExtensions {
 
 					copy.key.remoteJid = jid;
 					copy.key.fromMe = areJidsSameUser(sender, sock.user.id);
+
 					return proto.WebMessageInfo.fromObject(copy);
 				},
 			},
@@ -791,6 +1070,7 @@ class ClientExtensions {
 						let chosen = preferPn
 							? await resolver.resolveToPn(base)
 							: base;
+
 						if (preferPn && chosen && !isPn(chosen)) {
 							chosen = base;
 						}
@@ -873,16 +1153,20 @@ class QuotedMessageBuilder {
 	 */
 	static async build(sock, resolver, parentMessage, contextInfo, from) {
 		const quoted = {};
+
 		quoted.message = MessageParser.parseContent(contextInfo.quotedMessage);
+
 		if (!quoted.message) {
 			return null;
 		}
 
 		quoted.type =
 			getContentType(quoted.message) || Object.keys(quoted.message)[0];
+
 		quoted.msg =
 			MessageParser.parseContent(quoted.message[quoted.type]) ||
 			quoted.message[quoted.type];
+
 		quoted.isMedia =
 			!!quoted.msg?.mimetype || !!quoted.msg?.thumbnailDirectPath;
 
@@ -890,6 +1174,7 @@ class QuotedMessageBuilder {
 			typeof contextInfo.participant === "string"
 				? contextInfo.participant
 				: "";
+
 		const qParticipantPnHint =
 			typeof contextInfo.participantPn === "string"
 				? contextInfo.participantPn
@@ -903,12 +1188,14 @@ class QuotedMessageBuilder {
 			qParticipantRaw,
 			qParticipantPnHint
 		);
+
 		quoted.participant =
 			(quoted.participantPn && !isLidJid(quoted.participantPn)
 				? quoted.participantPn
 				: quoted.participantLid) || normJid(qParticipantRaw);
 
 		const qRemote = contextInfo.remoteJid || from;
+
 		quoted.key = {
 			remoteJid: qRemote,
 			participant: quoted.participant,
@@ -919,6 +1206,7 @@ class QuotedMessageBuilder {
 		quoted.from = /g\.us|status/.test(qRemote)
 			? quoted.key.participant
 			: quoted.key.remoteJid;
+
 		quoted.fromMe = quoted.key.fromMe;
 		quoted.id = contextInfo.stanzaId;
 		quoted.device = MessageParser.detectDevice(quoted.id);
@@ -931,10 +1219,12 @@ class QuotedMessageBuilder {
 				(v) => v.groupJid
 			) || []),
 		];
+
 		quoted.mentions = await resolver.resolveMentions(qMentioned);
 
 		quoted.body = MessageParser.extractBody(quoted.msg, quoted.message);
 		quoted.prefix = MessageParser.extractPrefix(quoted.body);
+
 		quoted.command =
 			quoted.body
 				?.replace(quoted.prefix, "")
@@ -957,8 +1247,10 @@ class QuotedMessageBuilder {
 			) || [])[0] || "";
 
 		const quotedNum = extractNumber(quoted.participantPn || quoted.sender);
+
 		quoted.isOwner =
 			!!quotedNum && BOT_CONFIG.ownerJids.includes(quotedNum);
+
 		quoted.isBot = quoted.id
 			? (quoted.id.startsWith("BAE5") && quoted.id.length === 16) ||
 				(quoted.id.startsWith("3EB0") &&
@@ -992,7 +1284,7 @@ class SerializedMessageBuilder {
 	 * Create a serialized message wrapper with convenience fields and helpers.
 	 *
 	 * @param {any} sock Baileys socket.
-	 * @param {any} store Store instance.
+	 * @param {any} store Message/contact/group store.
 	 * @param {any} msg Raw Baileys message.
 	 * @returns {Promise<any | null>}
 	 */
@@ -1002,9 +1294,23 @@ class SerializedMessageBuilder {
 		}
 
 		const m = {
-			sock,
 			isClonebot: sock.isClonebot || false,
 		};
+
+		Object.defineProperties(m, {
+			sock: {
+				value: sock,
+				enumerable: false,
+				writable: true,
+				configurable: true,
+			},
+			_idMap: {
+				value: { lidToPn: {}, pnToLid: {} },
+				enumerable: false,
+				writable: true,
+				configurable: true,
+			},
+		});
 
 		m.message = MessageParser.parseContent(msg.message);
 		m.messageTimestamp =
@@ -1012,9 +1318,11 @@ class SerializedMessageBuilder {
 
 		if (msg.key) {
 			m.key = msg.key;
+
 			m.from = m.key.remoteJid.startsWith("status")
 				? normJid(m.key?.participant || msg.participant)
 				: normJid(m.key.remoteJid);
+
 			m.fromMe = !!m.key.fromMe;
 			m.id = m.key.id;
 			m.device = MessageParser.detectDevice(m.id);
@@ -1031,8 +1339,10 @@ class SerializedMessageBuilder {
 					store,
 					m.from
 				);
+
 			m.metadata = metadata;
 			idMap = map;
+
 			m.groupAdmins = metadata
 				? metadata.participants
 						.filter((p) => p.admin)
@@ -1054,6 +1364,7 @@ class SerializedMessageBuilder {
 		m.isBotAdmin = false;
 
 		const resolver = new IdentityResolver(sock, idMap);
+
 		await SerializedMessageBuilder.#resolveParticipants(m, msg, resolver);
 		SerializedMessageBuilder.#updateContacts(store, m);
 		await SerializedMessageBuilder.#checkPermissions(m, sock, resolver);
@@ -1061,7 +1372,8 @@ class SerializedMessageBuilder {
 			m,
 			sock,
 			store,
-			resolver
+			resolver,
+			msg
 		);
 		SerializedMessageBuilder.#attachMethods(m, sock);
 
@@ -1078,6 +1390,7 @@ class SerializedMessageBuilder {
 	 */
 	static async #loadGroupMetadata(sock, store, from) {
 		let metadata = store.getGroupMetadata(from);
+
 		if (!metadata) {
 			try {
 				metadata = await sock.groupMetadata(from);
@@ -1088,6 +1401,7 @@ class SerializedMessageBuilder {
 		}
 
 		let idMap = { lidToPn: {}, pnToLid: {} };
+
 		if (metadata?.participants?.length) {
 			metadata.participants = metadata.participants.map((p) => ({
 				...p,
@@ -1096,6 +1410,7 @@ class SerializedMessageBuilder {
 				phoneNumber: normJid(p.phoneNumber),
 				lid: normJid(p.lid),
 			}));
+
 			idMap = IdentityResolver.buildIdentityMap(metadata.participants);
 		}
 
@@ -1153,6 +1468,7 @@ class SerializedMessageBuilder {
 			: await resolver.resolveToLid(rawSender);
 
 		m.senderPn = await resolver.resolveToPn(rawSender, senderPnHint);
+
 		m.sender =
 			m.senderPn && !isLidJid(m.senderPn)
 				? m.senderPn
@@ -1182,9 +1498,14 @@ class SerializedMessageBuilder {
 
 		if (m.pushName) {
 			const contact = store.getContact(m.sender);
+
 			if (!contact || contact.notify !== m.pushName) {
 				store.updateContacts([
-					{ id: m.sender, notify: m.pushName, isContact: true },
+					{
+						id: m.sender,
+						notify: m.pushName,
+						isContact: true,
+					},
 				]);
 			}
 		}
@@ -1204,6 +1525,7 @@ class SerializedMessageBuilder {
 
 		if (m.isGroup && m.metadata) {
 			const sNum = extractNumber(m.senderPn || m.sender);
+
 			m.isAdmin = m.groupAdmins.some((a) => {
 				const adminNum = extractNumber(a.phoneNumber || a.jid || a.id);
 				return adminNum && sNum && adminNum === sNum;
@@ -1211,6 +1533,7 @@ class SerializedMessageBuilder {
 
 			const botPn = await resolver.resolveToPn(sock.user.id);
 			const botNum = extractNumber(botPn);
+
 			m.isBotAdmin = m.groupAdmins.some((a) => {
 				const adminNum = extractNumber(a.phoneNumber || a.jid || a.id);
 				return adminNum && botNum && adminNum === botNum;
@@ -1225,36 +1548,81 @@ class SerializedMessageBuilder {
 	 * @param {any} sock Baileys socket.
 	 * @param {any} store Store instance.
 	 * @param {IdentityResolver} resolver Identity resolver.
+	 * @param {any} rawMsg Raw message before parse.
 	 * @returns {Promise<void>}
 	 */
-	static async #parseMessageContent(m, sock, store, resolver) {
+	static async #parseMessageContent(m, sock, store, resolver, rawMsg = null) {
 		if (!m.message) {
 			return;
 		}
 
-		m.type = getContentType(m.message) || Object.keys(m.message)[0];
+		const rawMessage = rawMsg?.message || m.message;
 
-		const edited = m.message.editedMessage?.message?.protocolMessage;
-		if (edited?.editedMessage) {
+		const edit =
+			MessageParser.getEditedPayload(rawMessage) ||
+			MessageParser.getEditedPayload(m.message);
+
+		const editKey = edit?.key || m.key;
+
+		const oldStoredMessage = edit
+			? store.loadMessage?.(m.from?.toString(), editKey?.id || m.key?.id)
+			: null;
+
+		const oldMessage = oldStoredMessage?.message || null;
+
+		const chatExpiration = MessageParser.getChatExpiration(store, m.from);
+		const oldExpiration = MessageParser.getExpiration(oldMessage);
+		const rawExpiration = MessageParser.getExpiration(rawMessage);
+		const currentExpiration = MessageParser.getExpiration(m.message);
+
+		const inheritedExpiration =
+			oldExpiration ||
+			rawExpiration ||
+			currentExpiration ||
+			chatExpiration ||
+			0;
+
+		if (edit?.message) {
+			m.isEdited = true;
+			m.editedKey = editKey;
+			m.originalMessage = oldStoredMessage || null;
+
 			m.message =
-				store.loadMessage(m.from.toString(), edited.key.id)?.message ||
-				edited.editedMessage;
+				MessageParser.parseContent(edit.message) || edit.message;
+
+			m.message = MessageParser.mergeMissingContextInfo(
+				m.message,
+				oldMessage,
+				inheritedExpiration
+			);
+		} else {
+			m.isEdited = false;
 		}
 
+		m.type = getContentType(m.message) || Object.keys(m.message || {})[0];
+
 		m.msg =
-			MessageParser.parseContent(m.message[m.type]) || m.message[m.type];
+			MessageParser.parseContent(m.message?.[m.type]) ||
+			m.message?.[m.type];
 
 		const mentioned = [
 			...(m.msg?.contextInfo?.mentionedJid || []),
 			...(m.msg?.contextInfo?.groupMentions?.map((v) => v.groupJid) ||
 				[]),
 		];
+
 		m.mentions = await resolver.resolveMentions(mentioned);
 
 		m.body = MessageParser.extractBody(m.msg, m.message);
 		Object.assign(m, getPrefix(m.body, m));
 
-		m.expiration = m.msg?.contextInfo?.expiration || 0;
+		m.expiration =
+			MessageParser.normalizeExpiration(m.msg?.contextInfo?.expiration) ||
+			MessageParser.getExpiration(m.message) ||
+			inheritedExpiration ||
+			chatExpiration ||
+			0;
+
 		m.isMedia =
 			!!m.msg?.mimetype ||
 			!!m.msg?.thumbnailDirectPath ||
@@ -1266,6 +1634,7 @@ class SerializedMessageBuilder {
 			) || [])[0] || "";
 
 		m.isQuoted = false;
+
 		if (m.msg?.contextInfo?.quotedMessage) {
 			m.isQuoted = true;
 
@@ -1279,14 +1648,17 @@ class SerializedMessageBuilder {
 
 			if (quoted) {
 				m.quoted = quoted;
+
 				m.getQuotedObj = m.getQuotedMessage = async () => {
 					if (!m.quoted.id) {
 						return null;
 					}
+
 					const qMsg = proto.WebMessageInfo.fromObject(
 						store.loadMessage(m.from, m.quoted.id) ||
 							m.quoted.fakeObj
 					);
+
 					return SerializedMessageBuilder.build(sock, store, qMsg);
 				};
 			}
@@ -1306,6 +1678,20 @@ class SerializedMessageBuilder {
 				? sock.parseMention(text)
 				: [];
 
+		const buildSendOptions = (options = {}) => {
+			const sendOptions = {
+				...(m.expiration ? { ephemeralExpiration: m.expiration } : {}),
+				messageId: options?.messageId || randomId(32),
+				...options,
+			};
+
+			if (!sendOptions.ephemeralExpiration) {
+				delete sendOptions.ephemeralExpiration;
+			}
+
+			return sendOptions;
+		};
+
 		/**
 		 * Reply to the current message.
 		 *
@@ -1319,59 +1705,53 @@ class SerializedMessageBuilder {
 
 			if (
 				Buffer.isBuffer(text) ||
-				/^data:.?\/.*?;base64,/i.test(text) ||
-				/^https?:\/\//.test(text) ||
-				existsSync(text)
+				(typeof text === "string" &&
+					(/^data:.?\/.*?;base64,/i.test(text) ||
+						/^https?:\/\//.test(text) ||
+						existsSync(text)))
 			) {
 				const data = await Func.getFile(text);
+
 				if (
 					!options.mimetype &&
 					(/utf-8|json/i.test(data.mime) ||
 						data.ext === ".bin" ||
 						!data.ext)
 				) {
+					const body = data.data.toString();
+
 					return sock.sendMessage(
 						chatId,
 						{
-							text: data.data.toString(),
-							mentions: [
-								m.sender,
-								...safeParseMention(data.data.toString()),
-							],
+							text: body,
+							mentions: [m.sender, ...safeParseMention(body)],
 							...options,
 						},
 						{
 							quoted,
-							ephemeralExpiration: m.expiration,
-							messageId: randomId(32),
-							...options,
+							...buildSendOptions(options),
 						}
 					);
 				}
 
 				return sock.sendMedia(chatId, data.data, quoted, {
-					ephemeralExpiration: m.expiration,
-					messageId: randomId(32),
-					...options,
+					...buildSendOptions(options),
 				});
 			}
 
 			if (typeof text === "object" && !Array.isArray(text)) {
+				const rawText = JSON.stringify(text);
+
 				return sock.sendMessage(
 					chatId,
 					{
 						...text,
-						mentions: [
-							m.sender,
-							...safeParseMention(JSON.stringify(text)),
-						],
+						mentions: [m.sender, ...safeParseMention(rawText)],
 						...options,
 					},
 					{
 						quoted,
-						ephemeralExpiration: m.expiration,
-						messageId: randomId(32),
-						...options,
+						...buildSendOptions(options),
 					}
 				);
 			}
@@ -1380,14 +1760,12 @@ class SerializedMessageBuilder {
 				chatId,
 				{
 					text,
-					mentions: [m.sender, ...safeParseMention(text)],
+					mentions: [m.sender, ...safeParseMention(String(text))],
 					...options,
 				},
 				{
 					quoted,
-					ephemeralExpiration: m.expiration,
-					messageId: randomId(32),
-					...options,
+					...buildSendOptions(options),
 				}
 			);
 		};
