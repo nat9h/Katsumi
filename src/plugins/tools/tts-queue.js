@@ -30,7 +30,7 @@ export default {
 		if (!input) {
 			return m.reply(
 				"Please provide text to synthesize.\n" +
-					`Usage: ${m.prefix}tts [-l lang] <text>\n\n` +
+					`Usage: ${m.prefix + m.command} [-l lang] <text>\n\n` +
 					"Available languages:\n" +
 					LANG_LIST.map((l, i) => `${i + 1}. ${l}`).join("\n") +
 					"\n\n" +

@@ -219,6 +219,12 @@ export const isUrl = (url) => {
 	);
 };
 
+export const isUrlMedia = (url) => {
+	return url.match(
+		new RegExp(/(https?:\/\/[^\s]+?\.(?:png|jpe?g|webp|gif|mp4|mov|webm))/i)
+	);
+};
+
 export const formatDate = (n, locale = "id") => {
 	const d = new Date(n);
 	return d.toLocaleDateString(locale, {

@@ -1,4 +1,4 @@
-import { getEmojiRegex } from "#lib/functions";
+import { getEmojiRegex, isUrlMedia } from "#lib/functions";
 import Sticker from "#lib/sticker";
 import uploader from "#lib/uploader";
 
@@ -26,8 +26,6 @@ export default {
 		let mime = q && q.type ? q.type : "";
 		let urlMedia = null;
 		let mediaBuffer = null;
-		const urlRegex =
-			/(https?:\/\/[^\s]+?\.(?:png|jpe?g|webp|gif|mp4|mov|webm))/i;
 		let isMedia = false;
 
 		if (m.mentions && m.mentions[0]) {
@@ -48,71 +46,123 @@ export default {
 			return await m.reply({ sticker });
 		}
 
+		let isQc = false;
+		if (input.includes("-qc")) {
+			isQc = true;
+			input = input.replace("-qc", "").trim();
+		}
+
 		if (m.isQuoted && m.quoted) {
 			if (/image|video|sticker|webp|document|audio/.test(mime)) {
 				await new Promise((res) => setTimeout(res, 500));
 				mediaBuffer = await q.download();
 				isMedia = true;
-			} else if (q.text) {
-				const url = await sock
-					.profilePictureUrl(q.sender, "image")
-					.catch(
-						() =>
-							"https://i.pinimg.com/736x/f1/26/e3/f126e305c9a2ba39aba2b882584b2afd.jpg"
-					);
-				const username = await sock.getName(q.sender);
-
-				const request = {
-					type: "image",
-					format: "png",
-					backgroundColor: m.isGroup ? "#FFFFFF" : "#FFFFFF",
-					width: 512,
-					height: 786,
-					scale: 2,
-					messages: [
-						{
-							avatar: true,
-							from: { id: 8, name: username, photo: { url } },
-							text: q.text,
-							replyMessage: {},
-						},
-					],
-				};
-
-				const response = await fetch(
-					"https://qc.chitoge.win/generate",
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(request),
-					}
-				);
-
-				if (!response.ok) {
-					return m.reply("Failed to generate sticker.");
-				}
-
-				const data = await response.json();
-				const quotly = Buffer.from(data.result.image, "base64");
-				const sticker = await Sticker.create(quotly, {
-					packname: "@natsumiworld.",
-					author: m.pushName,
-					emojis: "🤣",
-				});
-				return await m.reply({ sticker });
 			}
 		}
 
-		if (urlRegex.test(input)) {
-			urlMedia = input.match(urlRegex)[0];
+		const urlMatch = isUrlMedia(input);
+		if (urlMatch && !isMedia) {
+			urlMedia = urlMatch[0];
 			mediaBuffer = Buffer.from(
 				await fetch(urlMedia).then((res) => res.arrayBuffer())
 			);
 			input = input.replace(urlMedia, "").trim();
 			isMedia = true;
-		} else if (/sticker|webp|image|video|webm|document/g.test(mime)) {
+		} else if (
+			/sticker|webp|image|video|webm|document/g.test(mime) &&
+			!isMedia
+		) {
 			mediaBuffer = await q.download();
 			isMedia = true;
+		}
+
+		let isAutoQc = m.isQuoted && q.text && !isMedia && !input;
+
+		if (isQc || isAutoQc) {
+			let _qc = input || (m.isQuoted ? q.text || q.caption || "" : "");
+
+			if (!_qc && !isMedia) {
+				return m.reply(
+					"What's the text or media? Provide text or reply media to create a QC."
+				);
+			}
+
+			let _target = m.isQuoted ? q.sender : m.sender;
+			const url = await sock
+				.profilePictureUrl(_target, "image")
+				.catch(
+					() =>
+						"https://i.pinimg.com/736x/f1/26/e3/f126e305c9a2ba39aba2b882584b2afd.jpg"
+				);
+			const username = await sock.getName(_target);
+
+			const { text: _qcText, entities: entity } = parseMarkdown(
+				_qc,
+				markup
+			);
+
+			let replyMedia = {};
+			if (isMedia && mediaBuffer) {
+				try {
+					const link =
+						await uploader.providers.uguu.upload(mediaBuffer);
+					replyMedia = {
+						media: {
+							url: link,
+						},
+					};
+				} catch {
+					replyMedia = {
+						media: {
+							url: `data:${mime || "image/jpeg"};base64,${mediaBuffer.toString("base64")}`,
+						},
+					};
+				}
+			} else if (urlMedia) {
+				replyMedia = {
+					media: {
+						url: urlMedia,
+					},
+				};
+			}
+
+			let payload_msg = {
+				avatar: true,
+				from: { id: 8, name: username, photo: { url } },
+				text: _qcText,
+				entities: entity,
+				...replyMedia,
+				replyMessage: {},
+			};
+
+			const request = {
+				type: "image",
+				format: "png",
+				backgroundColor: m.isGroup ? "#FFFFFF" : "#FFFFFF",
+				width: 512,
+				height: 786,
+				scale: 2,
+				messages: [payload_msg],
+			};
+
+			const response = await fetch("https://qc.chitoge.win/generate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(request),
+			});
+
+			if (!response.ok) {
+				return m.reply("Failed to generate sticker.");
+			}
+
+			const data = await response.json();
+			const quotly = Buffer.from(data.result.image, "base64");
+			const sticker = await Sticker.create(quotly, {
+				packname: "@natsumiworld.",
+				author: m.pushName,
+				emojis: "🤣",
+			});
+			return await m.reply({ sticker });
 		}
 
 		if (!isMedia && input) {
@@ -171,7 +221,7 @@ export default {
 		}
 
 		if (input.length > 0 && isMedia) {
-			const url = await uploader.providers.freeimage.upload(mediaBuffer);
+			const url = await uploader.providers.uguu.upload(mediaBuffer);
 			const res = await fetch(
 				`https://api.memegen.link/images/custom/${encodeURIComponent(teks1)}/${encodeURIComponent(teks2)}.png?background=${url}`,
 				{ responseType: "arraybuffer" }
@@ -229,3 +279,77 @@ const getAnimatedEmojiUrl = (emoji) => {
 		.join("-");
 	return `https://fonts.gstatic.com/s/e/notoemoji/latest/${codepoints}/512.webp`;
 };
+
+const parseMarkdown = (text, markups) => {
+	if (!text) {
+		return { text: "", entities: [] };
+	}
+	let entities = [];
+	let _txt = text;
+
+	const sortedMarkups = [...markups].sort(
+		(a, b) => b.marker.length - a.marker.length
+	);
+
+	for (const { marker, type } of sortedMarkups) {
+		const escapeMark = marker.replace(
+			/[-[\]{}()*+?.,\\^$|#\s]/g,
+			"\\$&"
+		);
+		const regex = new RegExp(`${escapeMark}(.+?)${escapeMark}`, "g");
+
+		let match;
+		while ((match = regex.exec(_txt)) !== null) {
+			const innerText = match[1];
+			const offset = match.index;
+			const length = innerText.length;
+
+			entities.push({ type, offset, length });
+
+			_txt =
+				_txt.substring(0, offset) +
+				innerText +
+				_txt.substring(offset + match[0].length);
+			regex.lastIndex = offset + length;
+		}
+	}
+	return { text: _txt, entities };
+};
+
+const markup = [
+	{
+		marker: "```",
+		type: "pre",
+		raw: true,
+	},
+	{
+		marker: "||",
+		type: "spoiler",
+		raw: false,
+	},
+	{
+		marker: "~~",
+		type: "strikethrough",
+		raw: false,
+	},
+	{
+		marker: "*",
+		type: "bold",
+		raw: false,
+	},
+	{
+		marker: "_",
+		type: "italic",
+		raw: false,
+	},
+	{
+		marker: "~",
+		type: "strikethrough",
+		raw: false,
+	},
+	{
+		marker: "`",
+		type: "code",
+		raw: true,
+	},
+];

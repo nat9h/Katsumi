@@ -24,7 +24,7 @@ export default {
 		if (!prompt) {
 			return m.reply(
 				"Please provide a prompt.\nUsage: " +
-					`${m.prefix}img2img <prompt>`
+					`${m.prefix + m.command} <prompt>`
 			);
 		}
 
@@ -34,8 +34,6 @@ export default {
 		if (!/image|webp|sticker/i.test(mime)) {
 			return m.reply("Please reply/send an image.");
 		}
-
-		// await m.reply(`Generating image with prompt: "${prompt}", please wait...`);
 
 		const mediaBuffer = await q.download();
 		const service = new Image2Image();

@@ -30,11 +30,9 @@ export default {
 		if (!/image|webp|sticker/i.test(mime)) {
 			return m.reply(
 				"Please reply/send an image.\nUsage: " +
-					`${m.prefix}upscale <2|4>`
+					`${m.prefix + m.command} <2|4>`
 			);
 		}
-
-		// await m.reply(`Upscaling at ${scaleRadio}x, please wait...`);
 
 		const mediaBuffer = await q.download();
 		const imageUrl = await uploader.providers.uguu.upload(mediaBuffer);

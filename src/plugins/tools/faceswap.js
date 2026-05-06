@@ -48,12 +48,10 @@ export default {
 		} else {
 			return m.reply(
 				"Usage:\n" +
-					`1. Reply a source image & send a face image: ${m.prefix}faceswap\n` +
-					`2. Provide 2 image URLs: ${m.prefix}faceswap <source_url> <face_url>`
+					`1. Reply a source image & send a face image: ${m.prefix + m.command}\n` +
+					`2. Provide 2 image URLs: ${m.prefix + m.command} <source_url> <face_url>`
 			);
 		}
-
-		// await m.reply("Swapping faces, please wait...");
 
 		const swapper = new FaceSwap();
 		const resultUrl = await swapper.run(sourceUrl, faceUrl);
