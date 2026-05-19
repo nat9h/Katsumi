@@ -1,0 +1,49 @@
+import { CommandBuilder } from "#structures/CommandBuilder";
+import {
+    groupCommands,
+    isVisible,
+    renderCategory,
+    renderCommandDetail,
+    renderFullMenu,
+} from "#utils/menu";
+import { isOwner } from "#utils/permission";
+import { commandMap } from "#utils/plugin";
+
+export default new CommandBuilder()
+    .setName("menu")
+    .setAliases("help", "h")
+    .setDescription("Show all available commands")
+    .setUsage("{prefix}{name} [command|category]")
+    .setExample("{prefix}menu info")
+    .addOption("query", "string", "command or category name")
+    .setHandler(async (interaction) => {
+        const prefix = interaction.prefix;
+        const input = interaction.args.query?.toLowerCase();
+        const viewerIsOwner = isOwner(interaction);
+        const groups = groupCommands(viewerIsOwner);
+
+        if (input) {
+            const cmd = commandMap.get(input);
+            if (cmd && isVisible(cmd, viewerIsOwner)) {
+                return interaction.reply(renderCommandDetail(prefix, cmd));
+            }
+            if (groups[input]?.length) {
+                return interaction.reply(
+                    renderCategory(prefix, input, groups[input]),
+                );
+            }
+            return interaction.reply(
+                `*${input}* is not a command or category.`,
+            );
+        }
+
+        return interaction.reply({
+            text: renderFullMenu(
+                prefix,
+                interaction.commandName,
+                interaction.user,
+                groups,
+            ),
+            mentions: [interaction.user],
+        });
+    });

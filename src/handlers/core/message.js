@@ -1,0 +1,324 @@
+import { jidNormalizedUser } from "baileys";
+import config from "#config";
+import { processMessage } from "#middleware";
+import { print } from "#utils/log/print";
+import { extractText } from "#utils/message";
+import { decryptSecretEdit, isSecretEdit, storeSecret } from "#utils/secret";
+
+/**
+ * Scan a raw msg.message for ephemeral expiration before any unwrapping.
+ * Checks the ephemeralMessage wrapper, then contextInfo on each content
+ * field, then nested editedMessage content.
+ *
+ * @param {object} message
+ * @returns {number} expiration in seconds, 0 if not found
+ */
+function extractExpiration(message) {
+    if (!message || typeof message !== "object") {
+        return 0;
+    }
+
+    const inner = message.ephemeralMessage?.message;
+    if (inner) {
+        for (const v of Object.values(inner)) {
+            if (v && typeof v === "object") {
+                const exp = Number(v.contextInfo?.expiration);
+                if (exp > 0) {
+                    return exp;
+                }
+            }
+        }
+    }
+
+    for (const v of Object.values(message)) {
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+            const exp = Number(v.contextInfo?.expiration);
+            if (exp > 0) {
+                return exp;
+            }
+            if (v.editedMessage) {
+                for (const ev of Object.values(v.editedMessage)) {
+                    if (ev && typeof ev === "object") {
+                        const e = Number(ev.contextInfo?.expiration);
+                        if (e > 0) {
+                            return e;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @param {object} msg
+ * @returns {boolean}
+ */
+function isOwnEcho(msg) {
+    if (!msg.key.fromMe) {
+        return false;
+    }
+    if (!config.selfMode) {
+        return true;
+    }
+    return (msg.key.id ?? "").startsWith(`${config.botId}_`);
+}
+
+/**
+ * @param {string|undefined} jid
+ * @returns {boolean}
+ */
+function isDmJid(jid) {
+    return (
+        jid?.endsWith("@s.whatsapp.net") ||
+        jid?.endsWith("@lid") ||
+        jid?.endsWith("@c.us")
+    );
+}
+
+/**
+ * Look up ephemeral expiration from the cache, trying both the raw JID
+ * and its normalized form (@lid vs @s.whatsapp.net).
+ *
+ * @param {import('../Client.js').Client} client
+ * @param {string} jid
+ * @returns {number}
+ */
+function getCachedExpiration(client, jid) {
+    if (!jid) {
+        return 0;
+    }
+    const direct = client.ephemeralCache.get(jid);
+    if (direct) {
+        return direct;
+    }
+    try {
+        const norm = jidNormalizedUser(jid);
+        if (norm && norm !== jid) {
+            return client.ephemeralCache.get(norm) || 0;
+        }
+    } catch {}
+    return 0;
+}
+
+/**
+ * Update the ephemeral cache from an incoming message.
+ * protocolMessage EPHEMERAL_SETTING (type 3) is authoritative.
+ * For DMs, contextInfo.expiration on the message content is also reliable.
+ * Groups are skipped — their duration comes from groupMetadata.
+ *
+ * @param {import('../Client.js').Client} client
+ * @param {object} msg
+ */
+function syncEphemeral(client, msg) {
+    const chatJid = msg.key.remoteJid;
+    if (!chatJid) {
+        return;
+    }
+
+    const proto = msg.message?.protocolMessage;
+    if (proto) {
+        if (proto.type === 3 || proto.type === "EPHEMERAL_SETTING") {
+            const exp = proto.ephemeralExpiration || 0;
+            if (exp > 0) {
+                client.ephemeralCache.set(chatJid, exp);
+            } else {
+                client.ephemeralCache.delete(chatJid);
+            }
+        }
+        return;
+    }
+
+    if (!isDmJid(chatJid) || client.ephemeralCache.get(chatJid)) {
+        return;
+    }
+
+    const inner = msg.message?.ephemeralMessage?.message;
+    if (inner) {
+        for (const v of Object.values(inner)) {
+            const exp = v?.contextInfo?.expiration;
+            if (exp && exp > 0) {
+                client.ephemeralCache.set(chatJid, exp);
+                return;
+            }
+        }
+    }
+
+    const message = msg.message;
+    if (message) {
+        for (const v of Object.values(message)) {
+            if (v && typeof v === "object" && !Array.isArray(v)) {
+                const exp = v.contextInfo?.expiration;
+                if (exp && exp > 0) {
+                    client.ephemeralCache.set(chatJid, exp);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/**
+ * @param {import('../Client.js').Client} client
+ * @param {object} msg
+ */
+function recordStats(client, msg) {
+    client.stats.bump();
+
+    const chatJid = msg.key.remoteJid;
+    if (!chatJid?.endsWith("@g.us")) {
+        return;
+    }
+
+    const sender = msg.key.participant;
+    if (sender) {
+        client.stats.bumpGroup(chatJid, sender);
+    }
+}
+
+/**
+ * Decrypt and re-process a SecretEncryptedMessage edit.
+ * Self-edits (fromMe) can't be decrypted — WA doesn't share the
+ * messageSecret with the sender's own linked devices.
+ *
+ * @param {import('../Client.js').Client} client
+ * @param {object} msg
+ */
+function handleSecretEdit(client, msg) {
+    const decoded = decryptSecretEdit(msg);
+    if (!decoded) {
+        return;
+    }
+
+    let content = decoded;
+
+    if (content.editedMessage?.message) {
+        content = content.editedMessage.message;
+    }
+    if (content.protocolMessage?.editedMessage) {
+        content = content.protocolMessage.editedMessage;
+    }
+    if (content.ephemeralMessage?.message) {
+        content = content.ephemeralMessage.message;
+    }
+
+    if (content.messageContextInfo) {
+        const { messageContextInfo: _ctx, ...rest } = content;
+        if (Object.keys(rest).some((k) => rest[k] != null)) {
+            content = rest;
+        }
+    }
+
+    const targetKey = msg.message.secretEncryptedMessage.targetMessageKey;
+    const fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
+    const isGroup = (targetKey?.remoteJid || msg.key.remoteJid || "").endsWith(
+        "@g.us",
+    );
+
+    const remoteJid = isGroup
+        ? targetKey?.remoteJid || msg.key.remoteJid
+        : msg.key.remoteJid || targetKey?.remoteJid;
+
+    const text = extractText(content);
+    if (!text) {
+        return;
+    }
+
+    processMessage(client, {
+        key: {
+            remoteJid,
+            id: targetKey?.id || msg.key.id,
+            fromMe,
+            participant: isGroup
+                ? targetKey?.participant || msg.key.participant
+                : undefined,
+        },
+        message: content,
+        pushName: msg.pushName,
+        messageTimestamp: msg.messageTimestamp,
+        _isEditReprocess: true,
+        _expiration:
+            extractExpiration(msg.message) ||
+            getCachedExpiration(client, remoteJid) ||
+            0,
+    });
+
+    print.info(`[edit] re-processing "${text}" from ${remoteJid}`);
+}
+
+/**
+ * @param {import('../Client.js').Client} client
+ * @param {{ type: string, messages: object[] }} payload
+ */
+export async function handleMessagesUpsert(client, { type, messages }) {
+    if (type !== "notify") {
+        return;
+    }
+
+    for (const msg of messages) {
+        if (!msg.message) {
+            continue;
+        }
+
+        syncEphemeral(client, msg);
+        storeSecret(msg);
+
+        if (isSecretEdit(msg)) {
+            handleSecretEdit(client, msg);
+            continue;
+        }
+
+        const protoMsg = msg.message?.protocolMessage;
+        if (protoMsg?.type === 14 || protoMsg?.type === "MESSAGE_EDIT") {
+            if (protoMsg.editedMessage) {
+                const targetKey = protoMsg.key;
+                const text = extractText(protoMsg.editedMessage);
+
+                if (text) {
+                    processMessage(client, {
+                        key: {
+                            remoteJid:
+                                targetKey?.remoteJid || msg.key.remoteJid,
+                            id: targetKey?.id || msg.key.id,
+                            fromMe:
+                                msg.key.fromMe ?? targetKey?.fromMe ?? false,
+                            participant:
+                                targetKey?.participant || msg.key.participant,
+                        },
+                        message: protoMsg.editedMessage,
+                        pushName: msg.pushName,
+                        messageTimestamp: msg.messageTimestamp,
+                        _isEditReprocess: true,
+                        _expiration:
+                            extractExpiration(msg.message) ||
+                            getCachedExpiration(
+                                client,
+                                targetKey?.remoteJid || msg.key.remoteJid,
+                            ) ||
+                            0,
+                    });
+
+                    print.info(`[edit-proto] re-processing "${text}"`);
+                }
+            }
+            continue;
+        }
+
+        // Cache every incoming message for quoted retrieval
+        if (msg.key?.id && msg.key?.remoteJid) {
+            client.messageCache.set(`${msg.key.remoteJid}_${msg.key.id}`, msg);
+        }
+
+        if (isOwnEcho(msg)) {
+            continue;
+        }
+
+        print.message(msg, msg.key.fromMe === true, client.store);
+        recordStats(client, msg);
+
+        client.emit("messageCreate", msg);
+        processMessage(client, msg);
+    }
+}

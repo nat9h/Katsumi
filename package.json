@@ -1,0 +1,72 @@
+{
+  "name": "katsumi",
+  "version": "1.0.6",
+  "engines": {
+		"node": ">=20.0.0"
+	},
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env src/app.js",
+    "dev": "node --env-file=.env --watch src/app.js",
+    "pm2": "pm2 start ecosystem.config.cjs",
+    "postinstall": "node patches/baileys-device-sent-fix.js",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write --unsafe src/",
+    "format": "biome format --write src/"
+  },
+  "repository": {
+		"type": "git",
+		"url": "git+https://github.com/nat9h/Katsumi.git"
+	},
+  "author": "Natsumi",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/nat9h/Katsumi/issues"
+	},
+	"homepage": "https://github.com/nat9h/Katsumi#readme",
+	"description": "WhatsApp Bot using Baileys and SQLite.",
+	"keywords": [
+		"whatsapp-bot",
+		"bot-whatsapp",
+		"baileys"
+	],
+  "dependencies": {
+    "axios": "^1.16.1",
+    "baileys": "^7.0.0-rc11",
+    "better-sqlite3": "^12.10.0",
+    "file-type": "^22.0.1",
+    "fluent-ffmpeg": "^2.1.3",
+    "node-webpmux": "^3.2.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15"
+  },
+  "imports": {
+    "#config": "./src/libs/settings/config.js",
+    "#state": "./src/libs/settings/state.js",
+    "#db": "./src/libs/database/db.js",
+    "#middleware": "./src/libs/middleware/index.js",
+    "#structures/*": "./src/libs/structures/*.js",
+    "#utils/cache": "./src/libs/utils/cache/index.js",
+    "#utils/format": "./src/libs/utils/format/index.js",
+    "#utils/format/*": "./src/libs/utils/format/*.js",
+    "#utils/stats": "./src/libs/utils/stats/index.js",
+    "#utils/plugin": "./src/libs/utils/plugin/index.js",
+    "#utils/message": "./src/libs/utils/message/index.js",
+    "#utils/queue": "./src/libs/utils/queue/index.js",
+    "#utils/secret": "./src/libs/utils/secret/index.js",
+    "#utils/permission": "./src/libs/utils/permission/index.js",
+    "#utils/menu": "./src/libs/utils/menu/index.js",
+    "#utils/greeting": "./src/libs/utils/greeting/index.js",
+    "#utils/prompt": "./src/libs/utils/prompt/index.js",
+    "#utils/profile": "./src/libs/utils/profile/index.js",
+    "#utils/log/*": "./src/libs/utils/log/*.js",
+    "#utils/converter/*": "./src/libs/utils/converter/*.js",
+    "#handlers/*": "./src/handlers/*.js",
+    "#core/*": "./src/handlers/core/*.js",
+    "#scrapers/*": "./src/libs/scrapers/*.js",
+    "#services/*": "./src/libs/services/*.js",
+    "#storage/*": "./src/libs/storage/*.js"
+  }
+}
