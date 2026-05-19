@@ -2,7 +2,7 @@
 
 <h1>Katsumi</h1>
 
-<img src="https://files.catbox.moe/7saj78.gif" width="600" height="240" alt="Katsumi"/>
+<img src="./assets/banner.gif" width="600" height="240" alt="Katsumi"/>
 
 Modular WhatsApp bot framework built on [Baileys v7](https://github.com/WhiskeySockets/Baileys).
 
