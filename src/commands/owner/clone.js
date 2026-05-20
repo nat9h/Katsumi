@@ -21,17 +21,27 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const sub = interaction.rawArgs[0]?.toLowerCase();
 
+        const parsePhone = () => {
+            const digits = interaction.rawArgs
+                .slice(1)
+                .join("")
+                .replace(/\D/g, "");
+            return digits || null;
+        };
+
         switch (sub) {
             case "pair":
             case "create":
             case "start": {
-                const target = interaction.rawArgs[1]
-                    ? interaction.rawArgs[1].replace(/[^0-9]/g, "")
-                    : null;
+                const target = parsePhone();
 
                 if (!target || target.length < 8) {
                     return interaction.reply(
-                        `Usage: \`${interaction.prefix}${interaction.commandName} pair <number>\`\n\nExample: \`${interaction.prefix}clone pair 628123456789\``,
+                        `Usage: \`${interaction.prefix}${interaction.commandName} pair <number>\`\n\n` +
+                            `Number must include country code. Examples:\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} pair 628123456789\`\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} pair +62 812-345-6789\`\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} pair +1 (555) 123-4567\``,
                     );
                 }
 
@@ -43,8 +53,22 @@ export default new CommandBuilder()
                     );
                 }
 
+                try {
+                    const [info] =
+                        (await interaction.client.sock.onWhatsApp(jid)) ?? [];
+                    if (!info?.exists) {
+                        return interaction.reply(
+                            `*${target}* is not registered on WhatsApp.`,
+                        );
+                    }
+                } catch (err) {
+                    return interaction.reply(
+                        `Failed to verify number: ${err.message}`,
+                    );
+                }
+
                 await interaction.reply(
-                    "⏳ Requesting pairing code, please wait...",
+                    "Requesting pairing code, please wait...",
                 );
 
                 try {
@@ -82,7 +106,6 @@ export default new CommandBuilder()
                     );
                 }
 
-                // Stop all
                 if (arg.toLowerCase() === "all") {
                     const clones = listClones();
                     if (!clones.length) {
@@ -100,16 +123,11 @@ export default new CommandBuilder()
                     );
                 }
 
-                // Stop by index
-                const digits = arg.replace(/[^0-9]/g, "");
-                if (!digits) {
-                    return interaction.reply("Invalid argument.");
-                }
-
-                const isShortIndex = arg.length <= 3 && !arg.includes("@");
+                const isShortIndex =
+                    interaction.rawArgs.length === 2 && /^\d{1,3}$/.test(arg);
                 if (isShortIndex) {
                     const clones = listClones();
-                    const idx = Number.parseInt(digits, 10) - 1;
+                    const idx = Number.parseInt(arg, 10) - 1;
                     if (idx < 0 || idx >= clones.length) {
                         return interaction.reply(
                             `Invalid index. Use \`${interaction.prefix}clone list\` to see indices.`,
@@ -124,7 +142,10 @@ export default new CommandBuilder()
                     );
                 }
 
-                // Stop by phone number
+                const digits = parsePhone();
+                if (!digits || digits.length < 8) {
+                    return interaction.reply("Invalid phone number.");
+                }
                 const ownerJid = `${digits}@s.whatsapp.net`;
                 const removed = deleteCloneByOwner(ownerJid);
                 return interaction.reply(
