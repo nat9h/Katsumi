@@ -28,12 +28,7 @@ export default new CommandBuilder()
     .setReact("🎭")
     .setRateLimit(5000, 3)
     .setHandler(async (interaction) => {
-        const {
-            userName: pushName,
-            mentions,
-            sock,
-            quoted,
-        } = interaction;
+        const { userName: pushName, mentions, sock, quoted } = interaction;
 
         const { flags, positional } = interaction.parseFlags({
             wm: { type: "string" },

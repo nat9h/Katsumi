@@ -212,9 +212,7 @@ export class UserSerialQueue {
     add(userId, fn) {
         const existing = this.#entries.get(userId);
         if (existing && existing.pending >= this.#maxPending) {
-            return Promise.reject(
-                new QueueFullError(userId, existing.pending),
-            );
+            return Promise.reject(new QueueFullError(userId, existing.pending));
         }
 
         const entry = existing ?? { pending: 0, tail: Promise.resolve() };

@@ -145,7 +145,9 @@ export function parseFlags(input, schema = {}) {
         let value;
         if (def.type === "boolean") {
             value =
-                inline === undefined ? true : !/^(false|0|no|off)$/i.test(inline);
+                inline === undefined
+                    ? true
+                    : !/^(false|0|no|off)$/i.test(inline);
         } else if (inline !== undefined) {
             value = inline;
         } else if (i + 1 < tokens.length) {

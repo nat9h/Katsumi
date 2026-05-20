@@ -24,17 +24,13 @@ export default new CommandBuilder()
             );
         }
 
-        try {
-            await interaction.sock.groupParticipantsUpdate(
-                interaction.chatJid,
-                [target],
-                "remove",
-            );
-            return interaction.reply({
-                text: `✅ Kicked: @${target.split("@")[0]}`,
-                mentions: [target],
-            });
-        } catch (err) {
-            return interaction.reply(`Failed: ${err.message}`);
-        }
+        await interaction.sock.groupParticipantsUpdate(
+            interaction.chatJid,
+            [target],
+            "remove",
+        );
+        return interaction.reply({
+            text: `✅ Kicked: @${target.split("@")[0]}`,
+            mentions: [target],
+        });
     });

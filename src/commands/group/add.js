@@ -1,112 +1,187 @@
 /**
  * @fileoverview Add command — adds members to a group by phone number.
- * Handles privacy-blocked users by sending invite links via DM.
  * @module commands/group/add
  */
 
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import {
+    buildGroupInviteMessage,
+    extractInviteAttrs,
+    fetchGroupThumbnail,
+} from "#libs/utils/group";
 
 export default new CommandBuilder()
     .setName("add")
+    .setAliases("+")
     .setDescription("Add a member to the group")
-    .setUsage("{prefix}{name} <number>")
+    .setUsage("{prefix}{name} <number>[, <number>, ...]")
     .setExample("{prefix}add 628123456789")
     .setGuard("group", "admin", "botAdmin")
     .addOption("number", "string", "phone number(s) to add")
     .setHandler(async (interaction) => {
+        const { sock, chatJid, client } = interaction;
         const input = interaction.body;
+
         if (!input) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <number>\`\nSeparate multiple with comma or space.`,
+                `Usage: \`${interaction.prefix}${interaction.commandName} <number>\`\nSeparate multiple numbers with commas.`,
             );
         }
 
-        const raw = input
-            .split(/[,\s]+/)
-            .map((n) => n.replace(/[^0-9]/g, ""))
-            .filter((n) => n.length >= 8);
+        const digitsList = [
+            ...new Set(
+                input
+                    .split(",")
+                    .map((c) => c.replace(/[^0-9]/g, ""))
+                    .filter((d) => d.length >= 8 && d.length <= 17),
+            ),
+        ];
 
-        if (!raw.length) {
+        if (!digitsList.length) {
             return interaction.reply(
                 "Provide at least one valid phone number.",
             );
         }
 
-        const checked = await interaction.sock.onWhatsApp(...raw);
-        const valid = checked.filter((c) => c.exists).map((c) => c.jid);
-        const invalid = raw.filter(
-            (n) => !checked.some((c) => c.exists && c.jid.startsWith(n)),
-        );
+        const checked = (await sock.onWhatsApp(...digitsList)) || [];
+        /** @type {Array<{ digits: string, pn: string }>} */
+        const users = [];
+        const invalid = [];
+
+        for (let i = 0; i < digitsList.length; i++) {
+            const digits = digitsList[i];
+            if (checked[i]?.exists) {
+                users.push({ digits, pn: `${digits}@s.whatsapp.net` });
+            } else {
+                invalid.push(digits);
+            }
+        }
 
         const lines = [];
         if (invalid.length) {
             lines.push(`Not on WhatsApp: ${invalid.join(", ")}`);
         }
-        if (!valid.length) {
-            if (lines.length) {
-                return interaction.reply(lines.join("\n"));
-            }
-            return interaction.reply("No valid WhatsApp numbers found.");
+        if (!users.length) {
+            return interaction.reply(
+                lines.length
+                    ? lines.join("\n")
+                    : "No valid WhatsApp numbers found.",
+            );
         }
 
+        const mentions = users.map((u) => u.pn);
+
         try {
-            const result = await interaction.sock.groupParticipantsUpdate(
-                interaction.chatJid,
-                valid,
+            const result = await sock.groupParticipantsUpdate(
+                chatJid,
+                mentions,
                 "add",
             );
 
-            const privacyBlocked = [];
+            const inviteV4 = [];
+            const linkFallback = [];
 
-            for (const r of result) {
-                const jid = r.jid || "";
-                const num = jid.split("@")[0] || "?";
+            for (let i = 0; i < result.length; i++) {
+                const r = result[i];
+                const user = users[i];
+                const tag = user ? `@${user.digits}` : "@?";
 
-                if (r.status === "200") {
-                    lines.push(`@${num} added`);
-                } else if (r.status === "403") {
-                    lines.push(`@${num} — privacy enabled, sending invite...`);
-                    privacyBlocked.push(jid);
-                } else if (r.status === "408") {
-                    lines.push(`@${num} — recently left, can't add yet`);
-                } else if (r.status === "409") {
-                    lines.push(`@${num} — already in group`);
-                } else {
-                    lines.push(`@${num} — failed (${r.status})`);
+                switch (r.status) {
+                    case "200":
+                        lines.push(`${tag} added`);
+                        break;
+                    case "403": {
+                        const attrs = extractInviteAttrs(r.content);
+                        if (attrs && user) {
+                            inviteV4.push({ user, ...attrs });
+                            lines.push(`${tag} — privacy on, invite sent`);
+                        } else if (user) {
+                            linkFallback.push(user);
+                            lines.push(
+                                `${tag} — privacy on, falling back to link`,
+                            );
+                        } else {
+                            lines.push(`${tag} — privacy on (unmatched)`);
+                        }
+                        break;
+                    }
+                    case "408":
+                        if (user) {
+                            linkFallback.push(user);
+                        }
+                        lines.push(
+                            `${tag} — recently left, sending invite link`,
+                        );
+                        break;
+                    case "409":
+                        lines.push(`${tag} — already in group`);
+                        break;
+                    case "421":
+                        lines.push(
+                            `${tag} — ${r.content?.content?.[0]?.tag || "blocked by WhatsApp"}`,
+                        );
+                        break;
+                    default:
+                        lines.push(`${tag} — failed (${r.status})`);
                 }
             }
 
-            if (privacyBlocked.length) {
+            if (inviteV4.length) {
+                const meta = await interaction.getGroupMeta();
+                const groupName = meta?.subject || "a group";
+                const thumbnail = await fetchGroupThumbnail(sock, chatJid);
+
+                for (const { user, code, expiration } of inviteV4) {
+                    try {
+                        const inviteMsg = await buildGroupInviteMessage({
+                            sock,
+                            groupJid: chatJid,
+                            targetJid: user.pn,
+                            code,
+                            expiration,
+                            groupName,
+                            thumbnail,
+                        });
+
+                        const exp = client.ephemeralCache.get(user.pn) || 0;
+                        await sock.sendMessage(
+                            user.pn,
+                            { forward: inviteMsg },
+                            exp > 0 ? { ephemeralExpiration: exp } : undefined,
+                        );
+                    } catch (err) {
+                        lines.push(
+                            `\nInvite to @${user.digits} failed: ${err.message}`,
+                        );
+                    }
+                }
+            }
+
+            if (linkFallback.length) {
                 try {
-                    const code = await interaction.sock.groupInviteCode(
-                        interaction.chatJid,
-                    );
+                    const code = await sock.groupInviteCode(chatJid);
                     const link = `https://chat.whatsapp.com/${code}`;
                     const meta = await interaction.getGroupMeta();
                     const groupName = meta?.subject || "a group";
 
-                    for (const jid of privacyBlocked) {
-                        const exp =
-                            interaction.client.ephemeralCache.get(jid) || 0;
-                        await interaction.sock.sendMessage(
-                            jid,
+                    for (const user of linkFallback) {
+                        const exp = client.ephemeralCache.get(user.pn) || 0;
+                        await sock.sendMessage(
+                            user.pn,
                             {
                                 text: `You've been invited to join *${groupName}*\n\n${link}`,
                             },
                             exp > 0 ? { ephemeralExpiration: exp } : undefined,
                         );
                     }
-                    lines.push(
-                        `\nInvite sent to ${privacyBlocked.length} user(s) via DM.`,
-                    );
                 } catch (err) {
-                    lines.push(`\nCould not send invite: ${err.message}`);
+                    lines.push(`\nCould not send invite link: ${err.message}`);
                 }
             }
 
             return interaction.reply({
                 text: lines.join("\n").trim(),
-                mentions: valid,
+                mentions,
             });
         } catch (err) {
             return interaction.reply(`Failed: ${err.message}`);
