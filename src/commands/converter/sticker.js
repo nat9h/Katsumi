@@ -29,13 +29,17 @@ export default new CommandBuilder()
     .setRateLimit(5000, 3)
     .setHandler(async (interaction) => {
         const {
-            rawBody: input,
             userName: pushName,
             mentions,
             sock,
             quoted,
         } = interaction;
-        const text = input || "";
+
+        const { flags, positional } = interaction.parseFlags({
+            wm: { type: "string" },
+            qc: { type: "string" },
+        });
+        const text = positional.join(" ");
         const meta = { pack: "@natsumiworld.", author: pushName };
 
         const send = async (buf, opts = {}) => {
@@ -46,11 +50,8 @@ export default new CommandBuilder()
             return interaction.reply({ sticker });
         };
 
-        if (text.match(/^-wm\s+/i)) {
-            const parts = text
-                .replace(/^-wm\s+/i, "")
-                .split("|")
-                .map((s) => s.trim());
+        if (flags.wm !== undefined) {
+            const parts = flags.wm.split("|").map((s) => s.trim());
             meta.pack = parts[0] || meta.pack;
             meta.author = parts[1] || meta.author;
 
@@ -82,18 +83,17 @@ export default new CommandBuilder()
             );
         }
 
-        const isQc = text.startsWith("-qc");
+        const isQc = flags.qc !== undefined;
         const isAutoQc =
             !text &&
+            !isQc &&
             !!quoted?.text &&
             !quoted?.message?.imageMessage &&
             !quoted?.message?.videoMessage &&
             !quoted?.message?.stickerMessage;
 
         if (isQc || isAutoQc) {
-            const qcText = isQc
-                ? text.replace(/^-qc\s*/, "").trim()
-                : quoted?.text || "";
+            const qcText = isQc ? flags.qc.trim() : quoted?.text || "";
             if (!qcText) {
                 return interaction.reply(
                     "Provide text or reply to a text message for QC.",

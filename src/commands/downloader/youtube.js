@@ -22,23 +22,19 @@ export default new CommandBuilder()
     .setReact("▶️")
     .setRateLimit(15_000, 2)
     .setHandler(async (interaction) => {
-        const body = interaction.body || "";
+        const { flags, positional } = interaction.parseFlags({
+            video: { type: "boolean", alias: "v" },
+        });
+        const wantVideo = flags.video === true;
         const quoted = interaction.quoted?.text || "";
 
-        const videoFlag = /(?:^|\s)(?:--video|-v)(?:\s|$)/.test(body);
-        const bodyWithoutFlag = body
-            .replace(/(?:^|\s)(?:--video|-v)(?:\s|$)/g, " ")
-            .trim();
-
-        const query = bodyWithoutFlag || quoted;
+        const query = positional.join(" ").trim() || quoted;
 
         if (!query) {
             return interaction.reply(
                 `Usage: \`${interaction.prefix}${interaction.commandName} <query|url> [--video | -v]\``,
             );
         }
-
-        const wantVideo = videoFlag;
 
         await interaction.typing();
 

@@ -98,6 +98,11 @@ export default new CommandBuilder()
         const imageCount = media.filter((m) => m.type === "image").length;
         const videoCount = media.filter((m) => m.type === "video").length;
 
+        const sendOpts = { messageId: interaction.client.generateMsgId() };
+        if (interaction.autoEphemeral && interaction.expiration > 0) {
+            sendOpts.ephemeralExpiration = interaction.expiration;
+        }
+
         const albumMsg = await interaction.sock.sendMessage(
             interaction.chatJid,
             {
@@ -106,7 +111,7 @@ export default new CommandBuilder()
                     expectedVideoCount: videoCount,
                 },
             },
-            { messageId: interaction.client.generateMsgId() },
+            sendOpts,
         );
 
         for (let i = 0; i < media.length; i++) {
@@ -120,10 +125,15 @@ export default new CommandBuilder()
                 content.caption = caption;
             }
 
+            const itemOpts = { messageId: interaction.client.generateMsgId() };
+            if (interaction.autoEphemeral && interaction.expiration > 0) {
+                itemOpts.ephemeralExpiration = interaction.expiration;
+            }
+
             await interaction.sock.sendMessage(
                 interaction.chatJid,
                 { ...content, albumParentKey: albumMsg.key },
-                { messageId: interaction.client.generateMsgId() },
+                itemOpts,
             );
         }
     });

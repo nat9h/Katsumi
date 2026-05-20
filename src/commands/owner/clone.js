@@ -31,7 +31,7 @@ export default new CommandBuilder()
 
                 if (!target || target.length < 8) {
                     return interaction.reply(
-                        `Usage: \`${interaction.prefix}${interaction.commandName} pair <number>\``,
+                        `Usage: \`${interaction.prefix}${interaction.commandName} pair <number>\`\n\nExample: \`${interaction.prefix}clone pair 628123456789\``,
                     );
                 }
 
@@ -39,19 +39,31 @@ export default new CommandBuilder()
                 const existing = getCloneByOwner(jid);
                 if (existing?.active) {
                     return interaction.reply(
-                        "This number already has an active clone.",
+                        "This number already has an active clone.\nUse `stop` first to remove it.",
                     );
                 }
 
-                await interaction.reply("Requesting pairing code...");
+                await interaction.reply(
+                    "⏳ Requesting pairing code, please wait...",
+                );
 
                 try {
                     const code = await createClone(jid, interaction.client);
                     await interaction.followUp(
-                        `*Pairing Code:* \`${code}\`\n\nOpen WhatsApp on the target phone → Linked Devices → Link a Device → Enter code.`,
+                        `*🔑 Pairing Code:* \`${code}\`\n\n` +
+                            `*Steps:*\n` +
+                            `1. Open WhatsApp on *${target}*\n` +
+                            `2. Go to *Linked Devices*\n` +
+                            `3. Tap *Link a Device*\n` +
+                            `4. Tap *Link with phone number instead*\n` +
+                            `5. Enter the code above\n\n` +
+                            `⏰ Code expires in 2 minutes.`,
                     );
                 } catch (err) {
-                    await interaction.followUp(err.message);
+                    console.error("[clone command] createClone error:", err);
+                    await interaction.followUp(
+                        `Failed: ${err.message}\n\nCheck console logs for details.`,
+                    );
                 }
                 return;
             }
@@ -59,18 +71,67 @@ export default new CommandBuilder()
             case "stop":
             case "delete":
             case "remove": {
-                const target = interaction.rawArgs[1]
-                    ? `${interaction.rawArgs[1].replace(/[^0-9]/g, "")}@s.whatsapp.net`
-                    : null;
+                const arg = interaction.rawArgs[1];
 
-                if (!target) {
+                if (!arg) {
                     return interaction.reply(
-                        `Usage: \`${interaction.prefix}${interaction.commandName} stop <number>\``,
+                        `Usage:\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} stop <number>\`\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} stop <index>\` (from \`${interaction.prefix}clone list\`)\n` +
+                            `• \`${interaction.prefix}${interaction.commandName} stop all\``,
                     );
                 }
 
-                deleteCloneByOwner(target);
-                return interaction.reply("Clone removed.");
+                // Stop all
+                if (arg.toLowerCase() === "all") {
+                    const clones = listClones();
+                    if (!clones.length) {
+                        return interaction.reply("No active clones.");
+                    }
+
+                    let stopped = 0;
+                    for (const c of clones) {
+                        if (deleteCloneByOwner(c.owner)) {
+                            stopped++;
+                        }
+                    }
+                    return interaction.reply(
+                        `✅ Stopped *${stopped}* clone(s).`,
+                    );
+                }
+
+                // Stop by index
+                const digits = arg.replace(/[^0-9]/g, "");
+                if (!digits) {
+                    return interaction.reply("Invalid argument.");
+                }
+
+                const isShortIndex = arg.length <= 3 && !arg.includes("@");
+                if (isShortIndex) {
+                    const clones = listClones();
+                    const idx = Number.parseInt(digits, 10) - 1;
+                    if (idx < 0 || idx >= clones.length) {
+                        return interaction.reply(
+                            `Invalid index. Use \`${interaction.prefix}clone list\` to see indices.`,
+                        );
+                    }
+                    const target = clones[idx];
+                    const removed = deleteCloneByOwner(target.owner);
+                    return interaction.reply(
+                        removed
+                            ? `✅ Clone *${target.jid.split("@")[0]}* (owner: ${target.owner.split("@")[0]}) stopped.`
+                            : `Failed to stop clone at index ${idx + 1}.`,
+                    );
+                }
+
+                // Stop by phone number
+                const ownerJid = `${digits}@s.whatsapp.net`;
+                const removed = deleteCloneByOwner(ownerJid);
+                return interaction.reply(
+                    removed
+                        ? `✅ Clone for *${digits}* stopped and removed.`
+                        : `No clone found for *${digits}*.`,
+                );
             }
 
             case "list": {

@@ -53,6 +53,7 @@ function parseLids(raw) {
  * @property {number} pairingDelay - Delay before requesting pairing code (ms).
  * @property {string} dbType - Database backend type ("sqlite" or "json").
  * @property {string} dbPath - Path to the database file.
+ * @property {string} cloneDbType - Database backend for clone sessions.
  * @property {string} logLevel - Pino log level.
  * @property {string[]} prefixes - Active command prefixes.
  * @property {string} ownerJid - Owner's normalized WhatsApp JID.
@@ -89,6 +90,10 @@ const config = {
     },
     get dbPath() {
         return process.env.DB_PATH || "./bot.db";
+    },
+    /** Clone-specific DB backend (defaults to main dbType if unset). */
+    get cloneDbType() {
+        return process.env.CLONE_DB_TYPE || process.env.DB_TYPE || "sqlite";
     },
     get logLevel() {
         return process.env.LOG_LEVEL || "silent";

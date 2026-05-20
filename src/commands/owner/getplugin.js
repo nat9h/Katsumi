@@ -19,9 +19,11 @@ export default new CommandBuilder()
     .setNote("Add -d flag to send as document file.")
     .setGuard("owner")
     .setHandler(async (interaction) => {
-        const args = interaction.rawArgs.filter((a) => a !== "-d");
-        const asDocument = interaction.rawArgs.includes("-d");
-        const name = args[0]?.toLowerCase();
+        const { flags, positional } = interaction.parseFlags({
+            document: { type: "boolean", alias: "d" },
+        });
+        const asDocument = flags.document === true;
+        const name = positional[0]?.toLowerCase();
 
         if (!name) {
             return interaction.reply(

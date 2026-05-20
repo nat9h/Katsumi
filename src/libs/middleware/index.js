@@ -3,7 +3,7 @@ import config from "#config";
 import { Interaction } from "#libs/structures/Interaction";
 import logger from "#libs/utils/logger";
 import { commandMap } from "#libs/utils/plugin";
-import { defaultQueue } from "#libs/utils/runtime";
+import { QueueFullError, userQueue } from "#libs/utils/runtime";
 import { state } from "#state";
 
 const LINK_RE = /https?:\/\/[^\s]+/i;
@@ -323,35 +323,56 @@ async function runGuards(client, interaction, cmd) {
 }
 
 /**
- * Push the command handler onto the default queue. Shows a typing indicator
- * after 500ms if the handler hasn't replied yet, and catches any unhandled
- * errors so they don't crash the process.
+ * Push the command handler onto the user's serial queue. Commands from
+ * the same user run one at a time (FIFO); different users run in
+ * parallel. If a user already has too many queued commands, the new one
+ * is rejected with a "slow down" reply.
+ *
+ * Shows a typing indicator after 500ms if the handler hasn't replied
+ * yet, and catches any unhandled errors so they don't crash the process.
  *
  * @param {Interaction} interaction
  * @param {object} cmd
  */
 function dispatch(interaction, cmd) {
-    const typingTimer = setTimeout(() => {
-        if (!interaction._replied) {
-            interaction.typing().catch(() => {});
-        }
-    }, 500);
+    const userId = interaction.user;
+    const wasBusy = userQueue.isBusy(userId);
 
-    defaultQueue.add(async () => {
+    const task = async () => {
+        const typingTimer = setTimeout(() => {
+            if (!interaction._replied) {
+                interaction.typing().catch(() => {});
+            }
+        }, 500);
+
         try {
             await cmd.handler(interaction);
         } catch (err) {
             logger.error({ err }, `command error: ${cmd.name}`);
             if (!interaction._replied) {
                 await interaction
-                    .reply(`Error: ${err.message || err}`)
+                    .reply(`*${cmd.name}* failed: ${err.message || err}`)
                     .catch(() => {});
             }
         } finally {
             clearTimeout(typingTimer);
             interaction.stopTyping().catch(() => {});
         }
+    };
+
+    userQueue.add(userId, task).catch((err) => {
+        if (err instanceof QueueFullError) {
+            interaction
+                .reply("⏳ Too many pending commands. Wait a moment.")
+                .catch(() => {});
+            return;
+        }
+        logger.error({ err }, `dispatch error: ${cmd.name}`);
     });
+
+    if (wasBusy) {
+        interaction.react("⏳").catch(() => {});
+    }
 }
 
 /**

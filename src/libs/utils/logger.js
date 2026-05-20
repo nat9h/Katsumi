@@ -174,8 +174,10 @@ export const print = {
      * @param {object} msg - The raw Baileys message object.
      * @param {boolean} [fromMe=false]
      * @param {object|null} [store=null]
+     * @param {object} [opts]
+     * @param {boolean} [opts.clone=false] - Whether the message came through a clone session.
      */
-    message(msg, fromMe = false, store = null) {
+    message(msg, fromMe = false, store = null, opts = {}) {
         const jid = msg.key.remoteJid ?? "";
         const sender = msg.key.participant ?? msg.key.remoteJid ?? "";
         const msgId = msg.key.id ?? "";
@@ -194,14 +196,22 @@ export const print = {
             ? `${C.cyan}grp${C.reset} ${C.white}${groupName}${C.reset}`
             : `${C.green} dm${C.reset} ${C.dim}${shortJid(jid)}${C.reset}`;
 
-        const selfTag = fromMe ? ` ${C.yellow}[self]${C.reset}` : "";
+        const tags = [];
+        if (opts.clone) {
+            tags.push(`${C.magenta}[clone]${C.reset}`);
+        }
+        if (fromMe) {
+            tags.push(`${C.yellow}[self]${C.reset}`);
+        }
+        const tagStr = tags.length ? ` ${tags.join(" ")}` : "";
+
         const preview = text
             ? `  ${C.dim}›${C.reset} ${text.slice(0, 60)}${text.length > 60 ? "…" : ""}`
             : "";
         const idTag = `${C.gray}[${msgId.slice(0, 12)}]${C.reset}`;
 
         out(
-            `${ts()}  ${icon}  ${chatLabel}${selfTag}  ${C.dim}${name}${C.reset}${preview}  ${idTag}`,
+            `${ts()}  ${icon}  ${chatLabel}${tagStr}  ${C.dim}${name}${C.reset}${preview}  ${idTag}`,
         );
     },
 

@@ -1,5 +1,6 @@
 import { jidNormalizedUser } from "baileys";
 import { convertAudio } from "#libs/utils/converter/audio";
+import { parseFlags } from "#libs/utils/flags";
 import logger from "#libs/utils/logger";
 import {
     extractText,
@@ -126,6 +127,20 @@ export class Interaction {
      */
     get isUrl() {
         return !!this.url;
+    }
+
+    /**
+     * Parse `rawBody` (preserves quoted whitespace) against a flag schema.
+     *
+     * Supports both `--flag value` and multi-char short `-flag value` forms,
+     * plus boolean/string/repeatable flags. Unknown tokens fall through to
+     * `positional` so existing regex parsing in commands remains valid.
+     *
+     * @param {Record<string, import('../utils/flags.js').FlagDef>} [schema]
+     * @returns {{ flags: Record<string, any>, positional: string[] }}
+     */
+    parseFlags(schema = {}) {
+        return parseFlags(this.rawBody, schema);
     }
 
     /** @returns {string[]} */

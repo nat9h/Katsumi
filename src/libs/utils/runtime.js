@@ -151,6 +151,94 @@ export const downloadQueue = new Queue(2);
 export const mediaQueue = new Queue(2);
 export const defaultQueue = new Queue(3);
 
+export class QueueFullError extends Error {
+    /**
+     * @param {string} userId
+     * @param {number} pending
+     */
+    constructor(userId, pending) {
+        super(`Too many pending tasks for ${userId} (${pending})`);
+        this.name = "QueueFullError";
+        this.code = "QUEUE_FULL";
+        this.userId = userId;
+        this.pending = pending;
+    }
+}
+
+/**
+ * Serializes async tasks per user. Tasks for the same userId run one at
+ * a time in FIFO order; tasks for different users run in parallel.
+ *
+ * Useful for keeping a single user from running multiple commands at
+ * once (and from spamming commands while a slow one is still in flight).
+ */
+export class UserSerialQueue {
+    /** @type {Map<string, { pending: number, tail: Promise<any> }>} */
+    #entries = new Map();
+    #maxPending;
+
+    /** @param {{ maxPending?: number }} [opts] */
+    constructor({ maxPending = 5 } = {}) {
+        this.#maxPending = maxPending;
+    }
+
+    /**
+     * Number of tasks (running + queued) for the given user.
+     * @param {string} userId
+     * @returns {number}
+     */
+    pending(userId) {
+        return this.#entries.get(userId)?.pending ?? 0;
+    }
+
+    /**
+     * @param {string} userId
+     * @returns {boolean}
+     */
+    isBusy(userId) {
+        return this.pending(userId) > 0;
+    }
+
+    /**
+     * Push a task onto the user's queue. The returned promise resolves
+     * with `fn`'s result, or rejects with `QueueFullError` if the user
+     * already has `maxPending` tasks queued.
+     *
+     * @template T
+     * @param {string} userId
+     * @param {() => Promise<T>} fn
+     * @returns {Promise<T>}
+     */
+    add(userId, fn) {
+        const existing = this.#entries.get(userId);
+        if (existing && existing.pending >= this.#maxPending) {
+            return Promise.reject(
+                new QueueFullError(userId, existing.pending),
+            );
+        }
+
+        const entry = existing ?? { pending: 0, tail: Promise.resolve() };
+        if (!existing) {
+            this.#entries.set(userId, entry);
+        }
+
+        entry.pending++;
+        const next = entry.tail.catch(() => {}).then(() => fn());
+        entry.tail = next;
+
+        next.finally(() => {
+            entry.pending--;
+            if (entry.pending === 0 && this.#entries.get(userId) === entry) {
+                this.#entries.delete(userId);
+            }
+        });
+
+        return next;
+    }
+}
+
+export const userQueue = new UserSerialQueue({ maxPending: 5 });
+
 export class StatsAccumulator {
     #db;
     #global;
