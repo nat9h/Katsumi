@@ -1,4 +1,4 @@
-import { jidNormalizedUser } from "baileys";
+import { areJidsSameUser, jidNormalizedUser } from "baileys";
 import config from "#config";
 import { print } from "#libs/utils/logger";
 import { extractText } from "#libs/utils/message";
@@ -64,10 +64,40 @@ function isOwnEcho(msg) {
     if (!msg.key.fromMe) {
         return false;
     }
-    if (!config.selfMode) {
+    if ((msg.key.id ?? "").startsWith(`${config.botId}_`)) {
         return true;
     }
-    return (msg.key.id ?? "").startsWith(`${config.botId}_`);
+    if (!config.selfMode) {
+        return !isBotOwner();
+    }
+    return false;
+}
+
+/**
+ * Check if the bot's own number is listed as an owner.
+ * This handles the case where PAIRING_NUMBER == OWNER_JID.
+ *
+ * @returns {boolean}
+ */
+function isBotOwner() {
+    const pairingNum = (config.pairingNumber || "").replace(/[^0-9]/g, "");
+    if (!pairingNum) {
+        return false;
+    }
+    const pairingJid = `${pairingNum}@s.whatsapp.net`;
+    for (const owner of config.ownerJids) {
+        if (owner === pairingJid) {
+            return true;
+        }
+        try {
+            if (areJidsSameUser(pairingJid, owner)) {
+                return true;
+            }
+        } catch {
+            return false;
+        }
+    }
+    return false;
 }
 
 /**

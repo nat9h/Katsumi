@@ -1,11 +1,13 @@
 /**
  * @fileoverview Setpp command (owner) — change the bot's profile picture.
- * Accepts an image or document (mime auto-detected by Jimp). Use `--remove`
- * to clear the current picture.
+ * Uses a raw `w:profile:picture` IQ so the image keeps its original
+ * resolution / quality (Baileys' `updateProfilePicture` downsizes to
+ * 640×640 JPEG q=50). The longest side is resized to 720px while
+ * preserving aspect ratio. Use `--remove` to clear the current picture.
  * @module commands/owner/setpp
  */
 
-import { jidNormalizedUser } from "baileys";
+import { jidNormalizedUser, S_WHATSAPP_NET } from "baileys";
 import { Jimp, JimpMime } from "jimp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { fetchMedia } from "#libs/utils/message";
@@ -23,14 +25,15 @@ export default new CommandBuilder()
             remove: { type: "boolean", short: "r" },
         });
 
-        const botJid = jidNormalizedUser(interaction.sock.user?.id || "");
+        const { sock } = interaction;
+        const botJid = jidNormalizedUser(sock.user?.id || "");
         if (!botJid) {
             return interaction.reply("Bot JID not available.");
         }
 
         if (flags.remove) {
             try {
-                await interaction.sock.removeProfilePicture(botJid);
+                await sock.removeProfilePicture(botJid);
                 return interaction.reply("✅ Bot picture removed.");
             } catch (err) {
                 return interaction.reply(`Failed: ${err.message}`);
@@ -53,11 +56,39 @@ export default new CommandBuilder()
             );
         }
 
-        const image = await Jimp.read(media.buffer);
-        const jpeg = await image.getBuffer(JimpMime.jpeg, { quality: 95 });
+        async function pp() {
+            const image = await Jimp.read(media.buffer);
+            let resized;
+            if (image.width > image.height) {
+                resized = image.resize({ w: 720, h: Jimp.RESIZE_AUTO });
+            } else {
+                resized = image.resize({ w: Jimp.RESIZE_AUTO, h: 720 });
+            }
+            return {
+                img: await resized.getBuffer(JimpMime.jpeg),
+            };
+        }
 
-        await interaction.sock.updateProfilePicture(botJid, jpeg);
-        return interaction.reply(
-            `✅ Bot picture updated (${image.width}×${image.height}).`,
-        );
+        const { img } = await pp();
+        if (!img) {
+            return interaction.reply("Failed.");
+        }
+
+        await sock.query({
+            tag: "iq",
+            attrs: {
+                to: S_WHATSAPP_NET,
+                type: "set",
+                xmlns: "w:profile:picture",
+            },
+            content: [
+                {
+                    tag: "picture",
+                    attrs: { type: "image" },
+                    content: img,
+                },
+            ],
+        });
+
+        return interaction.reply("✅ Successfully changed profile picture.");
     });

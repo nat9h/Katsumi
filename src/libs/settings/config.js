@@ -57,7 +57,9 @@ function parseLids(raw) {
  * @property {string} logLevel - Pino log level.
  * @property {string[]} prefixes - Active command prefixes.
  * @property {string} ownerJid - Owner's normalized WhatsApp JID.
+ * @property {string[]} ownerJids - All owner JIDs (comma-separated from env).
  * @property {string} ownerLid - Owner's LID (linked device ID).
+ * @property {string[]} ownerLids - All owner LIDs.
  * @property {number} maxReconnectAttempts - Max reconnection attempts before exit.
  * @property {number} initialReconnectDelay - Base delay for exponential backoff (ms).
  * @property {boolean} storeContacts - Whether to persist contacts.

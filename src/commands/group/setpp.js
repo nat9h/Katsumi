@@ -1,9 +1,13 @@
 /**
- * @fileoverview Setpp command — change the group's profile picture.
- * Accepts an image or document (mime auto-detected by Jimp).
+ * @fileoverview Setppgc command — change the group's profile picture.
+ * Uses a raw `w:profile:picture` IQ so the image keeps its original
+ * resolution / quality (Baileys' `updateProfilePicture` downsizes to
+ * 640×640 JPEG q=50). The longest side is resized to 720px while
+ * preserving aspect ratio.
  * @module commands/group/setpp
  */
 
+import { jidNormalizedUser, S_WHATSAPP_NET } from "baileys";
 import { Jimp, JimpMime } from "jimp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { fetchMedia } from "#libs/utils/message";
@@ -33,11 +37,42 @@ export default new CommandBuilder()
             );
         }
 
-        const image = await Jimp.read(media.buffer);
-        const jpeg = await image.getBuffer(JimpMime.jpeg, { quality: 95 });
+        async function pp() {
+            const image = await Jimp.read(media.buffer);
+            let resized;
+            if (image.width > image.height) {
+                resized = image.resize({ w: 720, h: Jimp.RESIZE_AUTO });
+            } else {
+                resized = image.resize({ w: Jimp.RESIZE_AUTO, h: 720 });
+            }
+            return {
+                img: await resized.getBuffer(JimpMime.jpeg),
+            };
+        }
 
-        await interaction.sock.updateProfilePicture(interaction.chatJid, jpeg);
+        const { img } = await pp();
+        if (!img) {
+            return interaction.reply("Failed.");
+        }
+
+        await interaction.sock.query({
+            tag: "iq",
+            attrs: {
+                to: S_WHATSAPP_NET,
+                target: jidNormalizedUser(interaction.chatJid),
+                type: "set",
+                xmlns: "w:profile:picture",
+            },
+            content: [
+                {
+                    tag: "picture",
+                    attrs: { type: "image" },
+                    content: img,
+                },
+            ],
+        });
+
         return interaction.reply(
-            `✅ Group picture updated (${image.width}×${image.height}).`,
+            "✅ Successfully changed group profile picture.",
         );
     });
