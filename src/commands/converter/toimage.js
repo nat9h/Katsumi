@@ -3,9 +3,9 @@
  * @module commands/converter/toimage
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { stickerToImage } from "#utils/converter/media";
-import { fetchMedia } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { stickerToImage } from "#libs/utils/converter/media";
+import { fetchMedia } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("toimage")

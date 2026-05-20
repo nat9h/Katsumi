@@ -1,9 +1,14 @@
 /**
- * @fileoverview Centralized console output utility.
- * Provides formatted, color-coded methods for system events, messages,
- * and command loading status. All human-visible output goes through here.
- * @module utils/log/print
+ * @fileoverview Logging: pino logger instance + centralized console output.
+ * @module utils/logger
  */
+
+import pino from "pino";
+import config from "#config";
+
+/** @type {import('pino').Logger} */
+const logger = pino({ level: config.logLevel });
+export default logger;
 
 /** ANSI color escape codes. */
 const C = {
@@ -98,7 +103,6 @@ function out(line) {
 
 /**
  * Centralized print utility for all human-visible console output.
- * Provides formatted methods for system events, messages, and command loading.
  */
 export const print = {
     /**
@@ -166,10 +170,10 @@ export const print = {
     },
 
     /**
-     * Log an incoming or outgoing message with type icon, chat info, and preview.
+     * Log an incoming or outgoing message.
      * @param {object} msg - The raw Baileys message object.
-     * @param {boolean} [fromMe=false] - Whether the message was sent by the bot.
-     * @param {object|null} [store=null] - The data store for resolving group names.
+     * @param {boolean} [fromMe=false]
+     * @param {object|null} [store=null]
      */
     message(msg, fromMe = false, store = null) {
         const jid = msg.key.remoteJid ?? "";
@@ -213,9 +217,9 @@ export const print = {
     },
 
     /**
-     * Print the command loading summary with counts of loaded and failed commands.
-     * @param {number} loaded - Number of successfully loaded commands.
-     * @param {number} failed - Number of commands that failed to load.
+     * Print the command loading summary.
+     * @param {number} loaded
+     * @param {number} failed
      */
     cmdSummary(loaded, failed) {
         const ok = `${C.green}${loaded} loaded${C.reset}`;

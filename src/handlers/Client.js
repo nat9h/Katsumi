@@ -8,27 +8,17 @@ import makeWASocket, {
     proto,
 } from "baileys";
 import config from "#config";
-import { handleConnectionUpdate } from "#core/connection";
-import { handleGroupEvents, handleParticipantsForWelcome } from "#core/group";
-import { handleMessagesUpsert } from "#core/message";
 import { createAuthStore, createDataStore, createKeyValueStore } from "#db";
+import { handleConnectionUpdate } from "#handlers/core/connection";
+import {
+    handleGroupEvents,
+    handleParticipantsForWelcome,
+} from "#handlers/core/group";
+import { handleMessagesUpsert } from "#handlers/core/message";
+import logger, { print } from "#libs/utils/logger";
+import { loadPlugins, reloadPlugins } from "#libs/utils/plugin";
+import { MemCache, StatsAccumulator } from "#libs/utils/runtime";
 import { state } from "#state";
-import { MemCache } from "#utils/cache";
-import logger from "#utils/log/logger";
-import { print } from "#utils/log/print";
-import { loadPlugins, reloadPlugins } from "#utils/plugin";
-import { StatsAccumulator } from "#utils/stats";
-
-const REMINDER_INTERVAL_MS = 30_000;
-const STATS_FLUSH_MS = 30_000;
-const SYNC_DELAY_MS = 3_000;
-const SHUTDOWN_GRACE_MS = 300;
-
-const CACHE_TTL = {
-    group: 5 * 60_000,
-    ephemeral: 60 * 60_000,
-    message: 30 * 60_000,
-};
 
 /**
  * Main WhatsApp client. Owns the Baileys socket, persistent stores, in-memory
@@ -49,19 +39,16 @@ export class Client extends EventEmitter {
         this.db = createKeyValueStore();
         this.store = createDataStore();
 
-        this.groupCache = new MemCache({ ttl: CACHE_TTL.group, max: 300 });
-        this.ephemeralCache = new MemCache({
-            ttl: CACHE_TTL.ephemeral,
-            max: 1000,
-        });
-        this.messageCache = new MemCache({ ttl: CACHE_TTL.message, max: 5000 });
+        this.groupCache = new MemCache({ ttl: 5 * 60_000, max: 300 });
+        this.ephemeralCache = new MemCache({ ttl: 60 * 60_000, max: 1000 });
+        this.messageCache = new MemCache({ ttl: 30 * 60_000, max: 5000 });
 
         state.init(this.db);
-        this.stats = new StatsAccumulator(this.db, { flushMs: STATS_FLUSH_MS });
+        this.stats = new StatsAccumulator(this.db, { flushMs: 30_000 });
 
         this.#reminderTimer = setInterval(
             () => this.#processReminders(),
-            REMINDER_INTERVAL_MS,
+            30_000,
         );
         this.#reminderTimer.unref?.();
 
@@ -103,7 +90,7 @@ export class Client extends EventEmitter {
     /** Fetch and cache metadata for all groups the bot is in. */
     async syncGroupMetadata() {
         try {
-            await new Promise((r) => setTimeout(r, SYNC_DELAY_MS));
+            await new Promise((r) => setTimeout(r, 3_000));
             const groups = await this.sock.groupFetchAllParticipating();
             for (const [jid, meta] of Object.entries(groups)) {
                 this.#cacheGroup(jid, meta);
@@ -405,7 +392,7 @@ export class Client extends EventEmitter {
                 await this.sock?.end?.(undefined);
             } catch {}
 
-            await new Promise((r) => setTimeout(r, SHUTDOWN_GRACE_MS));
+            await new Promise((r) => setTimeout(r, 300));
             process.exit(0);
         };
 

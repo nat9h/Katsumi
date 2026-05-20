@@ -1,13 +1,13 @@
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import {
     groupCommands,
     isVisible,
     renderCategory,
     renderCommandDetail,
     renderFullMenu,
-} from "#utils/menu";
-import { isOwner } from "#utils/permission";
-import { commandMap } from "#utils/plugin";
+} from "#libs/utils/menu";
+import { isOwner } from "#libs/utils/permission";
+import { commandMap } from "#libs/utils/plugin";
 
 export default new CommandBuilder()
     .setName("menu")

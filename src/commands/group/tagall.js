@@ -5,8 +5,8 @@
  */
 
 import { downloadMediaMessage } from "baileys";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { detectMedia } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { detectMedia } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("tagall")

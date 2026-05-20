@@ -3,8 +3,8 @@
  * @module commands/info/remind
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { parseDuration } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { parseDuration } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("remind")

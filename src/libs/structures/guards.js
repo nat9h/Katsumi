@@ -1,5 +1,5 @@
 import { areJidsSameUser, jidNormalizedUser } from "baileys";
-import { isOwner } from "#utils/permission";
+import { isOwner } from "#libs/utils/permission";
 
 /**
  * Thrown by a guard when the command should be blocked.

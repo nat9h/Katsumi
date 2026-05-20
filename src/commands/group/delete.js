@@ -4,8 +4,8 @@
  */
 
 import { jidNormalizedUser } from "baileys";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { findContextInfo } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { findContextInfo } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("delete")

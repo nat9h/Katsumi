@@ -1,4 +1,4 @@
-import logger from "#utils/log/logger";
+import logger from "#libs/utils/logger";
 
 const VALID_ACTIONS = new Set(["add", "remove", "leave"]);
 

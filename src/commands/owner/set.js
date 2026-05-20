@@ -4,10 +4,10 @@
  * @module commands/owner/set
  */
 
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { statusIcon } from "#libs/utils/format";
+import { resolveUserTarget } from "#libs/utils/message";
 import { state } from "#state";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { statusIcon } from "#utils/format";
-import { resolveUserTarget } from "#utils/message";
 
 /**
  * Toggle definitions mapping subcommand names to state getters/setters.

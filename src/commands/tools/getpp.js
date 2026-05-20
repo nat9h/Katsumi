@@ -1,5 +1,5 @@
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { fetchProfilePicture, queryBusinessProfile } from "#utils/profile";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { fetchProfilePicture, queryBusinessProfile } from "#libs/utils/profile";
 
 export default new CommandBuilder()
     .setName("getpp")

@@ -4,8 +4,8 @@
  * @module commands/owner/eval
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { fmt, sanitizeSecrets, truncate } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { fmt, sanitizeSecrets, truncate } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("eval")

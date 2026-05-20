@@ -1,8 +1,8 @@
-import { imgur } from "#storage/uploader";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { createSticker } from "#utils/converter/sticker";
-import { fetchMedia } from "#utils/message";
-import { fetchProfilePicture } from "#utils/profile";
+import { imgur } from "#libs/storage/uploader";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { createSticker } from "#libs/utils/converter/sticker";
+import { fetchMedia } from "#libs/utils/message";
+import { fetchProfilePicture } from "#libs/utils/profile";
 
 export default new CommandBuilder()
     .setName("sticker")

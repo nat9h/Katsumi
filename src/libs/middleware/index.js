@@ -1,13 +1,12 @@
 import { areJidsSameUser, jidNormalizedUser } from "baileys";
 import config from "#config";
+import { Interaction } from "#libs/structures/Interaction";
+import logger from "#libs/utils/logger";
+import { commandMap } from "#libs/utils/plugin";
+import { defaultQueue } from "#libs/utils/runtime";
 import { state } from "#state";
-import { Interaction } from "#structures/Interaction";
-import logger from "#utils/log/logger";
-import { commandMap } from "#utils/plugin";
-import { defaultQueue } from "#utils/queue";
 
 const LINK_RE = /https?:\/\/[^\s]+/i;
-const RATE_LIMIT_GC_MS = 5 * 60_000;
 
 // key: `${user}:${cmd}` → { count, reset }
 const rateLimitStore = new Map();
@@ -19,7 +18,7 @@ setInterval(() => {
             rateLimitStore.delete(key);
         }
     }
-}, RATE_LIMIT_GC_MS).unref();
+}, 5 * 60_000).unref();
 
 /**
  * Permissive owner check used by the command pipeline.

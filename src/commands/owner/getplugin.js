@@ -5,8 +5,8 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { commandMap } from "#utils/plugin";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { commandMap } from "#libs/utils/plugin";
 
 const COMMANDS_DIR = join(process.cwd(), "src", "commands");
 

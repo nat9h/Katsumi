@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { BufferJSON, initAuthCreds } from "baileys";
 import Database from "better-sqlite3";
 import config from "#config";
-import logger from "#utils/log/logger";
+import logger from "#libs/utils/logger";
 
 const DATA_DIR = join(process.cwd(), "data");
 const AUTH_JSON = join(DATA_DIR, "auth.json");

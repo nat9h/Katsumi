@@ -1,7 +1,7 @@
-import * as ytdlp from "#services/downloader/yt-dlp";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { formatDuration } from "#utils/format";
-import { selectFromList } from "#utils/prompt";
+import * as ytdlp from "#libs/services/downloader/yt-dlp";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { formatDuration } from "#libs/utils/format";
+import { selectFromList } from "#libs/utils/interaction";
 
 const FALLBACK_META = {
     title: "YouTube",

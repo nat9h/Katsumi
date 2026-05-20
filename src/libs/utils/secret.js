@@ -10,12 +10,10 @@ import { aesDecryptGCM, hmacSign, proto } from "baileys";
 /** @type {Map<string, SecretEntry>} */
 const secretStore = new Map();
 
-const MAX_EDIT_TIME_MS = 15 * 60 * 1000;
-
 setInterval(() => {
     const now = Date.now();
     for (const [id, entry] of secretStore) {
-        if (now - entry.timestamp >= MAX_EDIT_TIME_MS) {
+        if (now - entry.timestamp >= 15 * 60 * 1000) {
             secretStore.delete(id);
         }
     }

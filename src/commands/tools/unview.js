@@ -1,10 +1,10 @@
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import {
     detectMedia,
     getMedia,
     isViewOnce,
     unwrapMessage,
-} from "#utils/message";
+} from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("unview")

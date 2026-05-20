@@ -1,12 +1,12 @@
 import { jidNormalizedUser } from "baileys";
-import { convertAudio } from "#utils/converter/audio";
-import logger from "#utils/log/logger";
+import { convertAudio } from "#libs/utils/converter/audio";
+import logger from "#libs/utils/logger";
 import {
     extractText,
     extractUrl,
     findContextInfo,
     unwrapMessage,
-} from "#utils/message";
+} from "#libs/utils/message";
 import { Collector } from "./Collector.js";
 
 /**
@@ -15,7 +15,6 @@ import { Collector } from "./Collector.js";
  * @typedef {import('../../handlers/Client.js').Client} Client
  */
 
-const TYPING_AUTO_CLEAR_MS = 8_000;
 const DEFAULT_AWAIT_MS = 30_000;
 
 /**
@@ -255,7 +254,7 @@ export class Interaction {
         clearTimeout(this.#typingTimer);
         this.#typingTimer = setTimeout(
             () => this.stopTyping().catch(() => {}),
-            TYPING_AUTO_CLEAR_MS,
+            8_000,
         );
     }
 

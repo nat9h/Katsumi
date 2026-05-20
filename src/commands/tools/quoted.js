@@ -3,8 +3,8 @@ import {
     generateWAMessageFromContent,
     proto,
 } from "baileys";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { findContextInfo, unwrapMessage } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { findContextInfo, unwrapMessage } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("quoted")

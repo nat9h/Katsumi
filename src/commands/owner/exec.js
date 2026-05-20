@@ -6,8 +6,8 @@
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { sanitizeSecrets, truncate } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { sanitizeSecrets, truncate } from "#libs/utils/format";
 
 const execAsync = promisify(exec);
 

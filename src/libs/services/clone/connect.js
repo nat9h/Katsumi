@@ -17,9 +17,8 @@ import makeWASocket, {
     makeCacheableSignalKeyStore,
 } from "baileys";
 import Database from "better-sqlite3";
+import logger, { print } from "#libs/utils/logger";
 import { processMessage } from "#middleware";
-import logger from "#utils/log/logger";
-import { print } from "#utils/log/print";
 
 const DB_PATH = join(process.cwd(), "data", "clones.db");
 const DATA_DIR = join(process.cwd(), "data");

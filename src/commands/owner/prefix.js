@@ -5,8 +5,8 @@
  * @module commands/owner/prefix
  */
 
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { state } from "#state";
-import { CommandBuilder } from "#structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("prefix")

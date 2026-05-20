@@ -3,8 +3,8 @@
  * @module commands/info/stats
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { formatBytes, formatUptime } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { formatBytes, formatUptime } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("stats")

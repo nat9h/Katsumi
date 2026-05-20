@@ -1,8 +1,8 @@
-import { Spotify } from "#scrapers/spotify";
-import * as ytdlp from "#services/downloader/yt-dlp";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { formatDurationMs, sanitizeFilename } from "#utils/format";
-import { selectFromList } from "#utils/prompt";
+import { Spotify } from "#libs/scrapers/spotify";
+import * as ytdlp from "#libs/services/downloader/yt-dlp";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { formatDurationMs, sanitizeFilename } from "#libs/utils/format";
+import { selectFromList } from "#libs/utils/interaction";
 
 export default new CommandBuilder()
     .setName("spotify")

@@ -1,5 +1,5 @@
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { makeGreetingHandler } from "#utils/greeting";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { makeGreetingHandler } from "#libs/utils/interaction";
 
 export default new CommandBuilder()
     .setName("leave")

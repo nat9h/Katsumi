@@ -3,9 +3,9 @@
  * @module commands/converter/tovideo
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { stickerToVideo } from "#utils/converter/media";
-import { fetchMedia } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { stickerToVideo } from "#libs/utils/converter/media";
+import { fetchMedia } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("tovideo")

@@ -4,7 +4,7 @@
  * @module commands/group/add
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("add")
@@ -86,9 +86,15 @@ export default new CommandBuilder()
                     const groupName = meta?.subject || "a group";
 
                     for (const jid of privacyBlocked) {
-                        await interaction.sock.sendMessage(jid, {
-                            text: `You've been invited to join *${groupName}*\n\n${link}`,
-                        });
+                        const exp =
+                            interaction.client.ephemeralCache.get(jid) || 0;
+                        await interaction.sock.sendMessage(
+                            jid,
+                            {
+                                text: `You've been invited to join *${groupName}*\n\n${link}`,
+                            },
+                            exp > 0 ? { ephemeralExpiration: exp } : undefined,
+                        );
                     }
                     lines.push(
                         `\nInvite sent to ${privacyBlocked.length} user(s) via DM.`,

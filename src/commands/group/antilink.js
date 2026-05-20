@@ -4,7 +4,7 @@
  * @module commands/group/antilink
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("antilink")

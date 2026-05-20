@@ -1,9 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import logger from "#utils/log/logger";
-import { print } from "#utils/log/print";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import logger, { print } from "#libs/utils/logger";
 
 const COMMANDS_DIR = join(process.cwd(), "src", "commands");
 

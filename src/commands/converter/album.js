@@ -5,10 +5,9 @@
  */
 
 import { downloadMediaMessage } from "baileys";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { detectMedia, extractText } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { detectMedia, extractText } from "#libs/utils/message";
 
-const ALBUM_TIMEOUT_MS = 60_000;
 const MAX_ITEMS = 10;
 
 export default new CommandBuilder()
@@ -54,7 +53,7 @@ export default new CommandBuilder()
 
         const collector = interaction.createMessageCollector({
             filter: () => true,
-            time: ALBUM_TIMEOUT_MS,
+            time: 60_000,
             max: MAX_ITEMS + 5,
         });
 

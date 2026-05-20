@@ -1,6 +1,5 @@
 import { Client } from "./handlers/Client.js";
-import logger from "./libs/utils/log/logger.js";
-import { print } from "./libs/utils/log/print.js";
+import logger, { print } from "./libs/utils/logger.js";
 
 process.on("unhandledRejection", (reason) => {
     print.error(`Unhandled rejection: ${reason}`);

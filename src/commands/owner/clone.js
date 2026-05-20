@@ -8,8 +8,8 @@ import {
     deleteCloneByOwner,
     getCloneByOwner,
     listClones,
-} from "#services/clone/connect";
-import { CommandBuilder } from "#structures/CommandBuilder";
+} from "#libs/services/clone/connect";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("clone")

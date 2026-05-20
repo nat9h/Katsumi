@@ -5,7 +5,7 @@
 
 import { existsSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("delfile")

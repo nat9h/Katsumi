@@ -1,7 +1,5 @@
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { formatTimestamp } from "#utils/format";
-
-const TOP_LIMIT = 20;
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { formatTimestamp } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("totalchat")
@@ -25,7 +23,7 @@ export default new CommandBuilder()
 
         const sorted = Object.entries(counts)
             .sort(([, a], [, b]) => b - a)
-            .slice(0, TOP_LIMIT);
+            .slice(0, 20);
 
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
         const mentions = sorted.map(([jid]) => jid);

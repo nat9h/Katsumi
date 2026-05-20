@@ -1,8 +1,8 @@
 import { basename, extname } from "node:path";
 import axios from "axios";
 import { fileTypeFromBuffer } from "file-type";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { truncate } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { truncate } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("fetch")

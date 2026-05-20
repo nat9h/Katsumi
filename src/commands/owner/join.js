@@ -4,7 +4,7 @@
  * @module commands/owner/join
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("join")

@@ -1,4 +1,4 @@
-import { commandMap } from "#utils/plugin";
+import { commandMap } from "#libs/utils/plugin";
 
 /** Categories visible only to the bot owner. */
 const OWNER_CATEGORIES = new Set(["owner"]);

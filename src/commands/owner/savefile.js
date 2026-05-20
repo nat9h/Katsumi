@@ -7,8 +7,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { downloadMediaMessage } from "baileys";
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { extractText } from "#utils/message";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { extractText } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("savefile")

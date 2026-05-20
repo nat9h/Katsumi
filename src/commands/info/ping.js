@@ -3,8 +3,8 @@
  * @module commands/info/ping
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
-import { formatBytes } from "#utils/format";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { formatBytes } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("ping")

@@ -4,7 +4,7 @@
  * @module commands/owner/out
  */
 
-import { CommandBuilder } from "#structures/CommandBuilder";
+import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
     .setName("out")

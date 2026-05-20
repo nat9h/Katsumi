@@ -1,5 +1,5 @@
 import { downloadMediaMessage } from "baileys";
-import { formatBytes } from "#utils/format";
+import { formatBytes } from "#libs/utils/format";
 
 const URL_RE = /https?:\/\/[^\s<>"']+/i;
 

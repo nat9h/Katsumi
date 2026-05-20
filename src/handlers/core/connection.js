@@ -2,12 +2,8 @@ import { Boom } from "@hapi/boom";
 import { DisconnectReason } from "baileys";
 import QRCode from "qrcode-terminal";
 import config from "#config";
+import logger, { print } from "#libs/utils/logger";
 import { state } from "#state";
-import logger from "#utils/log/logger";
-import { print } from "#utils/log/print";
-
-const MAX_RECONNECT_DELAY_MS = 60_000;
-const DM_WARMUP_LIMIT = 50;
 
 /** Try to resolve LIDs for all configured owner numbers. Best-effort. */
 async function resolveOwnerLids(sock) {
@@ -52,7 +48,7 @@ async function warmEphemeralForDMs(client) {
     const dmJids = (client.store.getAllChats?.() ?? [])
         .map((c) => c.id)
         .filter((j) => j?.endsWith("@s.whatsapp.net"))
-        .slice(0, DM_WARMUP_LIMIT);
+        .slice(0, 50);
 
     if (!dmJids.length) {
         return;
@@ -87,10 +83,7 @@ function schedulePairingCode(client) {
 }
 
 function backoffDelay(attempt) {
-    const exp = Math.min(
-        config.initialReconnectDelay * 2 ** attempt,
-        MAX_RECONNECT_DELAY_MS,
-    );
+    const exp = Math.min(config.initialReconnectDelay * 2 ** attempt, 60_000);
     return exp + Math.floor(Math.random() * 1000);
 }
 
@@ -126,7 +119,7 @@ function onConnectionOpen(client) {
     resolveOwnerLids(client.sock).catch(() => {});
     client.syncGroupMetadata().catch(() => {});
     warmEphemeralForDMs(client).catch(() => {});
-    import("#services/clone/connect")
+    import("#libs/services/clone/connect")
         .then((m) => m.restoreClones(client))
         .catch(() => {});
 
