@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Spotify command — search and download Spotify tracks via yt-dlp.
+ * @module commands/downloader/spotify
+ */
+
 import { Spotify } from "#libs/scrapers/spotify";
 import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";

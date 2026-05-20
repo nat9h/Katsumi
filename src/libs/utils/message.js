@@ -249,9 +249,12 @@ export async function fetchMedia(interaction, opts) {
     } catch (err) {
         if (err.code === "MEDIA_TOO_LARGE") {
             await interaction.reply(err.message);
-            return null;
+        } else {
+            await interaction.reply(
+                "Failed to download media. The file may have expired or is unavailable.",
+            );
         }
-        throw err;
+        return null;
     }
 }
 

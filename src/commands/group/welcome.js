@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Welcome command — manage welcome message for a group.
+ * @module commands/group/welcome
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { makeGreetingHandler } from "#libs/utils/interaction";
 

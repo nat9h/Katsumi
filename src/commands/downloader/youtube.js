@@ -1,3 +1,8 @@
+/**
+ * @fileoverview YouTube command — search and download YouTube audio/video via yt-dlp.
+ * @module commands/downloader/youtube
+ */
+
 import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDuration } from "#libs/utils/format";

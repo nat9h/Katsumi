@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Leave command — manage leave/goodbye message for a group.
+ * @module commands/group/leave
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { makeGreetingHandler } from "#libs/utils/interaction";
 

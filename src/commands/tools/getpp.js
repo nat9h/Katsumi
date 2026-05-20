@@ -1,3 +1,8 @@
+/**
+ * @fileoverview GetPP command — fetch profile picture and business info of a user.
+ * @module commands/tools/getpp
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { fetchProfilePicture, queryBusinessProfile } from "#libs/utils/profile";
 

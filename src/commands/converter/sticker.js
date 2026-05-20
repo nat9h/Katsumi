@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Sticker command — all-in-one sticker creator with watermark,
+ * quote chat, meme, emoji kitchen, and URL support.
+ * @module commands/converter/sticker
+ */
+
 import { imgur } from "#libs/storage/uploader";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { createSticker } from "#libs/utils/converter/sticker";

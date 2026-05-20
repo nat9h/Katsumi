@@ -31,7 +31,7 @@ export default new CommandBuilder()
 
         await interaction.sock.sendMessage(interaction.chatJid, {
             pin: targetKey,
-            type: isUnpin ? 2 : 1, // 1 = PIN_FOR_ALL, 2 = UNPIN_FOR_ALL
+            type: isUnpin ? 2 : 1,
         });
 
         await interaction.reply(

@@ -340,7 +340,6 @@ export async function handleMessagesUpsert(client, { type, messages }) {
             continue;
         }
 
-        // Cache every incoming message for quoted retrieval
         if (msg.key?.id && msg.key?.remoteJid) {
             client.messageCache.set(`${msg.key.remoteJid}_${msg.key.id}`, msg);
         }

@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Quoted command — retrieve and forward the quoted message from a reply.
+ * @module commands/tools/quoted
+ */
+
 import {
     generateForwardMessageContent,
     generateWAMessageFromContent,

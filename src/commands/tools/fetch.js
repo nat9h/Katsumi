@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Fetch command — make HTTP requests and return the response.
+ * @module commands/tools/fetch
+ */
+
 import { basename, extname } from "node:path";
 import axios from "axios";
 import { fileTypeFromBuffer } from "file-type";

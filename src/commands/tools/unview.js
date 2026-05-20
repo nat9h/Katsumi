@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Unview command — re-send view-once media as a normal message.
+ * @module commands/tools/unview
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import {
     detectMedia,

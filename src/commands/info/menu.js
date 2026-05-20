@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Menu command — displays all available commands grouped by category.
+ * @module commands/info/menu
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import {
     groupCommands,

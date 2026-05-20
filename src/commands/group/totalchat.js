@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Totalchat command — show message leaderboard for a group.
+ * @module commands/group/totalchat
+ */
+
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatTimestamp } from "#libs/utils/format";
 
