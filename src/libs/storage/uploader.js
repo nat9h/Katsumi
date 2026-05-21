@@ -59,7 +59,10 @@ export async function litterbox(buffer, filename, time = "1h") {
 
     const res = await fetch(
         "https://litterbox.catbox.moe/resources/internals/api.php",
-        { method: "POST", body: form },
+        {
+            method: "POST",
+            body: form,
+        },
     );
     const text = await res.text();
     if (!text.startsWith("http")) {
@@ -135,37 +138,6 @@ export async function imgur(buffer) {
 }
 
 /**
- * Upload to GoFile (unlimited size, no auth, permanent until inactive).
- * @param {Buffer} buffer
- * @param {string} [filename]
- * @returns {Promise<string>}
- */
-export async function gofile(buffer, filename) {
-    const { name } = await prepare(buffer, filename);
-
-    const srv = await fetch("https://api.gofile.io/servers").then((r) =>
-        r.json(),
-    );
-    const server = srv?.data?.servers?.[0]?.name;
-    if (!server) {
-        throw new Error("GoFile: no server available");
-    }
-
-    const form = new FormData();
-    form.append("file", new File([buffer], name));
-
-    const res = await fetch(`https://${server}.gofile.io/contents/uploadfile`, {
-        method: "POST",
-        body: form,
-    });
-    const json = await res.json();
-    if (json.status !== "ok" || !json.data?.downloadPage) {
-        throw new Error(`GoFile: ${JSON.stringify(json).slice(0, 200)}`);
-    }
-    return json.data.downloadPage;
-}
-
-/**
  * Upload to x0.at (100MB max, temporary).
  * @param {Buffer} buffer
  * @param {string} [filename]
@@ -188,14 +160,91 @@ export async function x0(buffer, filename) {
 }
 
 /**
+ * Upload to tmpfile.link (direct link, temporary, 100MB max).
+ * @param {Buffer} buffer
+ * @param {string} [filename]
+ * @returns {Promise<string>}
+ */
+export async function tmpfilelink(buffer, filename) {
+    const { name } = await prepare(buffer, filename);
+    const form = new FormData();
+    form.append("file", new File([buffer], name));
+
+    const res = await fetch("https://tmpfile.link/api/upload", {
+        method: "POST",
+        body: form,
+    });
+    const json = await res.json();
+    if (!json?.downloadLink) {
+        throw new Error(`tmpfile.link: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.downloadLink;
+}
+
+/**
+ * Upload to qu.ax (direct link, permanent, 100MB max).
+ * @param {Buffer} buffer
+ * @param {string} [filename]
+ * @returns {Promise<string>}
+ */
+export async function quax(buffer, filename) {
+    const { blob, name } = await prepare(buffer, filename);
+    const form = new FormData();
+    form.append("files[]", blob, name);
+
+    const res = await fetch("https://qu.ax/upload.php", {
+        method: "POST",
+        body: form,
+    });
+    const json = await res.json();
+    if (!json?.success || !json.files?.[0]?.url) {
+        throw new Error(`qu.ax: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.files[0].url;
+}
+
+/**
+ * Upload image to FreeImage.host (direct link, permanent, image only).
+ * @param {Buffer} buffer
+ * @returns {Promise<string>}
+ */
+export async function freeimage(buffer) {
+    const form = new FormData();
+    form.append("source", buffer.toString("base64"));
+    form.append("type", "base64");
+    form.append("key", "6d207e02198a847aa98d0a2a901485a5");
+
+    const res = await fetch("https://freeimage.host/api/1/upload", {
+        method: "POST",
+        body: form,
+    });
+    const json = await res.json();
+    if (json.status_code !== 200 || !json.image?.url) {
+        throw new Error(`FreeImage: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.image.url;
+}
+
+/**
  * Upload using a named provider.
  * @param {Buffer} buffer
  * @param {string} [filename]
- * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"gofile"|"x0"} [provider="catbox"]
+ * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"} [provider="catbox"]
  * @returns {Promise<string>}
  */
+export const providers = {
+    catbox,
+    litterbox,
+    tmpfiles,
+    uguu,
+    imgur,
+    x0,
+    tmpfilelink,
+    quax,
+    freeimage,
+};
+
 export async function upload(buffer, filename, provider = "catbox") {
-    const providers = { catbox, litterbox, tmpfiles, uguu, imgur, gofile, x0 };
     const fn = providers[provider] || catbox;
     return fn(buffer, filename);
 }
