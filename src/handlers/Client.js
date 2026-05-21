@@ -31,6 +31,7 @@ export class Client extends EventEmitter {
 
     #pluginsLoaded = false;
     #reminderTimer;
+    #msgIdPrefix = `${config.botId}_`;
 
     constructor() {
         super();
@@ -41,7 +42,9 @@ export class Client extends EventEmitter {
 
         this.groupCache = new MemCache({ ttl: 5 * 60_000, max: 300 });
         this.ephemeralCache = new MemCache({ ttl: 60 * 60_000, max: 1000 });
-        this.messageCache = new MemCache({ ttl: 30 * 60_000, max: 5000 });
+        // The message cache is only used for retrying decryption of recently
+        // sent messages; a smaller window keeps RSS predictable.
+        this.messageCache = new MemCache({ ttl: 15 * 60_000, max: 1500 });
 
         state.init(this.db);
         this.stats = new StatsAccumulator(this.db, { flushMs: 30_000 });
@@ -74,8 +77,7 @@ export class Client extends EventEmitter {
      * Used to identify messages the bot sent so we can skip our own echoes.
      */
     generateMsgId() {
-        const base = generateMessageIDV2(this.sock?.user?.id);
-        return `${config.botId}_${base}`;
+        return this.#msgIdPrefix + generateMessageIDV2(this.sock?.user?.id);
     }
 
     /** Send a message and cache it for retry decryption. */
@@ -162,7 +164,21 @@ export class Client extends EventEmitter {
     async _connect() {
         const { version } = await fetchLatestBaileysVersion();
 
-        this.sock?.ev.removeAllListeners();
+        // Tear down any previous socket before replacing it. removeAllListeners
+        // alone leaves the underlying WebSocket / keep-alive timers alive,
+        // which slowly grows RSS across reconnects.
+        const prev = this.sock;
+        if (prev) {
+            try {
+                prev.ev.removeAllListeners();
+            } catch {}
+            try {
+                prev.ws?.close?.();
+            } catch {}
+            try {
+                prev.end?.(undefined);
+            } catch {}
+        }
 
         this.sock = makeWASocket({
             version,
@@ -213,11 +229,13 @@ export class Client extends EventEmitter {
         sock.ev.on("contacts.upsert", (c) => this.#upsertContacts(c));
         sock.ev.on("contacts.update", (c) => this.#upsertContacts(c));
 
-        sock.ev.on("chats.upsert", (chats) =>
-            chats.forEach((c) => this.store.upsertChat(c)),
-        );
-        sock.ev.on("chats.update", (chats) =>
-            chats.forEach((c) => {
+        sock.ev.on("chats.upsert", (chats) => {
+            for (const c of chats) {
+                this.store.upsertChat(c);
+            }
+        });
+        sock.ev.on("chats.update", (chats) => {
+            for (const c of chats) {
                 this.store.upsertChat(c);
                 if (c.id && "ephemeralExpiration" in c) {
                     const exp = c.ephemeralExpiration || 0;
@@ -227,11 +245,13 @@ export class Client extends EventEmitter {
                         this.ephemeralCache.delete(c.id);
                     }
                 }
-            }),
-        );
-        sock.ev.on("chats.delete", (ids) =>
-            ids.forEach((id) => this.store.deleteChat(id)),
-        );
+            }
+        });
+        sock.ev.on("chats.delete", (ids) => {
+            for (const id of ids) {
+                this.store.deleteChat(id);
+            }
+        });
 
         sock.ev.on("groups.upsert", (g) => this.#onGroupsUpsert(g));
         sock.ev.on("groups.update", (u) => this.#onGroupsUpdate(u));

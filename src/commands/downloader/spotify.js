@@ -3,7 +3,7 @@
  * @module commands/downloader/spotify
  */
 
-import { Spotify } from "#libs/scrapers/spotify";
+import { getSpotify } from "#libs/scrapers/spotify";
 import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDurationMs, sanitizeFilename } from "#libs/utils/format";
@@ -25,7 +25,7 @@ export default new CommandBuilder()
             );
         }
 
-        const sp = new Spotify();
+        const sp = getSpotify();
         await interaction.typing();
 
         let track;

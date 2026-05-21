@@ -130,7 +130,7 @@ export default new CommandBuilder()
                     const idx = Number.parseInt(arg, 10) - 1;
                     if (idx < 0 || idx >= clones.length) {
                         return interaction.reply(
-                            `Invalid index. Use \`${interaction.prefix}clone list\` to see indices.`,
+                            `Invalid index. Use \`${interaction.prefix}${interaction.commandName} list\` to see indices.`,
                         );
                     }
                     const target = clones[idx];

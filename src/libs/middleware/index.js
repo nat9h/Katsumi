@@ -2,7 +2,7 @@ import { areJidsSameUser, jidNormalizedUser } from "baileys";
 import config from "#config";
 import { Interaction } from "#libs/structures/Interaction";
 import logger from "#libs/utils/logger";
-import { commandMap } from "#libs/utils/plugin";
+import { commandMap, customPrefixCommands } from "#libs/utils/plugin";
 import { QueueFullError, userQueue } from "#libs/utils/runtime";
 import { state } from "#state";
 
@@ -170,8 +170,8 @@ async function maybeAntiLink(client, interaction) {
  * @returns {{ cmd: object, name: string, rawArgs: string[], prefix: string }|null}
  */
 function parseInvocation(text, interaction) {
-    for (const [, cmd] of commandMap) {
-        if (!cmd.prefix || !text.startsWith(cmd.prefix)) {
+    for (const cmd of customPrefixCommands) {
+        if (!text.startsWith(cmd.prefix)) {
             continue;
         }
         const body = text.slice(cmd.prefix.length).trim();
@@ -414,9 +414,11 @@ export async function processMessage(client, msg) {
     interaction.rawBody = extractRawBody(text, prefix, name);
     interaction.autoEphemeral = true;
 
-    cmd.options?.forEach((opt, i) => {
-        interaction.args[opt.name] = rawArgs[i] ?? null;
-    });
+    if (cmd.options?.length) {
+        for (let i = 0; i < cmd.options.length; i++) {
+            interaction.args[cmd.options[i].name] = rawArgs[i] ?? null;
+        }
+    }
 
     if (cmd.react) {
         interaction.react(cmd.react).catch(() => {});

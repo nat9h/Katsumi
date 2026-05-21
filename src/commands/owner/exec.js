@@ -27,7 +27,6 @@ export default new CommandBuilder()
 
         try {
             const { stdout, stderr } = await execAsync(input, {
-                timeout: 10_000,
                 shell:
                     process.platform === "win32" ? "powershell.exe" : "/bin/sh",
             });

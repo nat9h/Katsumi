@@ -196,7 +196,6 @@ class JsonAuthStore {
                 JSON.stringify(
                     { creds: this.creds, keys: this.keys.toJSON() },
                     BufferJSON.replacer,
-                    2,
                 ),
             );
         } catch (err) {
@@ -263,7 +262,7 @@ class JsonKeyValueStore {
     /** @private */
     _flush() {
         try {
-            writeFileSync(KV_JSON, JSON.stringify(this._data, null, 2));
+            writeFileSync(KV_JSON, JSON.stringify(this._data));
         } catch (err) {
             logger.error({ err }, "kv.json write failed");
         }
@@ -379,15 +378,11 @@ class JsonDataStore {
         try {
             writeFileSync(
                 STORE_JSON,
-                JSON.stringify(
-                    {
-                        contacts: config.storeContacts ? this.contacts : {},
-                        groups: config.storeGroups ? this.groups : {},
-                        chats: config.storeChats ? this.chats : {},
-                    },
-                    null,
-                    2,
-                ),
+                JSON.stringify({
+                    contacts: config.storeContacts ? this.contacts : {},
+                    groups: config.storeGroups ? this.groups : {},
+                    chats: config.storeChats ? this.chats : {},
+                }),
             );
         } catch (err) {
             logger.error({ err }, "store.json write failed");

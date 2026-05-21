@@ -121,7 +121,7 @@ function createJsonStore() {
     let writeTimer = null;
     const flush = () => {
         try {
-            writeFileSync(filePath, JSON.stringify(data, null, 2));
+            writeFileSync(filePath, JSON.stringify(data));
         } catch (err) {
             print.error(`clones.json write failed: ${err.message}`);
         }

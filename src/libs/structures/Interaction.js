@@ -53,6 +53,16 @@ export class Interaction {
     #ephemeralCached;
     #typingTimer = null;
 
+    #ctxCached;
+    #ctxComputed = false;
+    #textCached;
+    #textComputed = false;
+    #quotedCached;
+    #quotedComputed = false;
+    #mentionsCached;
+    #urlCached;
+    #urlComputed = false;
+
     /**
      * @param {Client} client
      * @param {WAMessage} msg
@@ -63,6 +73,16 @@ export class Interaction {
         this.store = client.store;
         this.db = client.db;
         this.msg = msg;
+    }
+
+    /** @returns {object|null} cached contextInfo of the current message */
+    #getCtx() {
+        if (this.#ctxComputed) {
+            return this.#ctxCached;
+        }
+        this.#ctxComputed = true;
+        this.#ctxCached = findContextInfo(this.msg.message) || null;
+        return this.#ctxCached;
     }
 
     /**
@@ -110,7 +130,12 @@ export class Interaction {
 
     /** Plain text of the message, unwrapping ephemeral/viewOnce containers. */
     get text() {
-        return extractText(this.msg.message);
+        if (this.#textComputed) {
+            return this.#textCached;
+        }
+        this.#textComputed = true;
+        this.#textCached = extractText(this.msg.message);
+        return this.#textCached;
     }
 
     /**
@@ -118,7 +143,12 @@ export class Interaction {
      * @returns {string|null}
      */
     get url() {
-        return extractUrl(this.text);
+        if (this.#urlComputed) {
+            return this.#urlCached;
+        }
+        this.#urlComputed = true;
+        this.#urlCached = extractUrl(this.text);
+        return this.#urlCached;
     }
 
     /**
@@ -145,7 +175,11 @@ export class Interaction {
 
     /** @returns {string[]} */
     get mentions() {
-        return findContextInfo(this.msg.message)?.mentionedJid || [];
+        if (this.#mentionsCached !== undefined) {
+            return this.#mentionsCached;
+        }
+        this.#mentionsCached = this.#getCtx()?.mentionedJid || [];
+        return this.#mentionsCached;
     }
 
     /**
@@ -154,15 +188,21 @@ export class Interaction {
      * @returns {{ message: object, sender: string, stanzaId: string, mentionedJid: string[], text: string, url: string|null, isUrl: boolean }|null}
      */
     get quoted() {
-        const ctx = findContextInfo(this.msg.message);
+        if (this.#quotedComputed) {
+            return this.#quotedCached;
+        }
+        this.#quotedComputed = true;
+
+        const ctx = this.#getCtx();
         if (!ctx?.quotedMessage) {
+            this.#quotedCached = null;
             return null;
         }
 
         const message = unwrapMessage(ctx.quotedMessage) || ctx.quotedMessage;
         const text = extractText(message);
         const url = extractUrl(text);
-        return {
+        this.#quotedCached = {
             message,
             sender: ctx.participant || "",
             stanzaId: ctx.stanzaId || "",
@@ -171,6 +211,7 @@ export class Interaction {
             url,
             isUrl: !!url,
         };
+        return this.#quotedCached;
     }
 
     /**

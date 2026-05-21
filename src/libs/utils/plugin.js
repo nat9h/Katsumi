@@ -9,6 +9,13 @@ const COMMANDS_DIR = join(process.cwd(), "src", "commands");
 /** Resolved command lookup — primary names + aliases all point here. */
 export const commandMap = new Map();
 
+/**
+ * Commands that opted into a non-standard prefix (e.g. `>>` for eval).
+ * Kept as a small array so the middleware can scan it cheaply per
+ * incoming message instead of iterating the full commandMap.
+ */
+export const customPrefixCommands = [];
+
 /** Walk one category folder, returning [filename, fileUrl] pairs. */
 async function listCategory(category) {
     const dir = join(COMMANDS_DIR, category);
@@ -39,6 +46,9 @@ function register(cmd) {
     commandMap.set(cmd.name, cmd);
     for (const alias of cmd.aliases ?? []) {
         commandMap.set(alias, cmd);
+    }
+    if (cmd.prefix) {
+        customPrefixCommands.push(cmd);
     }
 }
 
@@ -92,5 +102,6 @@ export async function loadPlugins({ bustCache = false } = {}) {
 /** Hot-reload: clear the map and re-import every plugin. */
 export async function reloadPlugins() {
     commandMap.clear();
+    customPrefixCommands.length = 0;
     return loadPlugins({ bustCache: true });
 }

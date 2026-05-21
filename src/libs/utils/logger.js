@@ -10,6 +10,15 @@ import config from "#config";
 const logger = pino({ level: config.logLevel });
 export default logger;
 
+/**
+ * Per-message console logging is the single biggest source of garbage
+ * during steady-state operation (string concat, ANSI escapes, JID slicing
+ * for every notify event, even when the user never reads stdout).
+ * Set `MSG_LOGS=false` to skip the work entirely.
+ */
+const MSG_LOGS_ENABLED =
+    (process.env.MSG_LOGS ?? "true").toLowerCase() !== "false";
+
 /** ANSI color escape codes. */
 const C = {
     reset: "\x1b[0m",
@@ -178,6 +187,9 @@ export const print = {
      * @param {boolean} [opts.clone=false] - Whether the message came through a clone session.
      */
     message(msg, fromMe = false, store = null, opts = {}) {
+        if (!MSG_LOGS_ENABLED) {
+            return;
+        }
         const jid = msg.key.remoteJid ?? "";
         const sender = msg.key.participant ?? msg.key.remoteJid ?? "";
         const msgId = msg.key.id ?? "";

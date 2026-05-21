@@ -64,13 +64,15 @@ export class Collector extends EventEmitter {
         this.#filter = filter;
         this.#max = max;
 
+        const ownIdPrefix = `${config.botId}_`;
+
         this.#handler = ({ type, messages }) => {
             if (type !== "notify") {
                 return;
             }
             for (const msg of messages) {
                 const msgId = msg.key.id ?? "";
-                if (msg.key.fromMe && msgId.startsWith(`${config.botId}_`)) {
+                if (msg.key.fromMe && msgId.startsWith(ownIdPrefix)) {
                     continue;
                 }
                 if (msg.key.remoteJid !== this.#chatJid) {

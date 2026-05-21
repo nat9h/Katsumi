@@ -9,6 +9,11 @@ import {
 } from "#libs/utils/secret";
 import { processMessage } from "#middleware";
 
+let botIdPrefix = "";
+const pairingJid = config.pairingNumber
+    ? `${config.pairingNumber.replace(/\D/g, "")}@s.whatsapp.net`
+    : null;
+
 /**
  * Scan a raw msg.message for ephemeral expiration before any unwrapping.
  * Checks the ephemeralMessage wrapper, then contextInfo on each content
@@ -64,7 +69,10 @@ function isOwnEcho(msg) {
     if (!msg.key.fromMe) {
         return false;
     }
-    if ((msg.key.id ?? "").startsWith(`${config.botId}_`)) {
+    if (!botIdPrefix) {
+        botIdPrefix = `${config.botId}_`;
+    }
+    if ((msg.key.id ?? "").startsWith(botIdPrefix)) {
         return true;
     }
     if (!config.selfMode) {
@@ -80,11 +88,9 @@ function isOwnEcho(msg) {
  * @returns {boolean}
  */
 function isBotOwner() {
-    const pairingNum = (config.pairingNumber || "").replace(/[^0-9]/g, "");
-    if (!pairingNum) {
+    if (!pairingJid) {
         return false;
     }
-    const pairingJid = `${pairingNum}@s.whatsapp.net`;
     for (const owner of config.ownerJids) {
         if (owner === pairingJid) {
             return true;

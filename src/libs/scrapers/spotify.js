@@ -220,3 +220,15 @@ export class Spotify {
 }
 
 export default Spotify;
+
+/**
+ * Cached singleton — token state lives across command invocations so we
+ * skip the `/api/token` + `/clienttoken` round-trips on every search.
+ */
+let _shared;
+export function getSpotify(opts) {
+    if (!_shared) {
+        _shared = new Spotify(opts);
+    }
+    return _shared;
+}
