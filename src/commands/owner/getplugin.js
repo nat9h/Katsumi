@@ -6,7 +6,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
-import { commandMap, commandsDir } from "#libs/utils/plugin";
+import { commandMap } from "#libs/utils/plugin";
+
+const commandsDir = join(process.cwd(), "src", "commands");
 
 export default new CommandBuilder()
     .setName("getplugin")
