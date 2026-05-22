@@ -32,7 +32,7 @@ export default new CommandBuilder()
             });
             const out = (stdout || stderr || "(no output)").trim();
             return interaction.reply(
-                `\`\`\`\n${sanitizeSecrets(truncate(out))}\n\`\`\``,
+                `\`\`\`${sanitizeSecrets(truncate(out))}\`\`\``,
             );
         } catch (err) {
             const out = (

@@ -160,3 +160,21 @@ export function formatTimestamp(input) {
 export function sanitizeFilename(str) {
     return (str || "").replace(/[\\/:*?"<>|]/g, "").slice(0, 60);
 }
+
+/**
+ * Format a number into compact form (1K, 1.5M, etc).
+ * @param {number} n
+ * @returns {string}
+ */
+export function formatCount(n) {
+    if (!n) {
+        return "0";
+    }
+    if (n >= 1_000_000) {
+        return `${(n / 1_000_000).toFixed(1)}M`;
+    }
+    if (n >= 1_000) {
+        return `${(n / 1_000).toFixed(1)}K`;
+    }
+    return String(n);
+}

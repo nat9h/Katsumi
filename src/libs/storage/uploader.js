@@ -226,10 +226,36 @@ export async function freeimage(buffer) {
 }
 
 /**
+ * Upload image to imgdrop.web.id (direct link, permanent, image only, 30MB max).
+ * @param {Buffer} buffer
+ * @param {string} [filename]
+ * @returns {Promise<string>}
+ */
+export async function imgdrop(buffer, filename) {
+    const { blob, name } = await prepare(buffer, filename);
+    const form = new FormData();
+    form.append("file", blob, name);
+
+    const res = await fetch("https://imgdrop.web.id/upload.php", {
+        method: "POST",
+        body: form,
+        headers: {
+            origin: "https://imgdrop.web.id",
+            referer: "https://imgdrop.web.id/",
+        },
+    });
+    const json = await res.json();
+    if (!json?.success || !json?.url) {
+        throw new Error(`imgdrop: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.url;
+}
+
+/**
  * Upload using a named provider.
  * @param {Buffer} buffer
  * @param {string} [filename]
- * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"} [provider="catbox"]
+ * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"|"imgdrop"} [provider="catbox"]
  * @returns {Promise<string>}
  */
 export const providers = {
@@ -242,6 +268,7 @@ export const providers = {
     tmpfilelink,
     quax,
     freeimage,
+    imgdrop,
 };
 
 export async function upload(buffer, filename, provider = "catbox") {

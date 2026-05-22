@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import logger, { print } from "#libs/utils/logger";
 
-const COMMANDS_DIR = join(process.cwd(), "src", "commands");
+export const COMMANDS_DIR = join(process.cwd(), "src", "commands");
 
 /** Resolved command lookup — primary names + aliases all point here. */
 export const commandMap = new Map();
@@ -82,6 +82,7 @@ export async function loadPlugins({ bustCache = false } = {}) {
                 }
 
                 cmd.category = category;
+                cmd.fileName = file;
                 register(cmd);
                 if (!bustCache) {
                     print.cmdLoaded(cmd.name, category);

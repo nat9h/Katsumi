@@ -6,9 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
-import { commandMap } from "#libs/utils/plugin";
-
-const COMMANDS_DIR = join(process.cwd(), "src", "commands");
+import { commandMap, commandsDir } from "#libs/utils/plugin";
 
 export default new CommandBuilder()
     .setName("getplugin")
@@ -36,7 +34,7 @@ export default new CommandBuilder()
             return interaction.reply(`Command *${name}* not found.`);
         }
 
-        const filePath = join(COMMANDS_DIR, cmd.category, `${cmd.name}.js`);
+        const filePath = join(commandsDir, cmd.category, cmd.fileName || `${cmd.name}.js`);
 
         try {
             const content = await readFile(filePath, "utf-8");
