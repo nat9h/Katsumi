@@ -95,15 +95,13 @@ export default new CommandBuilder()
             return interaction.reply("Video URL not available.");
         }
 
-        await interaction.reply(`${text}\n\n_Downloading..._`);
-
         const vid = await axios.get(post.video, {
             responseType: "arraybuffer",
             timeout: 60_000,
         });
         await interaction.followUp({
             video: Buffer.from(vid.data),
-            caption: post.videoHd ? "📹 HD" : undefined,
+            caption: text,
         });
 
         if (post.music) {
