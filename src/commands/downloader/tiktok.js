@@ -101,7 +101,7 @@ export default new CommandBuilder()
         });
         await interaction.followUp({
             video: Buffer.from(vid.data),
-            caption: text,
+            caption: text.trim(),
         });
 
         if (post.music) {

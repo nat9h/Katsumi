@@ -36,7 +36,11 @@ export default new CommandBuilder()
             return interaction.reply(`Command *${name}* not found.`);
         }
 
-        const filePath = join(commandsDir, cmd.category, cmd.fileName || `${cmd.name}.js`);
+        const filePath = join(
+            commandsDir,
+            cmd.category,
+            cmd.fileName || `${cmd.name}.js`,
+        );
 
         try {
             const content = await readFile(filePath, "utf-8");

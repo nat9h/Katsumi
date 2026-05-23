@@ -458,22 +458,17 @@ export class Interaction {
      * Send a poll message.
      *
      * @param {string} name - Poll question
-     * @param {string[]} options - Answer choices
-     * @param {{ selectableCount?: number, isAnonymous?: boolean }} [opts]
+     * @param {string[]} values - Answer choices (plain strings)
+     * @param {{ selectableCount?: number }} [opts]
      * @returns {Promise<object>}
      */
-    async sendPoll(
-        name,
-        options,
-        { selectableCount = 1, isAnonymous = true } = {},
-    ) {
+    async sendPoll(name, values, { selectableCount = 1 } = {}) {
         return this.#send(
             {
                 poll: {
                     name,
-                    options: options.map((optionName) => ({ optionName })),
-                    selectableOptionsCount: selectableCount,
-                    isAnonymous,
+                    values,
+                    selectableCount,
                 },
             },
             await this.#baseOptions(),

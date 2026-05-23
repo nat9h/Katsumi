@@ -115,6 +115,36 @@ OWNER_LID=62xxx@lid
 
 Full reference in [`.env.example`](.env.example).
 
+### Getting Twitter/X Credentials
+
+The Twitter scraper uses internal API endpoints. You need these values in `.env`:
+
+| Variable | How to get |
+|----------|-----------|
+| `X_AUTH_TOKEN` | Login to x.com → DevTools (F12) → Application → Cookies → `auth_token` |
+| `X_CT0` | Same location → `ct0` cookie |
+| `X_BEARER` | DevTools → Network → any request to `api.x.com` → Headers → `Authorization: Bearer ...` |
+| `X_EP_TWEET` | DevTools → Network → filter `graphql` → open a tweet → find `TweetDetail` request → queryId from URL |
+| `X_EP_PROFILE` | Same → visit a profile → find `UserByScreenName` request → queryId from URL |
+
+> **Note:** `X_BEARER` is a static public token shared by all twitter.com users and rarely changes. `X_EP_TWEET` and `X_EP_PROFILE` are GraphQL queryIds that **can change** when Twitter deploys updates. If the scraper suddenly breaks, re-grab these from DevTools.
+
+### Getting Instagram Credentials
+
+The Instagram downloader requires session cookies. Login to Instagram in your browser, then:
+
+1. Open DevTools (F12) → **Application** → **Cookies** → `https://www.instagram.com`
+2. Copy these cookie values:
+
+| Variable | Cookie name | Notes |
+|----------|-------------|-------|
+| `IG_SESSION_ID` | `sessionid` | Required for posts, reels, and story photos |
+| `IG_DS_USER_ID` | `ds_user_id` | Required for story videos |
+| `IG_MID` | `mid` | Required for story videos |
+| `IG_DID` | `ig_did` | Required for story videos |
+
+> **Note:** Session cookies expire periodically. If the IG downloader stops working, re-login to Instagram and grab fresh cookies from DevTools.
+
 ---
 
 ## Structure

@@ -252,10 +252,32 @@ export async function imgdrop(buffer, filename) {
 }
 
 /**
+ * Upload to Nekohime CDN (permanent).
+ * @param {Buffer} buffer
+ * @param {string} [filename]
+ * @returns {Promise<string>}
+ */
+export async function nekohime(buffer, filename) {
+    const { blob, name } = await prepare(buffer, filename);
+    const form = new FormData();
+    form.append("file", blob, name);
+
+    const res = await fetch("https://cdn.nekohime.site/upload", {
+        method: "POST",
+        body: form,
+    });
+    const json = await res.json();
+    if (!json?.files?.[0]?.url) {
+        throw new Error(`Nekohime: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.files[0].url;
+}
+
+/**
  * Upload using a named provider.
  * @param {Buffer} buffer
  * @param {string} [filename]
- * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"|"imgdrop"} [provider="catbox"]
+ * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"|"imgdrop"|"nekohime"} [provider="catbox"]
  * @returns {Promise<string>}
  */
 export const providers = {
@@ -269,6 +291,7 @@ export const providers = {
     quax,
     freeimage,
     imgdrop,
+    nekohime,
 };
 
 export async function upload(buffer, filename, provider = "catbox") {
