@@ -52,7 +52,10 @@ async function isUrlReachable(videoUrl) {
     try {
         const res = await axios.head(videoUrl, {
             timeout: 8_000,
-            headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36" },
+            headers: {
+                "User-Agent":
+                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+            },
         });
         return res.status >= 200 && res.status < 400;
     } catch {
@@ -72,7 +75,8 @@ async function fetchApi(url, hd = "1") {
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+                "User-Agent":
+                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
             },
             timeout: 15_000,
         },
@@ -139,7 +143,8 @@ export async function search(query, { count = 10, cursor = 0 } = {}) {
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+                "User-Agent":
+                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
             },
             timeout: 15_000,
         },
