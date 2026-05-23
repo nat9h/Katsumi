@@ -1,10 +1,13 @@
 /**
  * @fileoverview TikTok scraper via tikwm.com (no API key needed).
- * Supports video download (HD) and search.
+ * Supports video download (HD with fallback) and search.
  * @module scrapers/tiktok
  */
 
 import axios from "axios";
+
+const UA =
+    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36";
 
 function parse(d) {
     return {
@@ -14,6 +17,7 @@ function parse(d) {
         duration: d.duration || 0,
         video: d.hdplay || d.play || "",
         videoHd: d.hdplay || "",
+        videoSd: d.play || "",
         videoWm: d.wmplay || "",
         music: d.music || "",
         musicInfo: {
@@ -43,23 +47,35 @@ function parse(d) {
 }
 
 /**
- * Download a TikTok video by URL.
- * @param {string} url - TikTok video URL
- * @returns {Promise<object>}
+ * Check if a video URL is actually reachable (HEAD request).
+ * @param {string} videoUrl
+ * @returns {Promise<boolean>}
  */
-export async function download(url) {
-    if (!url?.trim()) {
-        throw new Error("TikTok URL is required.");
+async function isUrlReachable(videoUrl) {
+    try {
+        const res = await axios.head(videoUrl, {
+            timeout: 8_000,
+            headers: { "User-Agent": UA },
+        });
+        return res.status >= 200 && res.status < 400;
+    } catch {
+        return false;
     }
+}
 
+/**
+ * Fetch video data from tikwm API.
+ * @param {string} url
+ * @param {string} hd - "1" or "0"
+ */
+async function fetchApi(url, hd = "1") {
     const { data } = await axios.post(
         "https://www.tikwm.com/api/",
-        new URLSearchParams({ url: url.trim(), hd: "1" }).toString(),
+        new URLSearchParams({ url: url.trim(), hd }).toString(),
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent":
-                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+                "User-Agent": UA,
             },
             timeout: 15_000,
         },
@@ -69,7 +85,43 @@ export async function download(url) {
         throw new Error(data.msg || "Failed to fetch TikTok video.");
     }
 
-    return parse(data.data);
+    return data.data;
+}
+
+/**
+ * Download a TikTok video by URL.
+ * Tries HD first, falls back to SD if the HD CDN returns 502/unavailable.
+ * @param {string} url - TikTok video URL
+ * @returns {Promise<object>}
+ */
+export async function download(url) {
+    if (!url?.trim()) {
+        throw new Error("TikTok URL is required.");
+    }
+
+    // Try HD first
+    let d = await fetchApi(url, "1");
+    let result = parse(d);
+
+    // If video URL exists, verify it's reachable
+    if (result.video && !result.images) {
+        const reachable = await isUrlReachable(result.video);
+        if (!reachable && result.videoHd) {
+            // HD failed, try SD URL directly
+            if (result.videoSd && result.videoSd !== result.videoHd) {
+                const sdReachable = await isUrlReachable(result.videoSd);
+                if (sdReachable) {
+                    result.video = result.videoSd;
+                    return result;
+                }
+            }
+            // Both from HD request failed, re-fetch without HD
+            d = await fetchApi(url, "0");
+            result = parse(d);
+        }
+    }
+
+    return result;
 }
 
 /**
@@ -94,8 +146,7 @@ export async function search(query, { count = 10, cursor = 0 } = {}) {
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent":
-                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+                "User-Agent": UA,
             },
             timeout: 15_000,
         },
