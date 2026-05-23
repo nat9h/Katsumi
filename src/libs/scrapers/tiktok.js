@@ -6,9 +6,6 @@
 
 import axios from "axios";
 
-const UA =
-    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36";
-
 function parse(d) {
     return {
         id: d.id,
@@ -55,7 +52,7 @@ async function isUrlReachable(videoUrl) {
     try {
         const res = await axios.head(videoUrl, {
             timeout: 8_000,
-            headers: { "User-Agent": UA },
+            headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36" },
         });
         return res.status >= 200 && res.status < 400;
     } catch {
@@ -75,7 +72,7 @@ async function fetchApi(url, hd = "1") {
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": UA,
+                "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
             },
             timeout: 15_000,
         },
@@ -99,15 +96,12 @@ export async function download(url) {
         throw new Error("TikTok URL is required.");
     }
 
-    // Try HD first
     let d = await fetchApi(url, "1");
     let result = parse(d);
 
-    // If video URL exists, verify it's reachable
     if (result.video && !result.images) {
         const reachable = await isUrlReachable(result.video);
         if (!reachable && result.videoHd) {
-            // HD failed, try SD URL directly
             if (result.videoSd && result.videoSd !== result.videoHd) {
                 const sdReachable = await isUrlReachable(result.videoSd);
                 if (sdReachable) {
@@ -115,7 +109,6 @@ export async function download(url) {
                     return result;
                 }
             }
-            // Both from HD request failed, re-fetch without HD
             d = await fetchApi(url, "0");
             result = parse(d);
         }
@@ -146,7 +139,7 @@ export async function search(query, { count = 10, cursor = 0 } = {}) {
         {
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": UA,
+                "User-Agent": "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
             },
             timeout: 15_000,
         },
