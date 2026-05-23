@@ -16,11 +16,7 @@ export default new CommandBuilder()
     .setReact("🧵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const url = (
-            interaction.body ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const url = (interaction.body || interaction.quoted?.text || "").trim();
 
         if (!url || !/threads\.net/i.test(url)) {
             return interaction.reply(
