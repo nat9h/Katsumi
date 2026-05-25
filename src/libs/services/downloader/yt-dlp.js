@@ -25,7 +25,7 @@ const COOKIES_FILE = join(process.cwd(), "cookies", "yt.txt");
 function buildArgs(extra) {
     const args = [
         "--js-runtimes",
-        "deno",
+        existsSync("/usr/bin/deno") ? "deno" : "node:/usr/bin/node",
         "--remote-components",
         "ejs:npm",
         "--no-warnings",

@@ -237,7 +237,7 @@ async function passesGates(interaction) {
     if (state.selfMode && !interaction.fromMe && !isOwner(interaction)) {
         return false;
     }
-    if (state.isChatBanned(interaction.chatJid)) {
+    if (!isOwner(interaction) && state.isChatBanned(interaction.chatJid)) {
         return false;
     }
     if (!isOwner(interaction) && state.isUserBanned(interaction.user)) {
