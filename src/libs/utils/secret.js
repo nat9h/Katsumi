@@ -103,9 +103,10 @@ export function isSecretEdit(msg) {
  *   plain  = aesDecryptGCM(encPayload, decKey, encIv, '')
  *
  * @param {object} msg - Raw Baileys WAMessage containing secretEncryptedMessage
+ * @param {{ meId?: string, meLid?: string }} [opts] - Bot's own JIDs for fromMe resolution
  * @returns {import('baileys').proto.IMessage|null}
  */
-export function decryptSecretEdit(msg) {
+export function decryptSecretEdit(msg, opts) {
     const message = msg?.message;
     const secretEnc = message?.secretEncryptedMessage;
     if (!secretEnc) {
@@ -126,7 +127,16 @@ export function decryptSecretEdit(msg) {
         const encPayload = Buffer.from(secretEnc.encPayload);
         const encIv = Buffer.from(secretEnc.encIv);
 
-        const sender = msg.key?.participant || msg.key?.remoteJid;
+        let sender = msg.key?.participant || msg.key?.remoteJid;
+        if (msg.key?.fromMe && !msg.key?.participant) {
+            const remoteJid = msg.key.remoteJid || "";
+            if (remoteJid.endsWith("@lid") && opts?.meLid) {
+                sender = opts.meLid.replace(/:.*@/, "@");
+            } else if (opts?.meId) {
+                sender = opts.meId.replace(/:.*@/, "@");
+            }
+        }
+
         if (!sender) {
             return null;
         }

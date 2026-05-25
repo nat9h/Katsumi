@@ -2,6 +2,7 @@ import { areJidsSameUser, jidNormalizedUser } from "baileys";
 import config from "#config";
 import { Interaction } from "#libs/structures/Interaction";
 import logger from "#libs/utils/logger";
+import { findContextInfo } from "#libs/utils/message";
 import { commandMap, customPrefixCommands } from "#libs/utils/plugin";
 import { QueueFullError, userQueue } from "#libs/utils/runtime";
 import { state } from "#state";
@@ -376,6 +377,54 @@ function dispatch(interaction, cmd) {
 }
 
 /**
+ * Track mentions in group messages. Stores up to 50 recent mentions per
+ * user per group in the KV store under `mentions:{groupJid}:{targetJid}`.
+ *
+ * @param {import('../handlers/Client.js').Client} client
+ * @param {Interaction} interaction
+ */
+function trackMentions(client, interaction) {
+    if (!interaction.isGroup) {
+        return;
+    }
+
+    const ctx = interaction.msg.message
+        ? findContextInfo(interaction.msg.message)
+        : null;
+    const mentioned = ctx?.mentionedJid;
+    if (!mentioned?.length) {
+        return;
+    }
+
+    const sender = interaction.user;
+    const text = interaction.text || "";
+    const timestamp = Date.now();
+    const groupJid = interaction.chatJid;
+
+    for (const target of mentioned) {
+        if (target === sender) {
+            continue;
+        }
+
+        const key = `mentions:${groupJid}:${target}`;
+        const list = client.db.get(key) || [];
+
+        list.push({
+            sender,
+            pushName: interaction.userName,
+            text: text.slice(0, 200),
+            timestamp,
+        });
+
+        if (list.length > 50) {
+            list.splice(0, list.length - 50);
+        }
+
+        client.db.set(key, list);
+    }
+}
+
+/**
  * Entry point for every incoming message. Parses the command, runs all
  * checks, and dispatches the handler.
  *
@@ -392,6 +441,8 @@ export async function processMessage(client, msg) {
     if (state.autoRead) {
         interaction.sock.readMessages([msg.key]).catch(() => {});
     }
+
+    trackMentions(client, interaction);
 
     if (await maybeAntiLink(client, interaction)) {
         return;

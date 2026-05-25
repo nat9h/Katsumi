@@ -20,6 +20,7 @@ export default new CommandBuilder()
     .setRateLimit(8_000, 3)
     .setHandler(async (interaction) => {
         const { quoted, chatJid, client, sock, msg, isGroup } = interaction;
+
         if (!quoted) {
             return interaction.reply(
                 "Reply to a message that quotes another message.",
@@ -49,16 +50,18 @@ export default new CommandBuilder()
 
         const content = generateForwardMessageContent(fakeMsg, false);
         const type = Object.keys(content)[0];
+
         if (content[type]?.contextInfo) {
             delete content[type].contextInfo.forwardingScore;
             delete content[type].contextInfo.isForwarded;
         }
 
-        const expiration = interaction.expiration;
         const gen = generateWAMessageFromContent(chatJid, content, {
             userJid: sock.user?.id,
             quoted: msg,
-            ...(expiration ? { ephemeralExpiration: expiration } : {}),
+            ...(interaction.expiration
+                ? { ephemeralExpiration: interaction.expiration }
+                : {}),
         });
 
         await sock.relayMessage(chatJid, gen.message, {

@@ -32,37 +32,29 @@ export default new CommandBuilder()
         }
 
         await interaction.typing();
-
         const result = await facebook.download(url);
 
         if (result.type === "video") {
-            const caption = result.title
-                ? `*Facebook Video*\n\n${result.title}`
-                : "*Facebook Video*";
-
             const { data } = await axios.get(result.video, {
                 responseType: "arraybuffer",
-                timeout: 60_000,
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                },
             });
 
-            await interaction.followUp({
+            return interaction.reply({
                 video: Buffer.from(data),
-                caption,
+                caption: result.title
+                    ? `*Facebook Video*\n\n${result.title}`
+                    : "*Facebook Video*",
             });
-        } else {
-            const caption = result.title
-                ? `*Facebook Post*\n\n${result.title}\n\n📷 ${result.images.length} image(s)`
-                : `*Facebook Post*\n\n📷 ${result.images.length} image(s)`;
+        }
 
-            for (const [i, imgUrl] of result.images.entries()) {
-                await interaction.followUp({
-                    image: { url: imgUrl },
-                    ...(i === 0 ? { caption } : {}),
-                });
-            }
+        const caption = result.title
+            ? `*Facebook Post*\n\n${result.title}\n\n📷 ${result.images.length} image(s)`
+            : `*Facebook Post*\n\n📷 ${result.images.length} image(s)`;
+
+        for (const [i, imgUrl] of result.images.entries()) {
+            await interaction[i === 0 ? "reply" : "followUp"]({
+                image: { url: imgUrl },
+                ...(i === 0 ? { caption } : {}),
+            });
         }
     });

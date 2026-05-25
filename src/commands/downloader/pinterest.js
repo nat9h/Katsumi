@@ -129,5 +129,4 @@ export default new CommandBuilder()
                 });
             }
         }
-    })
-    .build();
+    });

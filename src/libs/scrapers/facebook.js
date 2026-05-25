@@ -10,12 +10,23 @@ class Facebook {
     UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    HEADERS = {
-        "User-Agent": this.UA,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "sec-fetch-mode": "navigate",
-    };
+    VIDEO_HD_PATTERNS = [
+        /hd_src:"(https?[^"]+)"/,
+        /"hd_src":"(https?[^"]+)"/,
+        /hd_src_no_ratelimit:"(https?[^"]+)"/,
+        /"hd_src_no_ratelimit":"(https?[^"]+)"/,
+        /browser_native_hd_url":"(https?[^"]+)"/,
+        /playable_url_quality_hd":"(https?[^"]+)"/,
+    ];
+
+    VIDEO_SD_PATTERNS = [
+        /sd_src:"(https?[^"]+)"/,
+        /"sd_src":"(https?[^"]+)"/,
+        /sd_src_no_ratelimit:"(https?[^"]+)"/,
+        /"sd_src_no_ratelimit":"(https?[^"]+)"/,
+        /browser_native_sd_url":"(https?[^"]+)"/,
+        /playable_url":"(https?[^"]+)"/,
+    ];
 
     /**
      * Decode HTML/JSON entities from extracted strings.
@@ -66,28 +77,53 @@ class Facebook {
     /**
      * Extract video SD/HD URLs from page source.
      * @param {string} html
-     * @returns {{ sd: string|null, hd: string|null }}
+     * @returns {{ hd: string|null, sd: string|null }}
      */
     extractVideo(html) {
-        const hd = this.matchFirst(html, [
-            /hd_src:"(https?[^"]+)"/,
-            /"hd_src":"(https?[^"]+)"/,
-            /hd_src_no_ratelimit:"(https?[^"]+)"/,
-            /"hd_src_no_ratelimit":"(https?[^"]+)"/,
-            /browser_native_hd_url":"(https?[^"]+)"/,
-            /playable_url_quality_hd":"(https?[^"]+)"/,
-        ]);
+        return {
+            hd: this.matchFirst(html, this.VIDEO_HD_PATTERNS),
+            sd: this.matchFirst(html, this.VIDEO_SD_PATTERNS),
+        };
+    }
 
-        const sd = this.matchFirst(html, [
-            /sd_src:"(https?[^"]+)"/,
-            /"sd_src":"(https?[^"]+)"/,
-            /sd_src_no_ratelimit:"(https?[^"]+)"/,
-            /"sd_src_no_ratelimit":"(https?[^"]+)"/,
-            /browser_native_sd_url":"(https?[^"]+)"/,
-            /playable_url":"(https?[^"]+)"/,
-        ]);
+    /**
+     * Extract full post caption from embedded JSON data in page source.
+     * @param {string} html
+     * @returns {string|null}
+     */
+    extractCaption(html) {
+        const msgMatch = html.match(
+            /"message"\s*:\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+        );
+        if (msgMatch) {
+            return this.decode(
+                msgMatch[1]
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\"/g, '"')
+                    .replace(/\\\\/g, "\\"),
+            );
+        }
 
-        return { sd, hd };
+        const actrsMatch = html.match(
+            /"actrs_description"\s*:\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+        );
+        if (actrsMatch) {
+            return this.decode(
+                actrsMatch[1]
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\"/g, '"')
+                    .replace(/\\\\/g, "\\"),
+            );
+        }
+
+        const descMatch = html.match(
+            /<meta\s+property="og:description"\s+content="([^"]+)"/i,
+        );
+        if (descMatch) {
+            return this.decode(descMatch[1]);
+        }
+
+        return null;
     }
 
     /**
@@ -100,7 +136,6 @@ class Facebook {
         const seen = new Set();
         const images = [];
 
-        // Escaped scontent URIs in JSON payloads
         const escaped = [
             ...html.matchAll(
                 /"uri":"(https:\\\/\\\/scontent[^"]+?\.jpg[^"]*)"/g,
@@ -120,17 +155,19 @@ class Facebook {
             images.push(url);
         }
 
-        // Fallback: unescaped scontent URLs
         if (images.length === 0) {
             const raw = [
-                ...html.matchAll(/"(https:\/\/scontent[^"]+?\.jpg[^"]*)"/g),
+                ...html.matchAll(
+                    /"(https:\/\/scontent[^"]+?\.jpg[^"]*)"/g,
+                ),
             ];
             for (const m of raw) {
                 const url = m[1];
                 if (!url.includes("/t39.30808-6/")) {
                     continue;
                 }
-                const key = url.match(/\/(\d+_\d+_\d+_n\.jpg)/)?.[1] || url;
+                const key =
+                    url.match(/\/(\d+_\d+_\d+_n\.jpg)/)?.[1] || url;
                 if (seen.has(key)) {
                     continue;
                 }
@@ -144,7 +181,6 @@ class Facebook {
 
     /**
      * Download media from a public Facebook URL.
-     * Supports videos, reels, and photo posts (single & multi-image).
      * @param {string} url - Facebook video, reel, or photo post URL.
      * @returns {Promise<object>}
      */
@@ -153,15 +189,27 @@ class Facebook {
             throw new Error("Facebook URL is required.");
         }
 
-        const { data: html } = await axios.get(this.normalize(url.trim()), {
-            headers: this.HEADERS,
-            timeout: 15_000,
-            maxRedirects: 5,
-        });
+        const { data: html } = await axios.get(
+            this.normalize(url.trim()),
+            {
+                headers: {
+                    "User-Agent": this.UA,
+                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "sec-fetch-mode": "navigate",
+                },
+                timeout: 15_000,
+                maxRedirects: 5,
+            },
+        );
 
-        const title = (html.match(
-            /<meta\s+property="og:title"\s+content="([^"]+)"/i,
-        ) || html.match(/<title>([^<]+)<\/title>/i))?.[1];
+        const title =
+            this.extractCaption(html) ||
+            (html.match(
+                /<meta\s+property="og:title"\s+content="([^"]+)"/i,
+            ) ||
+                html.match(/<title>([^<]+)<\/title>/i))?.[1] ||
+            "";
 
         const thumbnail = html.match(
             /<meta\s+property="og:image"\s+content="([^"]+)"/i,

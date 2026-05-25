@@ -4,19 +4,6 @@
  */
 
 export class Upscaler {
-    static BASE_URL = "https://get1.imglarger.com/api/UpscalerNew";
-    static UPLOAD_ENDPOINT = "/UploadNew";
-    static STATUS_ENDPOINT = "/CheckStatusNew";
-
-    static headers = {
-        accept: "application/json, text/plain, */*",
-        "accept-language": "en-US,en;q=0.9",
-        origin: "https://imgupscaler.com",
-        referer: "https://imgupscaler.com/",
-        "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-    };
-
     constructor({
         scaleRadio = 2,
         pollIntervalMs = 3000,
@@ -56,10 +43,16 @@ export class Upscaler {
         formData.append("scaleRadio", String(scaleRadio));
 
         const response = await fetch(
-            `${Upscaler.BASE_URL}${Upscaler.UPLOAD_ENDPOINT}`,
+            "https://get1.imglarger.com/api/UpscalerNew/UploadNew",
             {
                 method: "POST",
-                headers: Upscaler.headers,
+                headers: {
+                    accept: "application/json, text/plain, */*",
+                    origin: "https://imgupscaler.com",
+                    referer: "https://imgupscaler.com/",
+                    "user-agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                },
                 body: formData,
             },
         );
@@ -76,12 +69,16 @@ export class Upscaler {
 
     async #checkStatus(code, scaleRadio) {
         const response = await fetch(
-            `${Upscaler.BASE_URL}${Upscaler.STATUS_ENDPOINT}`,
+            "https://get1.imglarger.com/api/UpscalerNew/CheckStatusNew",
             {
                 method: "POST",
                 headers: {
-                    ...Upscaler.headers,
+                    accept: "application/json, text/plain, */*",
                     "content-type": "application/json",
+                    origin: "https://imgupscaler.com",
+                    referer: "https://imgupscaler.com/",
+                    "user-agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
                 },
                 body: JSON.stringify({ code, scaleRadio }),
             },

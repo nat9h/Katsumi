@@ -4,7 +4,7 @@
  */
 
 import axios from "axios";
-import * as tiktok from "#libs/scrapers/tiktok";
+import tiktok from "#libs/scrapers/tiktok";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatCount, formatDuration } from "#libs/utils/format";
 import { selectFromList } from "#libs/utils/interaction";

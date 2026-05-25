@@ -6,153 +6,163 @@
 
 import axios from "axios";
 
-function parse(d) {
-    return {
-        id: d.id,
-        title: d.title || "",
-        cover: d.origin_cover || d.cover || "",
-        duration: d.duration || 0,
-        video: d.hdplay || d.play || "",
-        videoHd: d.hdplay || "",
-        videoSd: d.play || "",
-        videoWm: d.wmplay || "",
-        music: d.music || "",
-        musicInfo: {
-            title: d.music_info?.title || "",
-            author: d.music_info?.author || "",
-            album: d.music_info?.album || "",
-            url: d.music_info?.play || "",
-            cover: d.music_info?.cover || "",
-            duration: d.music_info?.duration || 0,
-        },
-        author: {
-            id: d.author?.id || "",
-            name: d.author?.unique_id || "",
-            nickname: d.author?.nickname || "",
-            avatar: d.author?.avatar || "",
-        },
-        stats: {
-            likes: d.digg_count || 0,
-            comments: d.comment_count || 0,
-            shares: d.share_count || 0,
-            views: d.play_count || 0,
-            saves: d.collect_count || 0,
-        },
-        images: d.images || null,
-        createdAt: d.create_time || 0,
-    };
-}
+class TikTok {
+    UA =
+        "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36";
+    API_BASE = "https://www.tikwm.com/api/";
 
-/**
- * Check if a video URL is actually reachable (HEAD request).
- * @param {string} videoUrl
- * @returns {Promise<boolean>}
- */
-async function isUrlReachable(videoUrl) {
-    try {
-        const res = await axios.head(videoUrl, {
-            timeout: 8_000,
-            headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+    /**
+     * Parse raw tikwm data into a clean, consistent structure.
+     * @param {object} d - Raw tikwm response data
+     * @returns {object}
+     */
+    parse(d) {
+        return {
+            id: d.id,
+            title: d.title || "",
+            cover: d.origin_cover || d.cover || "",
+            duration: d.duration || 0,
+            video: d.hdplay || d.play || "",
+            videoHd: d.hdplay || "",
+            videoSd: d.play || "",
+            videoWm: d.wmplay || "",
+            music: d.music || "",
+            musicInfo: {
+                title: d.music_info?.title || "",
+                author: d.music_info?.author || "",
+                album: d.music_info?.album || "",
+                url: d.music_info?.play || "",
+                cover: d.music_info?.cover || "",
+                duration: d.music_info?.duration || 0,
             },
-        });
-        return res.status >= 200 && res.status < 400;
-    } catch {
-        return false;
-    }
-}
-
-/**
- * Fetch video data from tikwm API.
- * @param {string} url
- * @param {string} hd - "1" or "0"
- */
-async function fetchApi(url, hd = "1") {
-    const { data } = await axios.post(
-        "https://www.tikwm.com/api/",
-        new URLSearchParams({ url: url.trim(), hd }).toString(),
-        {
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent":
-                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+            author: {
+                id: d.author?.id || "",
+                name: d.author?.unique_id || "",
+                nickname: d.author?.nickname || "",
+                avatar: d.author?.avatar || "",
             },
-            timeout: 15_000,
-        },
-    );
-
-    if (data.code !== 0 || !data.data) {
-        throw new Error(data.msg || "Failed to fetch TikTok video.");
+            stats: {
+                likes: d.digg_count || 0,
+                comments: d.comment_count || 0,
+                shares: d.share_count || 0,
+                views: d.play_count || 0,
+                saves: d.collect_count || 0,
+            },
+            images: d.images || null,
+            createdAt: d.create_time || 0,
+        };
     }
 
-    return data.data;
-}
-
-/**
- * Download a TikTok video by URL.
- * Tries HD first, falls back to SD if the HD CDN returns 502/unavailable.
- * @param {string} url - TikTok video URL
- * @returns {Promise<object>}
- */
-export async function download(url) {
-    if (!url?.trim()) {
-        throw new Error("TikTok URL is required.");
-    }
-
-    let d = await fetchApi(url, "1");
-    let result = parse(d);
-
-    if (result.video && !result.images) {
-        const reachable = await isUrlReachable(result.video);
-        if (!reachable && result.videoHd) {
-            if (result.videoSd && result.videoSd !== result.videoHd) {
-                const sdReachable = await isUrlReachable(result.videoSd);
-                if (sdReachable) {
-                    result.video = result.videoSd;
-                    return result;
-                }
-            }
-            d = await fetchApi(url, "0");
-            result = parse(d);
+    /**
+     * Check if a video URL is actually reachable (HEAD request).
+     * @param {string} url
+     * @returns {Promise<boolean>}
+     */
+    async isReachable(url) {
+        try {
+            const res = await axios.head(url, {
+                timeout: 8_000,
+                headers: { "User-Agent": this.UA },
+            });
+            return res.status >= 200 && res.status < 400;
+        } catch {
+            return false;
         }
     }
 
-    return result;
-}
-
-/**
- * Search TikTok videos by keyword.
- * @param {string} query - Search keywords
- * @param {{ count?: number, cursor?: number }} [opts]
- * @returns {Promise<object[]>}
- */
-export async function search(query, { count = 10, cursor = 0 } = {}) {
-    if (!query?.trim()) {
-        throw new Error("Search query is required.");
-    }
-
-    const { data } = await axios.post(
-        "https://www.tikwm.com/api/feed/search",
-        new URLSearchParams({
-            keywords: query.trim(),
-            count: String(count),
-            cursor: String(cursor),
-            hd: "1",
-        }).toString(),
-        {
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent":
-                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.86 Mobile Safari/537.36",
+    /**
+     * Fetch video data from tikwm API.
+     * @param {string} url - TikTok video URL
+     * @param {string} [hd="1"] - HD flag ("1" or "0")
+     * @returns {Promise<object>}
+     */
+    async fetchApi(url, hd = "1") {
+        const { data } = await axios.post(
+            this.API_BASE,
+            new URLSearchParams({ url: url.trim(), hd }).toString(),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": this.UA,
+                },
+                timeout: 15_000,
             },
-            timeout: 15_000,
-        },
-    );
+        );
 
-    if (data.code !== 0 || !data.data?.videos?.length) {
-        throw new Error(data.msg || "No results found.");
+        if (data.code !== 0 || !data.data) {
+            throw new Error(data.msg || "Failed to fetch TikTok video.");
+        }
+
+        return data.data;
     }
 
-    return data.data.videos.map(parse);
+    /**
+     * Download a TikTok video by URL.
+     * Tries HD first, falls back to SD if the HD CDN returns 502/unavailable.
+     * @param {string} url - TikTok video URL
+     * @returns {Promise<object>}
+     */
+    async download(url) {
+        if (!url?.trim()) {
+            throw new Error("TikTok URL is required.");
+        }
+
+        let d = await this.fetchApi(url, "1");
+        let result = this.parse(d);
+
+        if (result.video && !result.images) {
+            const hdOk = await this.isReachable(result.video);
+
+            if (!hdOk && result.videoHd) {
+                if (result.videoSd && result.videoSd !== result.videoHd) {
+                    const sdOk = await this.isReachable(result.videoSd);
+                    if (sdOk) {
+                        result.video = result.videoSd;
+                        return result;
+                    }
+                }
+                d = await this.fetchApi(url, "0");
+                result = this.parse(d);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Search TikTok videos by keyword.
+     * @param {string} query - Search keywords
+     * @param {{ count?: number, cursor?: number }} [opts]
+     * @returns {Promise<object[]>}
+     */
+    async search(query, { count = 10, cursor = 0 } = {}) {
+        if (!query?.trim()) {
+            throw new Error("Search query is required.");
+        }
+
+        const { data } = await axios.post(
+            `${this.API_BASE}feed/search`,
+            new URLSearchParams({
+                keywords: query.trim(),
+                count: String(count),
+                cursor: String(cursor),
+                hd: "1",
+            }).toString(),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": this.UA,
+                },
+                timeout: 15_000,
+            },
+        );
+
+        if (data.code !== 0 || !data.data?.videos?.length) {
+            throw new Error(data.msg || "No results found.");
+        }
+
+        return data.data.videos.map((v) => this.parse(v));
+    }
 }
+
+export default new TikTok();

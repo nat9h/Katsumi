@@ -7,7 +7,7 @@
 import axios from "axios";
 
 class Instagram {
-    UA =
+    #ua =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
     DOC_ID = "8845758582119845";
 
@@ -104,7 +104,7 @@ class Instagram {
             }).toString(),
             {
                 headers: {
-                    "User-Agent": this.UA,
+                    "User-Agent": this.#ua,
                     "Content-Type": "application/x-www-form-urlencoded",
                     "X-IG-App-ID": "936619743392459",
                     "X-CSRFToken": csrf,
@@ -237,7 +237,7 @@ class Instagram {
                 `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${ownerId}`,
                 {
                     headers: {
-                        "User-Agent": this.UA,
+                        "User-Agent": this.#ua,
                         "X-IG-App-ID": "936619743392459",
                         "X-CSRFToken": csrf,
                         "X-Requested-With": "XMLHttpRequest",
@@ -352,7 +352,7 @@ class Instagram {
         const tag = query.trim().replace(/^#/, "").toLowerCase();
         const { cookies, csrf } = this.getSession();
         const headers = {
-            "User-Agent": this.UA,
+            "User-Agent": this.#ua,
             "X-IG-App-ID": "936619743392459",
             "X-CSRFToken": csrf,
             "X-Requested-With": "XMLHttpRequest",

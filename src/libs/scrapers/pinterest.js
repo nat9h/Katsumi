@@ -5,21 +5,17 @@
  */
 
 import { unlink, writeFile } from "node:fs/promises";
-import https from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import qs from "node:querystring";
 
-/**
- * Pick the highest quality video URL from a pin object.
- * @param {object} pin
- * @returns {string|null}
- */
+/** Pick the highest quality video URL from a pin object. */
 function bestVideo(pin) {
     const list = pin?.videos?.video_list;
     if (!list) {
         return null;
     }
+
     for (const key of [
         "V_1080P",
         "V_720P",
@@ -35,11 +31,7 @@ function bestVideo(pin) {
     return Object.values(list).find((v) => v?.url)?.url || null;
 }
 
-/**
- * Pick the highest resolution image URL from a pin object.
- * @param {object} pin
- * @returns {string|null}
- */
+/** Pick the highest resolution image URL from a pin object. */
 function bestImage(pin) {
     return (
         pin?.images?.orig?.url ||
@@ -52,24 +44,23 @@ function bestImage(pin) {
 }
 
 class Pinterest {
-    UA =
+    #ua =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-    agent = new https.Agent({ keepAlive: true });
-    cookies = "";
-    csrf = "";
-    ready = false;
+    #cookies = "";
+    #csrf = "";
+    #ready = false;
 
     /**
      * Initialize guest session (cookies + CSRF token) from Pinterest homepage.
      * Safe to call multiple times — only runs once.
      */
     async init() {
-        if (this.ready) {
+        if (this.#ready) {
             return;
         }
 
         const res = await fetch("https://www.pinterest.com/", {
-            headers: { "User-Agent": this.UA, Accept: "text/html" },
+            headers: { "User-Agent": this.#ua, Accept: "text/html" },
             redirect: "follow",
         });
 
@@ -85,29 +76,25 @@ class Pinterest {
             .map((c) => c.split(";")[0])
             .filter(Boolean);
 
-        this.cookies = pairs.join("; ");
-        this.csrf =
+        this.#cookies = pairs.join("; ");
+        this.#csrf =
             (pairs.find((c) => c.startsWith("csrftoken=")) || "").split(
                 "=",
             )[1] || "";
-        this.ready = true;
+        this.#ready = true;
     }
 
-    /**
-     * Build common headers for Pinterest resource requests.
-     * @param {string} referer
-     * @returns {object}
-     */
-    headers(referer) {
+    /** Build common headers for Pinterest resource requests. */
+    #headers(referer) {
         return {
-            "User-Agent": this.UA,
+            "User-Agent": this.#ua,
             Accept: "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-CSRFToken": this.csrf,
+            "X-CSRFToken": this.#csrf,
             "X-Requested-With": "XMLHttpRequest",
             Origin: "https://www.pinterest.com",
             Referer: referer,
-            Cookie: this.cookies,
+            Cookie: this.#cookies,
         };
     }
 
@@ -141,7 +128,9 @@ class Pinterest {
             "https://www.pinterest.com/resource/BaseSearchResource/get/",
             {
                 method: "POST",
-                headers: this.headers(`https://www.pinterest.com${sourcePath}`),
+                headers: this.#headers(
+                    `https://www.pinterest.com${sourcePath}`,
+                ),
                 body,
                 redirect: "follow",
             },
@@ -181,7 +170,7 @@ class Pinterest {
 
         for (let i = 0; i < 6; i++) {
             const res = await fetch(current, {
-                headers: { "User-Agent": this.UA },
+                headers: { "User-Agent": this.#ua },
                 redirect: "manual",
             });
             const location = res.headers.get("location");
@@ -194,8 +183,9 @@ class Pinterest {
             current = location;
         }
 
+        // Final fallback: follow all redirects
         const res = await fetch(url, {
-            headers: { "User-Agent": this.UA },
+            headers: { "User-Agent": this.#ua },
             redirect: "follow",
         });
         return res.url;
@@ -231,7 +221,9 @@ class Pinterest {
             "https://www.pinterest.com/resource/PinResource/get/",
             {
                 method: "POST",
-                headers: this.headers(`https://www.pinterest.com${sourcePath}`),
+                headers: this.#headers(
+                    `https://www.pinterest.com${sourcePath}`,
+                ),
                 body,
             },
         );
@@ -260,9 +252,10 @@ class Pinterest {
         const resolved = await this.resolveUrl(url.trim());
         const pinId = this.extractId(resolved);
 
+        // Fallback: scrape HTML if no pin ID found
         if (!pinId) {
             const res = await fetch(resolved, {
-                headers: { "User-Agent": this.UA },
+                headers: { "User-Agent": this.#ua },
             });
             const html = await res.text();
 
@@ -327,7 +320,7 @@ class Pinterest {
                 {
                     method: "PUT",
                     body: form,
-                    headers: { "User-Agent": this.UA },
+                    headers: { "User-Agent": this.#ua },
                 },
             );
 

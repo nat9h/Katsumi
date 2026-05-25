@@ -4,7 +4,7 @@
  */
 
 import axios from "axios";
-import { threads } from "#libs/scrapers/threads";
+import threads from "#libs/scrapers/threads";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
 export default new CommandBuilder()
@@ -26,7 +26,7 @@ export default new CommandBuilder()
 
         await interaction.typing();
 
-        const post = await threads(url);
+        const post = await threads.download(url);
         const caption = post.caption || "";
 
         for (const [i, mediaUrl] of post.media.entries()) {

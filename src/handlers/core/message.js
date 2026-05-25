@@ -1,4 +1,4 @@
-import { areJidsSameUser, jidNormalizedUser } from "baileys";
+import { areJidsSameUser, jidNormalizedUser, proto } from "baileys";
 import config from "#config";
 import { print } from "#libs/utils/logger";
 import { extractText } from "#libs/utils/message";
@@ -227,7 +227,9 @@ function recordStats(client, msg) {
  * @param {object} msg
  */
 function handleSecretEdit(client, msg) {
-    const decoded = decryptSecretEdit(msg);
+    const meId = client.sock?.user?.id;
+    const meLid = client.sock?.user?.lid;
+    const decoded = decryptSecretEdit(msg, { meId, meLid });
     if (!decoded) {
         return;
     }
@@ -252,7 +254,6 @@ function handleSecretEdit(client, msg) {
     }
 
     const targetKey = msg.message.secretEncryptedMessage.targetMessageKey;
-    const fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
     const isGroup = (targetKey?.remoteJid || msg.key.remoteJid || "").endsWith(
         "@g.us",
     );
@@ -260,6 +261,18 @@ function handleSecretEdit(client, msg) {
     const remoteJid = isGroup
         ? targetKey?.remoteJid || msg.key.remoteJid
         : msg.key.remoteJid || targetKey?.remoteJid;
+
+    // In self-DM, force fromMe true when the chat JID matches the bot's own JID.
+    let fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
+    if (
+        !fromMe &&
+        !isGroup &&
+        isDmJid(remoteJid) &&
+        client.sock?.user?.id &&
+        areJidsSameUser(remoteJid, client.sock.user.id)
+    ) {
+        fromMe = true;
+    }
 
     const text = extractText(content);
     if (!text) {
@@ -310,20 +323,54 @@ export async function handleMessagesUpsert(client, { type, messages }) {
             continue;
         }
 
-        const protoMsg = msg.message?.protocolMessage;
+        // Unwrap ephemeralMessage to find protocolMessage / secretEncryptedMessage
+        // inside disappearing-message chats.
+        const innerMessage =
+            msg.message?.ephemeralMessage?.message || msg.message;
+
+        if (!isSecretEdit(msg) && innerMessage?.secretEncryptedMessage) {
+            const secretEncType =
+                innerMessage.secretEncryptedMessage.secretEncType;
+            const editType =
+                proto.Message.SecretEncryptedMessage.SecretEncType.MESSAGE_EDIT;
+            if (
+                secretEncType === editType ||
+                secretEncType === 2 ||
+                secretEncType === "MESSAGE_EDIT"
+            ) {
+                const originalMessage = msg.message;
+                msg.message = innerMessage;
+                handleSecretEdit(client, msg);
+                msg.message = originalMessage;
+                continue;
+            }
+        }
+
+        const protoMsg =
+            innerMessage?.protocolMessage || msg.message?.protocolMessage;
         if (protoMsg?.type === 14 || protoMsg?.type === "MESSAGE_EDIT") {
             if (protoMsg.editedMessage) {
                 const targetKey = protoMsg.key;
+                const remoteJid = targetKey?.remoteJid || msg.key.remoteJid;
+
+                let fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
+                if (
+                    !fromMe &&
+                    isDmJid(remoteJid) &&
+                    client.sock?.user?.id &&
+                    areJidsSameUser(remoteJid, client.sock.user.id)
+                ) {
+                    fromMe = true;
+                }
+
                 const text = extractText(protoMsg.editedMessage);
 
                 if (text) {
                     processMessage(client, {
                         key: {
-                            remoteJid:
-                                targetKey?.remoteJid || msg.key.remoteJid,
+                            remoteJid,
                             id: targetKey?.id || msg.key.id,
-                            fromMe:
-                                msg.key.fromMe ?? targetKey?.fromMe ?? false,
+                            fromMe,
                             participant:
                                 targetKey?.participant || msg.key.participant,
                         },
@@ -333,10 +380,7 @@ export async function handleMessagesUpsert(client, { type, messages }) {
                         _isEditReprocess: true,
                         _expiration:
                             extractExpiration(msg.message) ||
-                            getCachedExpiration(
-                                client,
-                                targetKey?.remoteJid || msg.key.remoteJid,
-                            ) ||
+                            getCachedExpiration(client, remoteJid) ||
                             0,
                     });
 

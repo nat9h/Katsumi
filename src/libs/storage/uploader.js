@@ -274,24 +274,51 @@ export async function nekohime(buffer, filename) {
 }
 
 /**
+ * Upload to athars.space (direct link).
+ * @param {Buffer} buffer
+ * @param {string} [filename]
+ * @returns {Promise<string>}
+ */
+export async function athars(buffer, filename) {
+    const { blob, name } = await prepare(buffer, filename);
+    const form = new FormData();
+    form.append("file", blob, name);
+
+    const res = await fetch("https://athars.space/upload.php", {
+        method: "POST",
+        body: form,
+        headers: {
+            origin: "https://athars.space",
+            referer: "https://athars.space/",
+        },
+    });
+    const text = await res.text();
+    if (!res.ok || !text.startsWith("http")) {
+        throw new Error(`athars: ${text.slice(0, 200)}`);
+    }
+    return text.trim();
+}
+
+/**
  * Upload using a named provider.
  * @param {Buffer} buffer
  * @param {string} [filename]
- * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"|"imgdrop"|"nekohime"} [provider="catbox"]
+ * @param {"catbox"|"litterbox"|"tmpfiles"|"uguu"|"imgur"|"x0"|"tmpfilelink"|"quax"|"freeimage"|"imgdrop"|"nekohime"|"athars"} [provider="catbox"]
  * @returns {Promise<string>}
  */
 export const providers = {
+    athars,
     catbox,
-    litterbox,
-    tmpfiles,
-    uguu,
-    imgur,
-    x0,
-    tmpfilelink,
-    quax,
     freeimage,
     imgdrop,
+    imgur,
+    litterbox,
     nekohime,
+    quax,
+    tmpfilelink,
+    tmpfiles,
+    uguu,
+    x0,
 };
 
 export async function upload(buffer, filename, provider = "catbox") {
