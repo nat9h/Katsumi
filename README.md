@@ -127,7 +127,8 @@ The Twitter scraper uses internal API endpoints. You need these values in `.env`
 | `X_EP_TWEET` | DevTools → Network → filter `graphql` → open a tweet → find `TweetDetail` request → queryId from URL |
 | `X_EP_PROFILE` | Same → visit a profile → find `UserByScreenName` request → queryId from URL |
 
-> **Note:** `X_BEARER` is a static public token shared by all twitter.com users and rarely changes. `X_EP_TWEET` and `X_EP_PROFILE` are GraphQL queryIds that **can change** when Twitter deploys updates. If the scraper suddenly breaks, re-grab these from DevTools.
+> [!NOTE]
+> `X_BEARER` is a static public token shared by all twitter.com users and rarely changes. `X_EP_TWEET` and `X_EP_PROFILE` are GraphQL queryIds that **can change** when Twitter deploys updates. If the scraper suddenly breaks, re-grab these from DevTools.
 
 ### Getting Instagram Credentials
 
@@ -143,7 +144,20 @@ The Instagram downloader requires session cookies. Login to Instagram in your br
 | `IG_MID` | `mid` | Required for story videos |
 | `IG_DID` | `ig_did` | Required for story videos |
 
-> **Note:** Session cookies expire periodically. If the IG downloader stops working, re-login to Instagram and grab fresh cookies from DevTools.
+> [!CAUTION]
+> Session cookies expire periodically. If the IG downloader stops working, re-login to Instagram and grab fresh cookies from DevTools.
+
+### Getting YouTube Cookies
+
+The YouTube downloader uses `yt-dlp` with a cookies file for authenticated access (bypasses age-restriction and rate limits).
+
+1. Install a browser extension like [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+2. Login to [youtube.com](https://youtube.com)
+3. Export cookies in **Netscape format**
+4. Save the file as `cookies/yt.txt`
+
+> [!NOTE]
+> Cookies expire periodically. If YouTube downloads start failing (403 errors), re-export fresh cookies from your browser.
 
 ---
 
