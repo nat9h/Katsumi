@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setAliases("del", "d")
     .setDescription("Delete a quoted message")
     .setUsage("{prefix}{name}")
-    .setGuard("group")
+    .setGuard("group", "admin", "botAdmin")
     .setHandler(async (interaction) => {
         const ctx = findContextInfo(interaction.msg.message);
         if (!ctx?.stanzaId) {
