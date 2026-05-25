@@ -157,17 +157,14 @@ class Facebook {
 
         if (images.length === 0) {
             const raw = [
-                ...html.matchAll(
-                    /"(https:\/\/scontent[^"]+?\.jpg[^"]*)"/g,
-                ),
+                ...html.matchAll(/"(https:\/\/scontent[^"]+?\.jpg[^"]*)"/g),
             ];
             for (const m of raw) {
                 const url = m[1];
                 if (!url.includes("/t39.30808-6/")) {
                     continue;
                 }
-                const key =
-                    url.match(/\/(\d+_\d+_\d+_n\.jpg)/)?.[1] || url;
+                const key = url.match(/\/(\d+_\d+_\d+_n\.jpg)/)?.[1] || url;
                 if (seen.has(key)) {
                     continue;
                 }
@@ -189,25 +186,20 @@ class Facebook {
             throw new Error("Facebook URL is required.");
         }
 
-        const { data: html } = await axios.get(
-            this.normalize(url.trim()),
-            {
-                headers: {
-                    "User-Agent": this.UA,
-                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "sec-fetch-mode": "navigate",
-                },
-                timeout: 15_000,
-                maxRedirects: 5,
+        const { data: html } = await axios.get(this.normalize(url.trim()), {
+            headers: {
+                "User-Agent": this.UA,
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "sec-fetch-mode": "navigate",
             },
-        );
+            timeout: 15_000,
+            maxRedirects: 5,
+        });
 
         const title =
             this.extractCaption(html) ||
-            (html.match(
-                /<meta\s+property="og:title"\s+content="([^"]+)"/i,
-            ) ||
+            (html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
                 html.match(/<title>([^<]+)<\/title>/i))?.[1] ||
             "";
 

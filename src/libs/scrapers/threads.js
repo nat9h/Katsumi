@@ -69,9 +69,7 @@ class Threads {
 
         return [...html.matchAll(/<img[^>]+src="(https:\/\/scontent[^"]+)"/g)]
             .map((m) => this.decode(m[1]))
-            .filter(
-                (u) => !u.includes("s100x100") && !u.includes("s150x150"),
-            );
+            .filter((u) => !u.includes("s100x100") && !u.includes("s150x150"));
     }
 
     /**
@@ -113,9 +111,7 @@ class Threads {
 
         const media = this.getMedia(html);
         if (!media.length) {
-            throw new Error(
-                "No media found. Post may be private or invalid.",
-            );
+            throw new Error("No media found. Post may be private or invalid.");
         }
 
         return { media, caption: this.getCaption(html) };

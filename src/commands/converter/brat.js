@@ -43,7 +43,9 @@ export default new CommandBuilder()
             const arrayBuffer = await res.arrayBuffer();
             buffer = Buffer.from(arrayBuffer);
         } catch (err) {
-            return interaction.reply(`Failed to fetch brat image: ${err.message}`);
+            return interaction.reply(
+                `Failed to fetch brat image: ${err.message}`,
+            );
         }
 
         let sticker;
@@ -54,7 +56,9 @@ export default new CommandBuilder()
                 author: interaction.userName,
             });
         } catch (err) {
-            return interaction.reply(`Failed to create sticker: ${err.message}`);
+            return interaction.reply(
+                `Failed to create sticker: ${err.message}`,
+            );
         }
 
         return interaction.reply({ sticker });

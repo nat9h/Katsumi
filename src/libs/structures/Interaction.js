@@ -476,6 +476,74 @@ export class Interaction {
     }
 
     /**
+     * Send multiple images/videos as an album (grouped media).
+     * Uses Baileys native album support with albumParentKey.
+     *
+     * @param {Array<{ url?: string, buffer?: Buffer, type?: 'image'|'video' }>} items
+     *   Each item should have either `url` or `buffer`, and optionally `type` (defaults to 'image').
+     * @param {{ caption?: string, ephemeralExpiration?: number }} [opts]
+     * @returns {Promise<object>} The album parent message
+     */
+    async sendAlbum(items, { caption = "", ephemeralExpiration } = {}) {
+        if (!items?.length) {
+            throw new Error("sendAlbum requires at least 1 item.");
+        }
+
+        const expiration =
+            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
+
+        const imageCount = items.filter(
+            (i) => (i.type || "image") === "image",
+        ).length;
+        const videoCount = items.filter((i) => i.type === "video").length;
+
+        const baseOpts = { messageId: this.client.generateMsgId() };
+        if (expiration > 0) {
+            baseOpts.ephemeralExpiration = expiration;
+        }
+
+        const albumMsg = await this.sock.sendMessage(
+            this.chatJid,
+            {
+                album: {
+                    expectedImageCount: imageCount,
+                    expectedVideoCount: videoCount,
+                },
+            },
+            baseOpts,
+        );
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const type = item.type || "image";
+            const media = item.buffer || { url: item.url };
+
+            const content =
+                type === "video" ? { video: media } : { image: media };
+
+            if (i === 0 && caption) {
+                content.caption = caption;
+            }
+
+            const itemOpts = { messageId: this.client.generateMsgId() };
+            if (expiration > 0) {
+                itemOpts.ephemeralExpiration = expiration;
+            }
+
+            await this.sock.sendMessage(
+                this.chatJid,
+                { ...content, albumParentKey: albumMsg.key },
+                itemOpts,
+            );
+        }
+
+        this._replied = true;
+        this._lastMsg = albumMsg;
+        this.stopTyping().catch(() => {});
+        return albumMsg;
+    }
+
+    /**
      * Create a message collector scoped to this chat and user.
      *
      * @param {{ filter?: Function, time?: number, max?: number }} [opts]

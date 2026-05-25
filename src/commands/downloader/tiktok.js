@@ -68,15 +68,13 @@ export default new CommandBuilder()
                 : []),
         ].join("\n");
 
-        // Slideshow
         if (post.images?.length) {
-            await interaction.reply({
-                image: { url: post.images[0] },
-                caption: text,
-            });
-            for (const url of post.images.slice(1)) {
-                await interaction.followUp({ image: { url } });
-            }
+            const albumItems = post.images.map((url) => ({
+                url,
+                type: "image",
+            }));
+            await interaction.sendAlbum(albumItems, { caption: text });
+
             if (post.music) {
                 const { data } = await axios.get(post.music, {
                     responseType: "arraybuffer",
