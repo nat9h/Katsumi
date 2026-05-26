@@ -69,6 +69,28 @@ export async function extractAudio(buffer, inExt = "mp4") {
 }
 
 /**
+ * Convert audio buffer to WAV (PCM s16le, 44100Hz, stereo).
+ * Useful for audio processing and compatibility.
+ *
+ * @param {Buffer} buffer - Input audio buffer.
+ * @param {string} [inExt="ogg"] - Input file extension hint.
+ * @returns {Promise<Buffer>} WAV audio buffer.
+ */
+export async function toWav(buffer, inExt = "ogg") {
+    return runFfmpeg(buffer, inExt, "wav", (cmd) => {
+        cmd.outputOptions([
+            "-vn",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+        ]);
+    });
+}
+
+/**
  * Convert a WebP sticker buffer to a PNG image.
  * Extracts only the first frame for animated stickers.
  *
@@ -102,6 +124,30 @@ export async function stickerToVideo(buffer) {
             "-preset",
             "veryfast",
             "-an",
+        ]);
+    });
+}
+
+/**
+ * Decode audio buffer to raw PCM (s16le, mono, 16kHz).
+ * Used for audio fingerprinting and recognition.
+ *
+ * @param {Buffer} inputBuffer - Input audio buffer.
+ * @param {string} [inExt="mp3"] - Input file extension hint.
+ * @returns {Promise<Buffer>} Raw PCM buffer (s16le, 16kHz, mono).
+ */
+export async function decodeToRawPCM(inputBuffer, inExt = "mp3") {
+    return runFfmpeg(inputBuffer, inExt, "pcm", (cmd) => {
+        cmd.outputOptions([
+            "-vn",
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
         ]);
     });
 }
