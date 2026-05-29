@@ -1,5 +1,9 @@
 import { areJidsSameUser, jidNormalizedUser, proto } from "baileys";
 import config from "#config";
+import {
+    detectReactionFromUpsert,
+    handleMessageRevoke,
+} from "#handlers/core/listeners";
 import { print } from "#libs/utils/logger";
 import { extractText } from "#libs/utils/message";
 import {
@@ -7,6 +11,7 @@ import {
     isSecretEdit,
     storeSecret,
 } from "#libs/utils/secret";
+import { captureStatus } from "#libs/utils/status";
 import { processMessage } from "#middleware";
 
 let botIdPrefix = "";
@@ -315,6 +320,11 @@ export async function handleMessagesUpsert(client, { type, messages }) {
             continue;
         }
 
+        if (msg.key?.remoteJid === "status@broadcast") {
+            captureStatus(msg);
+            continue;
+        }
+
         syncEphemeral(client, msg);
         storeSecret(msg);
 
@@ -323,8 +333,6 @@ export async function handleMessagesUpsert(client, { type, messages }) {
             continue;
         }
 
-        // Unwrap ephemeralMessage to find protocolMessage / secretEncryptedMessage
-        // inside disappearing-message chats.
         const innerMessage =
             msg.message?.ephemeralMessage?.message || msg.message;
 
@@ -387,6 +395,17 @@ export async function handleMessagesUpsert(client, { type, messages }) {
                     print.info(`[edit-proto] re-processing "${text}"`);
                 }
             }
+            continue;
+        }
+
+        if (protoMsg) {
+            const revoked = handleMessageRevoke(client, msg);
+            if (revoked) {
+                continue;
+            }
+        }
+
+        if (detectReactionFromUpsert(client, msg)) {
             continue;
         }
 

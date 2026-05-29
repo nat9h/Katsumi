@@ -14,7 +14,17 @@ import {
     handleGroupEvents,
     handleParticipantsForWelcome,
 } from "#handlers/core/group";
+import {
+    handlePollVote,
+    handleReactions,
+    registerWebSocketListeners,
+} from "#handlers/core/listeners";
 import { handleMessagesUpsert } from "#handlers/core/message";
+import {
+    createHealthMonitor,
+    createUptimeTracker,
+    teardownSocket,
+} from "#libs/utils/connection";
 import logger, { print } from "#libs/utils/logger";
 import { loadPlugins, reloadPlugins } from "#libs/utils/plugin";
 import { MemCache, StatsAccumulator } from "#libs/utils/runtime";
@@ -42,12 +52,14 @@ export class Client extends EventEmitter {
 
         this.groupCache = new MemCache({ ttl: 5 * 60_000, max: 300 });
         this.ephemeralCache = new MemCache({ ttl: 60 * 60_000, max: 1000 });
-        // The message cache is only used for retrying decryption of recently
-        // sent messages; a smaller window keeps RSS predictable.
         this.messageCache = new MemCache({ ttl: 15 * 60_000, max: 1500 });
 
         state.init(this.db);
         this.stats = new StatsAccumulator(this.db, { flushMs: 30_000 });
+        this.uptime = createUptimeTracker();
+
+        /** @type {ReturnType<typeof createHealthMonitor>|null} */
+        this.healthMonitor = null;
 
         this.#reminderTimer = setInterval(
             () => this.#processReminders(),
@@ -86,6 +98,7 @@ export class Client extends EventEmitter {
         if (sent?.key?.id) {
             this.messageCache.set(`${jid}_${sent.key.id}`, sent.message);
         }
+        this.healthMonitor?.touch();
         return sent;
     }
 
@@ -164,21 +177,8 @@ export class Client extends EventEmitter {
     async _connect() {
         const { version } = await fetchLatestBaileysVersion();
 
-        // Tear down any previous socket before replacing it. removeAllListeners
-        // alone leaves the underlying WebSocket / keep-alive timers alive,
-        // which slowly grows RSS across reconnects.
-        const prev = this.sock;
-        if (prev) {
-            try {
-                prev.ev.removeAllListeners();
-            } catch {}
-            try {
-                prev.ws?.close?.();
-            } catch {}
-            try {
-                prev.end?.(undefined);
-            } catch {}
-        }
+        teardownSocket(this.sock);
+        this.uptime.stop();
 
         this.sock = makeWASocket({
             version,
@@ -198,7 +198,24 @@ export class Client extends EventEmitter {
                 proto.Message.fromObject({}),
         });
 
+        if (!this.healthMonitor) {
+            this.healthMonitor = createHealthMonitor(this, {
+                silentTimeoutMs: 90_000,
+                checkIntervalMs: 30_000,
+                onDead: () => {
+                    if (!this._shuttingDown) {
+                        print.warn("Health monitor triggered reconnect");
+                        teardownSocket(this.sock);
+                        this._connect();
+                    }
+                },
+            });
+        } else {
+            this.healthMonitor.rehook();
+        }
+
         this.#registerEvents();
+        registerWebSocketListeners(this);
     }
 
     async #resolveGroup(jid) {
@@ -224,7 +241,10 @@ export class Client extends EventEmitter {
         sock.ev.on("messages.upsert", (m) => handleMessagesUpsert(this, m));
         sock.ev.on("messages.update", (u) => this.#onMessagesUpdate(u));
         sock.ev.on("messages.delete", (d) => this.emit("messageDelete", d));
-        sock.ev.on("messages.reaction", (r) => this.emit("messageReaction", r));
+        sock.ev.on("messages.reaction", (r) => {
+            this.emit("messageReaction", r);
+            handleReactions(this, r);
+        });
 
         sock.ev.on("contacts.upsert", (c) => this.#upsertContacts(c));
         sock.ev.on("contacts.update", (c) => this.#upsertContacts(c));
@@ -339,11 +359,13 @@ export class Client extends EventEmitter {
             if (!u.pollUpdates) {
                 continue;
             }
-            this.emit("pollUpdate", {
+            const pollData = {
                 key: u.key,
                 pollUpdates: u.pollUpdates,
                 remoteJid: u.key.remoteJid,
-            });
+            };
+            this.emit("pollUpdate", pollData);
+            handlePollVote(this, pollData);
         }
     }
 
@@ -402,6 +424,12 @@ export class Client extends EventEmitter {
             this._shuttingDown = true;
             print.warn(`Shutting down (${signal})…`);
 
+            try {
+                this.healthMonitor?.destroy();
+            } catch {}
+            try {
+                this.uptime.stop();
+            } catch {}
             try {
                 this.stats?.destroy();
             } catch {}

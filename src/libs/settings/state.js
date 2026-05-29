@@ -13,6 +13,7 @@ const TOGGLES = [
     "noPrefix",
     "antiCall",
     "autoRead",
+    "warmup",
 ];
 
 const generateBotId = () =>

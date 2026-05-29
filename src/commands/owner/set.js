@@ -44,6 +44,11 @@ const TOGGLES = {
         set: (v) => state.setAutoRead(v),
         label: "Auto-read",
     },
+    warmup: {
+        get: () => state.warmup,
+        set: (v) => state.setWarmup(v),
+        label: "Warmup",
+    },
 };
 
 export default new CommandBuilder()
@@ -51,7 +56,7 @@ export default new CommandBuilder()
     .setAliases("setting", "settings")
     .setDescription("Bot settings (owner only)")
     .setUsage(
-        "{prefix}{name} <self|admin|private|anticall|autoread|ban|unban|banlist>",
+        "{prefix}{name} <self|admin|private|anticall|autoread|warmup|ban|unban|banlist>",
     )
     .setExample("{prefix}set self on")
     .setGuard("owner")
@@ -69,6 +74,7 @@ export default new CommandBuilder()
                     `• Private only: *${statusIcon(state.privateOnly)}*`,
                     `• Anti-call: *${statusIcon(state.antiCall)}*`,
                     `• Auto-read: *${statusIcon(state.autoRead)}*`,
+                    `• Warmup: *${statusIcon(state.warmup)}*`,
                     `• Banned chats: *${state.getBannedChats().length}*`,
                     `• Banned users: *${state.getBannedUsers().length}*`,
                 ].join("\n"),
@@ -219,7 +225,7 @@ export default new CommandBuilder()
 
             default:
                 return interaction.reply(
-                    `Unknown: *${action}*\n\nAvailable: \`self\`, \`admin\`, \`private\`, \`anticall\`, \`autoread\`, \`ban\`, \`unban\`, \`banlist\``,
+                    `Unknown: *${action}*\n\nAvailable: \`self\`, \`admin\`, \`private\`, \`anticall\`, \`autoread\`, \`warmup\`, \`ban\`, \`unban\`, \`banlist\``,
                 );
         }
     });

@@ -5,6 +5,7 @@ import logger from "#libs/utils/logger";
 import { findContextInfo } from "#libs/utils/message";
 import { commandMap, customPrefixCommands } from "#libs/utils/plugin";
 import { QueueFullError, userQueue } from "#libs/utils/runtime";
+import { sendWarmup } from "#libs/utils/warmup";
 import { state } from "#state";
 
 const LINK_RE = /https?:\/\/[^\s]+/i;
@@ -484,6 +485,8 @@ export async function processMessage(client, msg) {
     if (guardError) {
         return interaction.reply(guardError);
     }
+
+    await sendWarmup(interaction.sock, msg);
 
     dispatch(interaction, cmd);
 }

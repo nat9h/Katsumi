@@ -113,6 +113,7 @@ function scheduleReconnect(client, lastDisconnect) {
 
 function onConnectionOpen(client) {
     client.reconnectAttempts = 0;
+    client.uptime.start();
     const jid = client.sock.user?.id ?? "";
     print.ready(jid, config.botId);
 

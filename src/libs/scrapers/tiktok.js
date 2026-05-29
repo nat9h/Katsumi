@@ -137,7 +137,6 @@ class TikTok {
         const playUrls = video.play_addr?.url_list || [];
 
         const videoNowm = downloadUrls[0] || playUrls[0] || "";
-        const videoWm = downloadUrls[1] || "";
         const videoPlay = playUrls[0] || "";
 
         let images = null;
@@ -165,7 +164,6 @@ class TikTok {
             video: videoNowm,
             videoHd: videoNowm,
             videoSd: videoPlay,
-            videoWm,
             music: music.play_url?.url_list?.[0] || "",
             musicInfo: {
                 title: music.title || "",
@@ -207,7 +205,6 @@ class TikTok {
             video: d.hdplay || d.play || "",
             videoHd: d.hdplay || "",
             videoSd: d.play || "",
-            videoWm: d.wmplay || "",
             music: d.music || "",
             musicInfo: {
                 title: d.music_info?.title || "",
