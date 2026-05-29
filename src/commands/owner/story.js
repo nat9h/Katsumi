@@ -235,7 +235,7 @@ export default new CommandBuilder()
                 if (err.message === "Timeout") {
                     return interaction.followUp("⏰ Timeout.");
                 }
-                return interaction.followUp(`❌ Failed: ${err.message}`);
+                return interaction.followUp(`Failed: ${err.message}`);
             }
         }
 
@@ -377,6 +377,6 @@ async function sendSingleStory(interaction, story) {
             }
         }
     } catch (err) {
-        await interaction.followUp(`⚠️ Failed: ${err.message}`);
+        await interaction.followUp(`Failed: ${err.message}`);
     }
 }

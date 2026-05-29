@@ -85,58 +85,118 @@ export default new CommandBuilder()
         }
 
         const isQc = flags.qc !== undefined;
-        const isAutoQc =
-            !text &&
-            !isQc &&
-            !!quoted?.text &&
-            !quoted?.message?.imageMessage &&
-            !quoted?.message?.videoMessage &&
-            !quoted?.message?.stickerMessage;
+        const hasQuotedMedia =
+            quoted?.message?.imageMessage ||
+            quoted?.message?.videoMessage ||
+            quoted?.message?.stickerMessage ||
+            quoted?.message?.audioMessage ||
+            quoted?.message?.documentMessage;
+        const isAutoQc = !text && !isQc && !!quoted?.text && !hasQuotedMedia;
 
         if (isQc || isAutoQc) {
-            const qcText = isQc ? flags.qc.trim() : quoted?.text || "";
+            const qcText = isQc
+                ? [flags.qc, ...positional].join(" ").trim() ||
+                  quoted?.text ||
+                  ""
+                : quoted?.text || "";
             if (!qcText) {
                 return interaction.reply(
                     "Provide text or reply to a text message for QC.",
                 );
             }
 
-            const sender = quoted?.sender || interaction.user;
-            const pfp = await fetchProfilePicture(sock, sender, "image").catch(
-                () =>
-                    "https://i.pinimg.com/736x/f1/26/e3/f126e305c9a2b882584b2afd.jpg",
-            );
+            let sender = quoted?.sender || "";
+            if (!sender && !interaction.isGroup) {
+                sender = interaction.chatJid;
+            }
+            sender = sender || interaction.user;
+            let resolvedSender = sender;
+            if (sender.endsWith("@lid") && interaction.isGroup) {
+                try {
+                    const meta = await interaction.getGroupMeta();
+                    const participant = meta?.participants?.find(
+                        (p) => p.lid === sender || p.id === sender,
+                    );
+                    if (participant?.id?.endsWith("@s.whatsapp.net")) {
+                        resolvedSender = participant.id;
+                    }
+                } catch {}
+            }
 
-            const res = await fetch("https://qc.chitoge.win/generate", {
+            const isQuotedFromSelf = resolvedSender === interaction.user;
+            const pfp =
+                (await fetchProfilePicture(
+                    sock,
+                    resolvedSender,
+                    "image",
+                ).catch(() => null)) ||
+                "https://i.pinimg.com/736x/f1/26/e3/f126e305c9a2b882584b2afd.jpg";
+
+            const contact =
+                interaction.store.getContact(resolvedSender) ||
+                interaction.store.getContact(sender);
+            const senderName = isQuotedFromSelf
+                ? interaction.msg.pushName || "Unknown"
+                : contact?.notify ||
+                  contact?.name ||
+                  resolvedSender.split("@")[0] ||
+                  "Unknown";
+
+            const qcPayload = {
+                type: "image",
+                format: "png",
+                backgroundColor: "#FFFFFF",
+                width: 512,
+                height: 786,
+                scale: 2,
+                messages: [
+                    {
+                        avatar: true,
+                        from: {
+                            id: 1,
+                            name: senderName,
+                            photo: { url: pfp },
+                        },
+                        text: qcText,
+                        replyMessage: {},
+                    },
+                ],
+            };
+
+            let imageBuffer = null;
+
+            const res = await fetch("https://bot.lyo.su/quote/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    type: "image",
-                    format: "png",
-                    backgroundColor: "#FFFFFF",
-                    width: 512,
-                    height: 786,
-                    scale: 2,
-                    messages: [
-                        {
-                            avatar: true,
-                            from: {
-                                id: 1,
-                                name: interaction.msg.pushName || "Unknown",
-                                photo: { url: pfp },
-                            },
-                            text: qcText,
-                            replyMessage: {},
-                        },
-                    ],
-                }),
+                body: JSON.stringify(qcPayload),
             });
-
-            if (!res.ok) {
-                return interaction.reply("Failed to generate quote sticker.");
+            if (res.ok) {
+                const data = await res.json();
+                if (data?.result?.image) {
+                    imageBuffer = Buffer.from(data.result.image, "base64");
+                }
             }
-            const data = await res.json();
-            return send(Buffer.from(data.result.image, "base64"));
+
+            if (!imageBuffer) {
+                const res = await fetch("https://qc.chitoge.win/generate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(qcPayload),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.result?.image) {
+                        imageBuffer = Buffer.from(data.result.image, "base64");
+                    }
+                }
+            }
+
+            if (!imageBuffer) {
+                return interaction.reply(
+                    "Failed to generate quote sticker. QC API unavailable.",
+                );
+            }
+            return send(imageBuffer);
         }
 
         const media = await fetchMedia(interaction, {
