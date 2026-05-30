@@ -8,13 +8,11 @@
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { createSticker } from "#libs/utils/converter/sticker";
 
-const API_BASE = "https://shinana-brat.hf.space/";
-
 export default new CommandBuilder()
     .setName("brat")
     .setDescription("Generate a brat-style text sticker.")
     .setUsage("{prefix}{name} <text>")
-    .setExample("{prefix}brat halo semua")
+    .setExample("{prefix}brat hi everyone!")
     .setReact("📃")
     .setRateLimit(5_000, 3)
     .setHandler(async (interaction) => {
@@ -22,44 +20,27 @@ export default new CommandBuilder()
 
         if (!text) {
             return interaction.reply(
-                "Provide text for the sticker.\n\nExample: `brat halo semua`",
+                `Provide text for the sticker.\n\nExample: \`${interaction.prefix}${interaction.commandName} hi everyone!\``,
             );
         }
 
-        let buffer;
+        const url = new URL("https://shinana-brat.hf.space/");
+        url.searchParams.set("text", text);
 
-        try {
-            const url = new URL(API_BASE);
-            url.searchParams.set("text", text);
+        const res = await fetch(url.toString());
 
-            const res = await fetch(url.toString());
-
-            if (!res.ok) {
-                return interaction.reply(
-                    `API error: ${res.status} ${res.statusText}`,
-                );
-            }
-
-            const arrayBuffer = await res.arrayBuffer();
-            buffer = Buffer.from(arrayBuffer);
-        } catch (err) {
+        if (!res.ok) {
             return interaction.reply(
-                `Failed to fetch brat image: ${err.message}`,
+                `API error: ${res.status} ${res.statusText}`,
             );
         }
 
-        let sticker;
+        const buffer = Buffer.from(await res.arrayBuffer());
 
-        try {
-            sticker = await createSticker(buffer, false, {
-                pack: "brat-api",
-                author: interaction.userName,
-            });
-        } catch (err) {
-            return interaction.reply(
-                `Failed to create sticker: ${err.message}`,
-            );
-        }
+        const sticker = await createSticker(buffer, false, {
+            pack: "brat-api",
+            author: interaction.userName,
+        });
 
         return interaction.reply({ sticker });
     });
