@@ -5,7 +5,7 @@
  */
 
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
-import { fmt, sanitizeSecrets, truncate } from "#libs/utils/format";
+import { fmt, sanitizeSecrets } from "#libs/utils/format";
 
 export default new CommandBuilder()
     .setName("eval")
@@ -44,10 +44,10 @@ export default new CommandBuilder()
             );
             const result = await fn(...Object.values(ctx));
 
-            const text = sanitizeSecrets(truncate(fmt(result)));
-            return interaction.reply(`\`\`\`${text}\n\`\`\``.trim());
+            const text = sanitizeSecrets(fmt(result));
+            return interaction.reply(text.trim());
         } catch (err) {
-            const text = sanitizeSecrets(truncate(err.stack ?? err.message));
-            return interaction.reply(`\`\`\`${text}\`\`\``.trim());
+            const text = sanitizeSecrets(err.stack ?? err.message);
+            return interaction.reply(text.trim());
         }
     });

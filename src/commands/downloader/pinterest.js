@@ -11,7 +11,7 @@ import { fetchMedia } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("pinterest")
-    .setAliases("pin", "pindl", "pinsearch")
+    .setAliases("pindl", "pinsearch")
     .setDescription("Download, search, or visual search Pinterest pins")
     .setUsage("{prefix}{name} <url|query|image> [count]")
     .setExample(
@@ -112,21 +112,34 @@ export default new CommandBuilder()
 
         const picks = results.sort(() => Math.random() - 0.5).slice(0, count);
 
-        for (const [i, pin] of picks.entries()) {
-            if (pin.video) {
-                const { data } = await axios.get(pin.video, {
-                    responseType: "arraybuffer",
-                    timeout: 60_000,
-                });
-                await interaction[i === 0 ? "reply" : "followUp"]({
-                    video: Buffer.from(data),
-                    caption: pin.title || undefined,
-                });
-            } else if (pin.image) {
-                await interaction[i === 0 ? "reply" : "followUp"]({
-                    image: { url: pin.image },
-                    caption: pin.title || undefined,
-                });
-            }
+        const images = picks.filter((p) => p.image && !p.video);
+        const videos = picks.filter((p) => p.video);
+
+        if (images.length > 1) {
+            const albumItems = images.map((pin) => ({
+                url: pin.image,
+                type: "image",
+            }));
+            await interaction.sendAlbum(albumItems, {
+                caption: `📌 Pinterest: "${searchQuery}" (${images.length} images)`,
+            });
+        } else if (images.length === 1) {
+            await interaction.reply({
+                image: { url: images[0].image },
+                caption: images[0].title || undefined,
+            });
+        }
+
+        for (const [i, pin] of videos.entries()) {
+            const { data } = await axios.get(pin.video, {
+                responseType: "arraybuffer",
+                timeout: 60_000,
+            });
+            const method =
+                images.length === 0 && i === 0 ? "reply" : "followUp";
+            await interaction[method]({
+                video: Buffer.from(data),
+                caption: pin.title || undefined,
+            });
         }
     });

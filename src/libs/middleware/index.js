@@ -8,7 +8,8 @@ import { QueueFullError, userQueue } from "#libs/utils/runtime";
 import { sendWarmup } from "#libs/utils/warmup";
 import { state } from "#state";
 
-const LINK_RE = /https?:\/\/[^\s]+/i;
+const LINK_RE =
+    /https?:\/\/[^\s]+|(?:chat\.whatsapp\.com|wa\.me|t\.me|bit\.ly|tinyurl\.com|goo\.gl|youtu\.be|discord\.gg|invite\.gg|telegram\.me)\/[^\s]+/i;
 
 // key: `${user}:${cmd}` → { count, reset }
 const rateLimitStore = new Map();
@@ -112,7 +113,15 @@ async function maybeAntiLink(client, interaction) {
     }
 
     const text = interaction.text;
-    if (!text || !LINK_RE.test(text)) {
+    // Also check extendedTextMessage matchedText/canonicalUrl for auto-detected links
+    const m = interaction.msg.message;
+    const ext =
+        m?.extendedTextMessage ||
+        m?.ephemeralMessage?.message?.extendedTextMessage ||
+        m?.viewOnceMessage?.message?.extendedTextMessage;
+    const matchedText = ext?.matchedText || ext?.canonicalUrl || "";
+
+    if (!LINK_RE.test(text || "") && !LINK_RE.test(matchedText)) {
         return false;
     }
 
@@ -232,9 +241,10 @@ function extractRawBody(text, prefix, name) {
  * Returns true if the command is allowed to proceed.
  *
  * @param {Interaction} interaction
+ * @param {object} cmd
  * @returns {Promise<boolean>}
  */
-async function passesGates(interaction) {
+async function passesGates(interaction, cmd) {
     if (state.selfMode && !interaction.fromMe && !isOwner(interaction)) {
         return false;
     }
@@ -246,6 +256,18 @@ async function passesGates(interaction) {
     }
     if (state.privateOnly && interaction.isGroup && !isOwner(interaction)) {
         return false;
+    }
+
+    if (!isOwner(interaction)) {
+        if (state.isPluginDisabled(cmd.name)) {
+            return false;
+        }
+        if (
+            interaction.isGroup &&
+            state.isPluginDisabledInGroup(interaction.chatJid, cmd.name)
+        ) {
+            return false;
+        }
     }
 
     if (state.adminOnly && !isOwner(interaction)) {
@@ -455,7 +477,7 @@ export async function processMessage(client, msg) {
     }
 
     const { cmd, name, rawArgs, prefix } = parsed;
-    if (!(await passesGates(interaction))) {
+    if (!(await passesGates(interaction, cmd))) {
         return;
     }
 

@@ -617,4 +617,60 @@ export class Interaction {
             return null;
         }
     }
+
+    /**
+     * Show a numbered list and let the user pick multiple items.
+     * Supports: "1,2,3", "1-5", "1,3-5", or "all".
+     *
+     * @param {object[]} items - Must have `subject` or `id` property
+     * @param {string} title
+     * @returns {Promise<object[]|null>} Selected items or null if cancelled/timeout
+     */
+    async pickMultipleFromList(items, title) {
+        const lines = items.map((it, i) => `${i + 1}. ${it.subject || it.id}`);
+        await this.reply(
+            `📋 *${title}:*\n\n${lines.join("\n")}\n\n_Reply with numbers (e.g. 1,2,3 or 1-5 or all)._`,
+        );
+
+        try {
+            const reply = await this.awaitReply(() => true, DEFAULT_AWAIT_MS);
+            const text = extractText(reply.message).trim().toLowerCase();
+
+            if (text === "all" || text === "*") {
+                return items.slice();
+            }
+
+            const indices = new Set();
+            for (const part of text.split(",")) {
+                const trimmed = part.trim();
+                const rangeMatch = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+                if (rangeMatch) {
+                    const start = Number.parseInt(rangeMatch[1], 10);
+                    const end = Number.parseInt(rangeMatch[2], 10);
+                    for (let i = start; i <= end; i++) {
+                        indices.add(i);
+                    }
+                } else {
+                    const num = Number.parseInt(trimmed, 10);
+                    if (!Number.isNaN(num)) {
+                        indices.add(num);
+                    }
+                }
+            }
+
+            const selected = [...indices]
+                .filter((n) => n >= 1 && n <= items.length)
+                .map((n) => items[n - 1]);
+
+            if (!selected.length) {
+                await this.followUp("Invalid. Cancelled.");
+                return null;
+            }
+
+            return selected;
+        } catch {
+            await this.followUp("⏰ Timeout.");
+            return null;
+        }
+    }
 }

@@ -125,11 +125,9 @@ export default new CommandBuilder()
 
             const isQuotedFromSelf = resolvedSender === interaction.user;
             const pfp =
-                (await fetchProfilePicture(
-                    sock,
-                    resolvedSender,
-                    "image",
-                ).catch(() => null)) ||
+                (await fetchProfilePicture(sock, resolvedSender, "image").catch(
+                    () => null,
+                )) ||
                 "https://i.pinimg.com/736x/f1/26/e3/f126e305c9a2b882584b2afd.jpg";
 
             const contact =

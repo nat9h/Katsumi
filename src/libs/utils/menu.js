@@ -33,8 +33,20 @@ export function groupCommands(viewerIsOwner) {
 
 /** Detail view for a single command. */
 export function renderCommandDetail(prefix, cmd) {
-    const usage = cmd.usage.replace(/^[!.?]/, prefix);
-    const example = cmd.example.replace(/^[!.?]/, prefix);
+    const replacePfx = (s) =>
+        s
+            .replace(/\{prefix\}/g, prefix)
+            .replace(/\{name\}/g, cmd.name)
+            .replace(/^[!.?]/gm, prefix);
+
+    const usage = replacePfx(cmd.usage);
+    const example = replacePfx(cmd.example);
+
+    const exampleLines = example.split("\n");
+    const exampleFormatted =
+        exampleLines.length > 1
+            ? `\n${exampleLines.map((l) => `  \`${l.trim()}\``).join("\n")}`
+            : `\`${example}\``;
 
     const lines = [
         `📖 *${prefix}${cmd.name}*`,
@@ -42,7 +54,7 @@ export function renderCommandDetail(prefix, cmd) {
         cmd.description || "_No description_",
         "",
         `• Usage: \`${usage}\``,
-        `• Example: \`${example}\``,
+        `• Example: ${exampleFormatted}`,
     ];
 
     if (cmd.aliases?.length) {

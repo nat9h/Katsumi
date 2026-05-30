@@ -123,16 +123,20 @@ export default new CommandBuilder()
                     return interaction.reply("No groups available to ban.");
                 }
 
-                const picked = await interaction.pickFromList(
+                const picked = await interaction.pickMultipleFromList(
                     groups,
-                    "Select group to ban",
+                    "Select group(s) to ban",
                 );
                 if (!picked) {
                     return;
                 }
-                state.banChat(picked.id);
+                const names = [];
+                for (const g of picked) {
+                    state.banChat(g.id);
+                    names.push(g.subject || g.id);
+                }
                 return interaction.followUp(
-                    `🚫 Banned: *${picked.subject || picked.id}*`,
+                    `🚫 Banned (${names.length}):\n${names.map((n) => `• ${n}`).join("\n")}`,
                 );
             }
 
@@ -174,16 +178,20 @@ export default new CommandBuilder()
                         },
                 );
 
-                const picked = await interaction.pickFromList(
+                const picked = await interaction.pickMultipleFromList(
                     items,
-                    "Select group to unban",
+                    "Select group(s) to unban",
                 );
                 if (!picked) {
                     return;
                 }
-                state.unbanChat(picked.id);
+                const names = [];
+                for (const g of picked) {
+                    state.unbanChat(g.id);
+                    names.push(g.subject || g.id);
+                }
                 return interaction.followUp(
-                    `✅ Unbanned: *${picked.subject || picked.id}*`,
+                    `✅ Unbanned (${names.length}):\n${names.map((n) => `• ${n}`).join("\n")}`,
                 );
             }
 

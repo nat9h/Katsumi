@@ -174,32 +174,15 @@ export default new CommandBuilder()
                 return interaction.reply("No groups found.");
             }
 
-            const lines = groups.map(
-                (g, i) =>
-                    `${i + 1}. ${g.subject} (${g.participants?.length || "?"} members)`,
+            const selectedGroups = await interaction.pickMultipleFromList(
+                groups,
+                "Select target group(s)",
             );
-            await interaction.reply(
-                `📋 *Select target group:*\n\n${lines.join("\n")}\n\n_Reply with number (e.g. 1 or 1,3,5). 60s timeout._`,
-            );
+            if (!selectedGroups) {
+                return;
+            }
 
             try {
-                const reply = await interaction.awaitReply(() => true, 60_000);
-                const input = extractText(reply.message).trim();
-                const indexes = [
-                    ...new Set(
-                        input
-                            .split(/[,\s]+/)
-                            .map((v) => parseInt(v.trim(), 10))
-                            .filter((v) => Number.isFinite(v)),
-                    ),
-                ].filter((i) => i >= 1 && i <= groups.length);
-
-                if (!indexes.length) {
-                    return interaction.followUp("Invalid input. Cancelled.");
-                }
-
-                const selectedGroups = indexes.map((i) => groups[i - 1]);
-
                 const inside = await generateWAMessageContent(msgContent, {
                     upload: sock.waUploadToServer,
                     ...genOpts,
@@ -207,14 +190,53 @@ export default new CommandBuilder()
 
                 const sentNames = [];
                 for (const g of selectedGroups) {
+                    const statusJidList = (g.participants || [])
+                        .map((p) => p.id)
+                        .filter(
+                            (id) =>
+                                id?.endsWith("@s.whatsapp.net") ||
+                                id?.endsWith("@lid"),
+                        );
+
+                    if (!statusJidList.length) {
+                        continue;
+                    }
+
                     const messageSecret = randomBytes(32);
+
+                    const contentKey = inside.imageMessage
+                        ? "imageMessage"
+                        : inside.videoMessage
+                          ? "videoMessage"
+                          : inside.extendedTextMessage
+                            ? "extendedTextMessage"
+                            : null;
+
+                    const innerMessage = { ...inside };
+                    if (contentKey && innerMessage[contentKey]) {
+                        innerMessage[contentKey] = {
+                            ...innerMessage[contentKey],
+                            contextInfo: {
+                                ...(innerMessage[contentKey].contextInfo || {}),
+                                mentionedJid: statusJidList,
+                                groupMentions: [
+                                    {
+                                        groupJid: g.id,
+                                        groupSubject: g.subject,
+                                    },
+                                ],
+                                isGroupStatus: true,
+                            },
+                        };
+                    }
+
                     const msg = generateWAMessageFromContent(
-                        g.id,
+                        "status@broadcast",
                         {
                             messageContextInfo: { messageSecret },
-                            groupStatusMessageV2: {
+                            groupStatusMentionMessage: {
                                 message: {
-                                    ...inside,
+                                    ...innerMessage,
                                     messageContextInfo: { messageSecret },
                                 },
                             },
@@ -222,19 +244,23 @@ export default new CommandBuilder()
                         { userJid: sock.user.id },
                     );
 
-                    await sock.relayMessage(g.id, msg.message, {
+                    await sock.relayMessage("status@broadcast", msg.message, {
                         messageId: msg.key.id,
+                        statusJidList,
                     });
                     sentNames.push(g.subject);
+                }
+
+                if (!sentNames.length) {
+                    return interaction.followUp(
+                        "No groups with valid participants found.",
+                    );
                 }
 
                 return interaction.followUp(
                     `✅ Group status sent to:\n${sentNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}`,
                 );
             } catch (err) {
-                if (err.message === "Timeout") {
-                    return interaction.followUp("⏰ Timeout.");
-                }
                 return interaction.followUp(`Failed: ${err.message}`);
             }
         }

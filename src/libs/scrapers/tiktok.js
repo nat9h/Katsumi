@@ -259,7 +259,7 @@ class TikTok {
     }
 
     /**
-     * Check if a video URL is actually reachable (HEAD request).
+     * Check if a video URL is actually reachable and has content (HEAD request).
      * @param {string} url
      * @returns {Promise<boolean>}
      */
@@ -275,7 +275,11 @@ class TikTok {
                     Referer: "https://www.tiktok.com/",
                 },
             });
-            return res.status >= 200 && res.status < 400;
+            if (res.status < 200 || res.status >= 400) {
+                return false;
+            }
+            const len = Number(res.headers["content-length"] || 0);
+            return len > 1000;
         } catch {
             return false;
         }

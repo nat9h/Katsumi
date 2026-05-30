@@ -28,6 +28,7 @@ const data = {
     prefixes: [...DEFAULT_PREFIXES],
     bannedChats: new Set(),
     bannedUsers: new Set(),
+    disabledPlugins: new Set(),
 };
 for (const key of TOGGLES) {
     data[key] = false;
@@ -55,6 +56,11 @@ function hydrateBans() {
     const users = db.get("state:bannedUsers");
     if (Array.isArray(users)) {
         data.bannedUsers = new Set(users);
+    }
+
+    const plugins = db.get("state:disabledPlugins");
+    if (Array.isArray(plugins)) {
+        data.disabledPlugins = new Set(plugins);
     }
 }
 
@@ -156,6 +162,75 @@ export const state = {
     },
     isUserBanned: (jid) => data.bannedUsers.has(jid),
     getBannedUsers: () => [...data.bannedUsers],
+
+    /**
+     * Disable a plugin globally.
+     * @param {string} name - Command name (primary name, not alias).
+     */
+    disablePlugin(name) {
+        const set = data.disabledPlugins;
+        set.add(name);
+        save("disabledPlugins", [...set]);
+    },
+
+    /**
+     * Enable a globally-disabled plugin.
+     * @param {string} name
+     */
+    enablePlugin(name) {
+        const set = data.disabledPlugins;
+        set.delete(name);
+        save("disabledPlugins", [...set]);
+    },
+
+    /** Check if a plugin is globally disabled. */
+    isPluginDisabled(name) {
+        return data.disabledPlugins.has(name);
+    },
+
+    /** List all globally disabled plugins. */
+    getDisabledPlugins() {
+        return [...data.disabledPlugins];
+    },
+
+    /**
+     * Disable a plugin in a specific group.
+     * @param {string} groupJid
+     * @param {string} name - Command name.
+     */
+    disablePluginInGroup(groupJid, name) {
+        const key = `disabledPlugins:${groupJid}`;
+        const list = db?.get(key) || [];
+        if (!list.includes(name)) {
+            list.push(name);
+            db?.set(key, list);
+        }
+    },
+
+    /**
+     * Enable a plugin in a specific group.
+     * @param {string} groupJid
+     * @param {string} name
+     */
+    enablePluginInGroup(groupJid, name) {
+        const key = `disabledPlugins:${groupJid}`;
+        const list = db?.get(key) || [];
+        const filtered = list.filter((n) => n !== name);
+        db?.set(key, filtered);
+    },
+
+    /** Check if a plugin is disabled in a specific group. */
+    isPluginDisabledInGroup(groupJid, name) {
+        const key = `disabledPlugins:${groupJid}`;
+        const list = db?.get(key) || [];
+        return list.includes(name);
+    },
+
+    /** List disabled plugins in a group. */
+    getDisabledPluginsInGroup(groupJid) {
+        const key = `disabledPlugins:${groupJid}`;
+        return db?.get(key) || [];
+    },
 };
 
 for (const key of TOGGLES) {

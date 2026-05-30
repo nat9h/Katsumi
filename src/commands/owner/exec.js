@@ -7,7 +7,7 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
-import { sanitizeSecrets, truncate } from "#libs/utils/format";
+import { sanitizeSecrets } from "#libs/utils/format";
 
 const execAsync = promisify(exec);
 
@@ -31,9 +31,7 @@ export default new CommandBuilder()
                     process.platform === "win32" ? "powershell.exe" : "/bin/sh",
             });
             const out = (stdout || stderr || "(no output)").trim();
-            return interaction.reply(
-                `\`\`\`${sanitizeSecrets(truncate(out))}\`\`\``,
-            );
+            return interaction.reply(sanitizeSecrets(out));
         } catch (err) {
             const out = (
                 err.stdout ||
@@ -41,8 +39,6 @@ export default new CommandBuilder()
                 err.message ||
                 String(err)
             ).trim();
-            return interaction.reply(
-                `\`\`\`${sanitizeSecrets(truncate(out))}\`\`\``,
-            );
+            return interaction.reply(sanitizeSecrets(out));
         }
     });

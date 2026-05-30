@@ -1,5 +1,5 @@
 /**
- * @fileoverview Facebook scraper for videos, reels, and image posts.
+ * @fileoverview Facebook scraper for videos, reels, image posts, and search.
  * No cookies or API keys needed — works on public content only.
  * @module scrapers/facebook
  */
@@ -7,8 +7,23 @@
 import axios from "axios";
 
 class Facebook {
-    UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:127.0) Gecko/20100101 Firefox/127.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 OPR/109.0.0.0",
+    ];
+
+    /** Pick a random User-Agent. */
+    get UA() {
+        return this.USER_AGENTS[
+            Math.floor(Math.random() * this.USER_AGENTS.length)
+        ];
+    }
 
     VIDEO_HD_PATTERNS = [
         /hd_src:"(https?[^"]+)"/,
@@ -242,6 +257,274 @@ class Facebook {
             video: "",
             images,
         };
+    }
+
+    /**
+     * Search Facebook videos/posts via Brave Search.
+     * @param {string} query - Search query.
+     * @param {object} [options]
+     * @param {"video"|"post"|"page"|"all"} [options.type="video"] - Content type filter.
+     * @param {number} [options.limit=10] - Max results to return.
+     * @returns {Promise<Array<{ title: string, url: string, description: string, type: string }>>}
+     */
+    async search(query, { type = "video", limit = 10 } = {}) {
+        if (!query?.trim()) {
+            throw new Error("Search query is required.");
+        }
+
+        const siteQuery = this.#buildSearchQuery(query.trim(), type);
+        const html = await this.#fetchSearch(siteQuery);
+
+        return this.#parseSearchResults(html, type, limit);
+    }
+
+    /**
+     * Fetch search results with retry on 429.
+     * @param {string} query
+     * @param {number} [retries=2]
+     * @returns {Promise<string>}
+     */
+    async #fetchSearch(query, retries = 2) {
+        for (let i = 0; i <= retries; i++) {
+            try {
+                const { data } = await axios.get(
+                    "https://search.brave.com/search",
+                    {
+                        params: { q: query, source: "web" },
+                        headers: {
+                            "User-Agent": this.UA,
+                            Accept: "text/html,application/xhtml+xml",
+                            "Accept-Language": "en-US,en;q=0.9",
+                        },
+                        timeout: 15_000,
+                    },
+                );
+                return data;
+            } catch (e) {
+                if (e.response?.status === 429 && i < retries) {
+                    await new Promise((r) => setTimeout(r, 3_000 * (i + 1)));
+                    continue;
+                }
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Build the search query with site filter.
+     * @param {string} query
+     * @param {string} type
+     * @returns {string}
+     */
+    #buildSearchQuery(query, type) {
+        switch (type) {
+            case "video":
+                return `site:facebook.com ${query} video`;
+            case "post":
+                return `site:facebook.com ${query}`;
+            case "page":
+                return `site:facebook.com ${query}`;
+            default:
+                return `site:facebook.com ${query}`;
+        }
+    }
+
+    /**
+     * Parse Brave Search HTML results.
+     * @param {string} html
+     * @param {string} type
+     * @param {number} limit
+     * @returns {Array<{ title: string, url: string, description: string, type: string }>}
+     */
+    #parseSearchResults(html, type, limit) {
+        const results = [];
+        const seen = new Set();
+
+        const snippetRegex =
+            /<div[^>]*class="snippet[^"]*"[^>]*>[\s\S]*?<a[^>]*href="(https?:\/\/(?:www\.)?facebook\.com[^"]+)"[^>]*>[\s\S]*?<\/a>[\s\S]*?<\/div>/g;
+
+        let match;
+        while ((match = snippetRegex.exec(html)) !== null) {
+            const url = match[1];
+            if (seen.has(url)) {
+                continue;
+            }
+            seen.add(url);
+
+            const block = match[0];
+            const title = this.#extractSearchText(
+                block.match(
+                    /<span class="snippet-title"[^>]*>([\s\S]*?)<\/span>/,
+                ),
+            );
+            const desc = this.#extractSearchText(
+                block.match(
+                    /<span class="snippet-description"[^>]*>([\s\S]*?)<\/span>/,
+                ),
+            );
+
+            if (this.#matchesType(url, type)) {
+                results.push({
+                    title: title || this.#titleFromUrl(url),
+                    url: this.#cleanSearchUrl(url),
+                    description: desc || "",
+                    type: this.#detectUrlType(url),
+                });
+            }
+        }
+
+        if (results.length === 0) {
+            const hrefRegex =
+                /href="(https?:\/\/(?:www\.)?facebook\.com\/[^"]+)"/g;
+            while ((match = hrefRegex.exec(html)) !== null) {
+                const url = match[1];
+                if (seen.has(url)) {
+                    continue;
+                }
+                if (url.includes("/policies/") || url.includes("/help/")) {
+                    continue;
+                }
+                seen.add(url);
+
+                if (this.#matchesType(url, type)) {
+                    results.push({
+                        title: this.#titleFromUrl(url),
+                        url: this.#cleanSearchUrl(url),
+                        description: "",
+                        type: this.#detectUrlType(url),
+                    });
+                }
+            }
+        }
+
+        return results.slice(0, limit);
+    }
+
+    /**
+     * Check if URL matches the requested content type.
+     * @param {string} url
+     * @param {string} type
+     * @returns {boolean}
+     */
+    #matchesType(url, type) {
+        if (type === "all") {
+            return true;
+        }
+        if (type === "video") {
+            return (
+                url.includes("/videos/") ||
+                url.includes("/reel/") ||
+                url.includes("/watch")
+            );
+        }
+        if (type === "page") {
+            return !url.includes("/videos/") && !url.includes("/reel/");
+        }
+        return true;
+    }
+
+    /**
+     * Detect content type from URL.
+     * @param {string} url
+     * @returns {string}
+     */
+    #detectUrlType(url) {
+        if (url.includes("/videos/") || url.includes("/watch")) {
+            return "video";
+        }
+        if (url.includes("/reel/")) {
+            return "reel";
+        }
+        if (url.includes("/posts/") || url.includes("/permalink/")) {
+            return "post";
+        }
+        if (url.includes("/photos/")) {
+            return "photo";
+        }
+        return "page";
+    }
+
+    /**
+     * Generate a readable title from a Facebook URL.
+     * @param {string} url
+     * @returns {string}
+     */
+    #titleFromUrl(url) {
+        try {
+            const path = new URL(url).pathname;
+            const parts = path.split("/").filter(Boolean);
+
+            if (parts.includes("videos") && parts.length >= 3) {
+                const idx = parts.indexOf("videos");
+                const slug = parts[idx + 1] || parts[0];
+                return this.#slugToTitle(slug);
+            }
+
+            if (parts.includes("reel") && parts.length >= 2) {
+                return `${this.#slugToTitle(parts[0])} (Reel)`;
+            }
+
+            return this.#slugToTitle(parts[0] || "Facebook");
+        } catch {
+            return "Facebook";
+        }
+    }
+
+    /**
+     * Convert a URL slug to a readable title.
+     * @param {string} slug
+     * @returns {string}
+     */
+    #slugToTitle(slug) {
+        if (/^\d+$/.test(slug)) {
+            return `Facebook (${slug})`;
+        }
+
+        return slug
+            .replace(/-/g, " ")
+            .replace(/\./g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+
+    /**
+     * Remove tracking params from URL.
+     * @param {string} url
+     * @returns {string}
+     */
+    #cleanSearchUrl(url) {
+        try {
+            const u = new URL(url);
+            for (const key of [...u.searchParams.keys()]) {
+                if (!["v", "id"].includes(key)) {
+                    u.searchParams.delete(key);
+                }
+            }
+            return u.toString();
+        } catch {
+            return url;
+        }
+    }
+
+    /**
+     * Extract text content from a regex match, stripping HTML tags.
+     * @param {RegExpMatchArray|null} match
+     * @returns {string}
+     */
+    #extractSearchText(match) {
+        if (!match?.[1]) {
+            return "";
+        }
+        return match[1]
+            .replace(/<[^>]+>/g, "")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#x27;/g, "'")
+            .replace(/\s+/g, " ")
+            .trim();
     }
 }
 
