@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setAliases("gp", "getcmd")
     .setDescription("Get a plugin source file")
     .setUsage("{prefix}{name} <command> [-d]")
-    .setExample("{prefix}getplugin ping")
+    .setExample("{prefix}{name} ping")
     .setNote("Add -d flag to send as document file.")
     .setGuard("owner")
     .setHandler(async (interaction) => {

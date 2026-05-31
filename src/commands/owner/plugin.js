@@ -40,7 +40,7 @@ export default new CommandBuilder()
         "{prefix}{name} <on|off> [command] [--group]\n{prefix}{name} list",
     )
     .setExample(
-        "{prefix}plg off pinterest\n{prefix}plg off --group\n{prefix}plg on pinterest\n{prefix}plg list",
+        "{prefix}{name} off pinterest\n{prefix}{name} off --group\n{prefix}{name} on pinterest\n{prefix}{name} list",
     )
     .setNote(
         "Omit command name to get an interactive list. Use --group for per-group.",

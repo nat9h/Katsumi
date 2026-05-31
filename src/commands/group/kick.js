@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("remove")
     .setDescription("Kick a member from the group")
     .setUsage("{prefix}{name} @user")
-    .setExample("{prefix}kick @user")
+    .setExample("{prefix}{name} @user")
     .setGuard("group", "admin", "botAdmin")
     .addOption("target", "string", "@mention or reply")
     .setHandler(async (interaction) => {

@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("reminder")
     .setDescription("Set a reminder")
     .setUsage("{prefix}{name} <duration> <message>")
-    .setExample("{prefix}remind 10m beli bensin")
+    .setExample("{prefix}{name} 10m beli bensin")
     .setHandler(async (interaction) => {
         const parts = interaction.rawBody.trim().split(/\s+/);
         const dur = parts.shift();

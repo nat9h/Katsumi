@@ -4,8 +4,40 @@
  * @module libs/utils/group
  */
 
-import { generateWAMessageFromContent, proto, toNumber } from "baileys";
+import {
+    areJidsSameUser,
+    generateWAMessageFromContent,
+    jidNormalizedUser,
+    proto,
+    toNumber,
+} from "baileys";
 import { fetchProfilePicture } from "#libs/utils/profile";
+
+/**
+ * Find a participant in group metadata by JID, handling normalization
+ * and LID/PN matching.
+ *
+ * @param {object} meta - Group metadata with participants array.
+ * @param {string} jid - JID to search for.
+ * @returns {object|undefined} The matching participant or undefined.
+ */
+export function findParticipant(meta, jid) {
+    if (!meta?.participants || !jid) {
+        return undefined;
+    }
+    const normalized = jidNormalizedUser(jid);
+    return meta.participants.find((p) => {
+        try {
+            return (
+                p.id === jid ||
+                p.id === normalized ||
+                areJidsSameUser(p.id, jid)
+            );
+        } catch {
+            return p.id === jid;
+        }
+    });
+}
 
 /**
  * Walk a `groupParticipantsUpdate` 403 response node tree and pull out

@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setAliases("s", "stiker")
     .setDescription("All-in-one sticker creator")
     .setUsage("{prefix}{name} [-wm pack|author] [-qc text] [top|bottom]")
-    .setExample("{prefix}s -wm MyPack|MyName")
+    .setExample("{prefix}{name} -wm MyPack|MyName")
     .setNote(
         [
             "Features:",

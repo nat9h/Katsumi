@@ -17,7 +17,7 @@ export default new CommandBuilder()
     .setAliases("wu")
     .setDescription("Toggle connection warmup (empty reaction before reply)")
     .setUsage("{prefix}{name} [on|off]")
-    .setExample("{prefix}warmup on")
+    .setExample("{prefix}{name} on")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         const value = interaction.rawArgs[0]?.toLowerCase();

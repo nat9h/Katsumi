@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("groupleave", "leavegroup")
     .setDescription("Leave a group (owner only)")
     .setUsage("{prefix}{name}")
-    .setExample("{prefix}out")
+    .setExample("{prefix}{name}")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         if (interaction.isGroup) {

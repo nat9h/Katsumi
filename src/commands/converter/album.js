@@ -14,7 +14,7 @@ export default new CommandBuilder()
     .setName("album")
     .setDescription("Collect images/videos and send as an album")
     .setUsage("{prefix}{name} [caption]")
-    .setExample("{prefix}album vacation photos")
+    .setExample("{prefix}{name} vacation photos")
     .setNote(
         "Send images/videos after the command. Type 'done' or 'kirim' to send.",
     )

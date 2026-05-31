@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setName("prefix")
     .setDescription("Manage bot prefixes (owner only)")
     .setUsage("{prefix}{name} <add|del|reset|noprefix> [value]")
-    .setExample("{prefix}prefix add /")
+    .setExample("{prefix}{name} add /")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         const { prefix: p, commandName: cmd, rawArgs } = interaction;

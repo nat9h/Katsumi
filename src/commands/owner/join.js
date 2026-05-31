@@ -10,7 +10,7 @@ export default new CommandBuilder()
     .setName("join")
     .setDescription("Join a group via invite link (owner only)")
     .setUsage("{prefix}{name} <link>")
-    .setExample("{prefix}join https://chat.whatsapp.com/ABC123")
+    .setExample("{prefix}{name} https://chat.whatsapp.com/ABC123")
     .setGuard("owner")
     .addOption("link", "string", "WhatsApp group invite link")
     .setHandler(async (interaction) => {

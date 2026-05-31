@@ -23,7 +23,7 @@ export default new CommandBuilder()
     .setAliases("yt", "ytdl", "play")
     .setDescription("Search or download YouTube audio/video")
     .setUsage("{prefix}{name} <query|url> [--video | -v]")
-    .setExample("{prefix}yt yoasobi idol")
+    .setExample("{prefix}{name} yoasobi idol")
     .setReact("▶️")
     .setRateLimit(15_000, 2)
     .setHandler(async (interaction) => {
@@ -31,9 +31,13 @@ export default new CommandBuilder()
             video: { type: "boolean", alias: "v" },
         });
         const wantVideo = flags.video === true;
-        const quoted = interaction.quoted?.text || "";
 
-        const query = positional.join(" ").trim() || quoted;
+        const query = (
+            positional.join(" ").trim() ||
+            interaction.quoted?.url ||
+            interaction.quoted?.text ||
+            ""
+        ).trim();
 
         if (!query) {
             return interaction.reply(

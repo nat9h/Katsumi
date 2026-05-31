@@ -1,10 +1,11 @@
 /**
- * @fileoverview Spotify command — search and download Spotify tracks via yt-dlp.
+ * @fileoverview Spotify command — search and download Spotify tracks via SpotiDown.
  * @module commands/downloader/spotify
  */
 
+import axios from "axios";
+import spotidown from "#libs/scrapers/spotidown";
 import { getSpotify } from "#libs/scrapers/spotify";
-import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDurationMs, sanitizeFilename } from "#libs/utils/format";
 import { selectFromList } from "#libs/utils/interaction";
@@ -14,11 +15,16 @@ export default new CommandBuilder()
     .setAliases("spdl", "spsearch")
     .setDescription("Search or download Spotify tracks")
     .setUsage("{prefix}{name} <query|url>")
-    .setExample("{prefix}spotify yoasobi idol")
+    .setExample("{prefix}{name} yoasobi idol")
     .setReact("🎵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const input = interaction.body || interaction.quoted?.text;
+        const input = (
+            interaction.body ||
+            interaction.quoted?.url ||
+            interaction.quoted?.text ||
+            ""
+        ).trim();
         if (!input) {
             return interaction.reply(
                 `Usage: \`${interaction.prefix}${interaction.commandName} <query|url>\``,
@@ -76,21 +82,19 @@ export default new CommandBuilder()
             thumbnail ? { image: { url: thumbnail }, caption } : caption,
         );
 
-        const ytResults = await ytdlp.search(`${track.name} ${artists}`, 1);
-        if (!ytResults.length) {
-            return interaction.followUp("Audio source not found.");
+        const result = await spotidown.download(track.url);
+        if (!result?.downloadUrl) {
+            return interaction.followUp("Failed to get download link.");
         }
 
-        try {
-            const result = await ytdlp.download(ytResults[0].url, "audio", {
-                title: track.name,
-            });
-            return interaction.followUp({
-                audio: result.buffer,
-                mimetype: result.mimetype,
-                fileName: `${sanitizeFilename(track.name)} - ${sanitizeFilename(artists)}.m4a`,
-            });
-        } catch (err) {
-            return interaction.followUp(err.message);
-        }
+        const { data: buffer } = await axios.get(result.downloadUrl, {
+            responseType: "arraybuffer",
+            timeout: 60_000,
+        });
+
+        return interaction.followUp({
+            audio: Buffer.from(buffer),
+            mimetype: "audio/mpeg",
+            fileName: `${sanitizeFilename(track.name)} - ${sanitizeFilename(artists)}.mp3`,
+        });
     });

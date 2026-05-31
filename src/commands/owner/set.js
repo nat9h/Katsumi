@@ -58,7 +58,7 @@ export default new CommandBuilder()
     .setUsage(
         "{prefix}{name} <self|admin|private|anticall|autoread|warmup|ban|unban|banlist>",
     )
-    .setExample("{prefix}set self on")
+    .setExample("{prefix}{name} self on")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         const { prefix: p, commandName: cmd, rawArgs: parts } = interaction;

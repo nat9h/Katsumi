@@ -13,7 +13,7 @@ export default new CommandBuilder()
     .setAliases("ai", "gpt", "chat")
     .setDescription("Chat with AI, analyze images, or generate images")
     .setUsage("{prefix}{name} <prompt> | --imagine <prompt>")
-    .setExample("{prefix}ai Explain what JavaScript is")
+    .setExample("{prefix}{name} Explain what JavaScript is")
     .setNote(
         "Use --imagine to generate images. Send/reply to an image to analyze it.",
     )

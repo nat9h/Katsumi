@@ -16,7 +16,7 @@ export default new CommandBuilder()
     .setAliases("jadibot", "clonebot")
     .setDescription("Clone bot management")
     .setUsage("{prefix}{name} <pair|stop|list>")
-    .setExample("{prefix}clone pair")
+    .setExample("{prefix}{name} pair")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         const sub = interaction.rawArgs[0]?.toLowerCase();

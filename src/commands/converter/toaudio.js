@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setAliases("tomp3", "ta")
     .setDescription("Extract audio from a video as MP3")
     .setUsage("{prefix}{name}")
-    .setExample("{prefix}toaudio")
+    .setExample("{prefix}{name}")
     .setReact("🎵")
     .setRateLimit(8000, 3)
     .setHandler(async (interaction) => {

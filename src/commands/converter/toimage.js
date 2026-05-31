@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setAliases("toimg", "ti")
     .setDescription("Convert a sticker to image (PNG)")
     .setUsage("{prefix}{name}")
-    .setExample("{prefix}toimage")
+    .setExample("{prefix}{name}")
     .setReact("🖼️")
     .setRateLimit(5000, 3)
     .setHandler(async (interaction) => {

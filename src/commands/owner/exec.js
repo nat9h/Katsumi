@@ -29,6 +29,8 @@ export default new CommandBuilder()
             const { stdout, stderr } = await execAsync(input, {
                 shell:
                     process.platform === "win32" ? "powershell.exe" : "/bin/sh",
+                timeout: 30_000,
+                maxBuffer: 1024 * 1024,
             });
             const out = (stdout || stderr || "(no output)").trim();
             return interaction.reply(sanitizeSecrets(out));

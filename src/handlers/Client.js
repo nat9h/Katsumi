@@ -165,7 +165,7 @@ export class Client extends EventEmitter {
                     mentions: [r.user],
                 });
             } catch {
-                return;
+                remaining.push(r);
             }
         }
 
@@ -381,7 +381,9 @@ export class Client extends EventEmitter {
                     `Owner LID resolved (live): ${mapping.pn.split("@")[0]} → ${mapping.lid}`,
                 );
             }
-        } catch {}
+        } catch (err) {
+            logger.warn({ err }, "lid mapping handler error");
+        }
         this.emit("lidMappingUpdate", mapping);
     }
 

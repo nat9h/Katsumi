@@ -24,6 +24,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const input = (
             interaction.body ||
+            interaction.quoted?.url ||
             interaction.quoted?.text ||
             ""
         ).trim();

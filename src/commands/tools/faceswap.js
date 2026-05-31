@@ -14,7 +14,7 @@ export default new CommandBuilder()
     .setAliases("swap")
     .setDescription("Swap faces between two images")
     .setUsage("{prefix}{name}")
-    .setExample("{prefix}faceswap")
+    .setExample("{prefix}{name}")
     .setNote(
         "Send/reply to the target image, then bot will ask for the face image.",
     )

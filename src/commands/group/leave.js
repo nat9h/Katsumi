@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("goodbye", "bye")
     .setDescription("Manage leave message for this group")
     .setUsage("{prefix}{name} <on|off|set <text>|show>")
-    .setExample("{prefix}leave set Bye @{user} 👋")
+    .setExample("{prefix}{name} set Bye @{user} 👋")
     .setGuard("group", "admin")
     .setHandler(
         makeGreetingHandler({

@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setAliases("sf", "save")
     .setDescription("Save replied text or document to a file")
     .setUsage("{prefix}{name} <path>")
-    .setExample("{prefix}sf src/commands/tools/test.js")
+    .setExample("{prefix}{name} src/commands/tools/test.js")
     .setNote("Reply to a text message or document file.")
     .setGuard("owner")
     .setHandler(async (interaction) => {

@@ -12,13 +12,18 @@ export default new CommandBuilder()
     .setAliases("th", "thread")
     .setDescription("Download media from Threads posts")
     .setUsage("{prefix}{name} <url>")
-    .setExample("{prefix}threads https://www.threads.net/@user/post/ABC123")
+    .setExample("{prefix}{name} https://www.threads.net/@user/post/ABC123")
     .setReact("🧵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const url = (interaction.body || interaction.quoted?.text || "").trim();
+        const raw = (
+            interaction.body ||
+            interaction.quoted?.url ||
+            interaction.quoted?.text ||
+            ""
+        ).trim();
 
-        if (!url || !/threads\.net/i.test(url)) {
+        if (!raw || !/threads\.net/i.test(raw)) {
             return interaction.reply(
                 `Usage: \`${interaction.prefix}${interaction.commandName} <threads url>\``,
             );
@@ -26,7 +31,7 @@ export default new CommandBuilder()
 
         await interaction.typing();
 
-        const post = await threads.download(url);
+        const post = await threads.download(raw);
         const caption = post.caption || "";
 
         for (const [i, mediaUrl] of post.media.entries()) {

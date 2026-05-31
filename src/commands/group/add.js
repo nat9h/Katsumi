@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setAliases("+")
     .setDescription("Add a member to the group")
     .setUsage("{prefix}{name} <number>[, <number>, ...]")
-    .setExample("{prefix}add 628123456789")
+    .setExample("{prefix}{name} 628123456789")
     .setGuard("group", "admin", "botAdmin")
     .addOption("number", "string", "phone number(s) to add")
     .setHandler(async (interaction) => {

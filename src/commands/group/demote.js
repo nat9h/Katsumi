@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("deladmin")
     .setDescription("Demote an admin to a regular member")
     .setUsage("{prefix}{name} @user")
-    .setExample("{prefix}demote @user")
+    .setExample("{prefix}{name} @user")
     .setGuard("group", "admin", "botAdmin")
     .addOption("target", "string", "@mention, reply, or phone number")
     .setHandler(async (interaction) => {

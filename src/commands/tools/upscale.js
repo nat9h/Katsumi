@@ -16,7 +16,7 @@ export default new CommandBuilder()
     .setAliases("hd", "enhance")
     .setDescription("Upscale image (2x/4x) or enhance video to Ultra HD")
     .setUsage("{prefix}{name} [--4x] [--wink/-w]")
-    .setExample("{prefix}upscale\n{prefix}upscale -w")
+    .setExample("{prefix}{name}\n{prefix}{name} -w")
     .setNote(
         "Send or reply to an image/video. Use --4x for 4x image upscale, --wink/-w for wink HD enhancer on images.",
     )

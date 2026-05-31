@@ -19,7 +19,7 @@ export default new CommandBuilder()
     .setAliases("help", "h")
     .setDescription("Show all available commands")
     .setUsage("{prefix}{name} [command|category]")
-    .setExample("{prefix}menu info")
+    .setExample("{prefix}{name} info")
     .addOption("query", "string", "command or category name")
     .setHandler(async (interaction) => {
         const prefix = interaction.prefix;

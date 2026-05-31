@@ -77,7 +77,7 @@ process.once("SIGTERM", () => {
  * @param {Function} [persistFn] - Called after each write to trigger persistence.
  * @returns {object} Signal key store with get/set/toJSON/fromJSON methods.
  */
-function createSignalKeyStore(persistFn) {
+export function createSignalKeyStore(persistFn) {
     const store = new Map();
 
     return {
@@ -637,21 +637,20 @@ class SqliteDataStore {
         if (!meta?.id || !config.storeGroups) {
             return;
         }
-        const existing = this._getRow("groups", meta.id) || {};
-        let merged;
 
         if (Array.isArray(meta.participants) && meta.participants.length) {
-            merged = meta;
-        } else {
-            const clean = {};
-            for (const k in meta) {
-                if (meta[k] !== undefined) {
-                    clean[k] = meta[k];
-                }
-            }
-            merged = { ...existing, ...clean };
+            this._put("groups", meta.id, meta);
+            return;
         }
-        this._put("groups", meta.id, merged);
+
+        const existing = this._getRow("groups", meta.id) || {};
+        const clean = {};
+        for (const k in meta) {
+            if (meta[k] !== undefined) {
+                clean[k] = meta[k];
+            }
+        }
+        this._put("groups", meta.id, { ...existing, ...clean });
     }
 
     getGroup(jid) {

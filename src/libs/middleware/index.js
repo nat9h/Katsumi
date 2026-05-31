@@ -1,6 +1,7 @@
 import { areJidsSameUser, jidNormalizedUser } from "baileys";
 import config from "#config";
 import { Interaction } from "#libs/structures/Interaction";
+import { findParticipant } from "#libs/utils/group";
 import logger from "#libs/utils/logger";
 import { findContextInfo } from "#libs/utils/message";
 import { commandMap, customPrefixCommands } from "#libs/utils/plugin";
@@ -79,21 +80,6 @@ function matchesOwner(normJid, rawJid, target) {
     } catch {
         return false;
     }
-}
-
-/**
- * @param {object} meta
- * @param {string} jid
- * @returns {object|undefined}
- */
-function findParticipant(meta, jid) {
-    return meta?.participants?.find((p) => {
-        try {
-            return areJidsSameUser(p.id, jid);
-        } catch {
-            return p.id === jid;
-        }
-    });
 }
 
 /**

@@ -11,7 +11,7 @@ export default new CommandBuilder()
     .setAliases("addadmin")
     .setDescription("Promote a member to admin")
     .setUsage("{prefix}{name} @user")
-    .setExample("{prefix}promote @user")
+    .setExample("{prefix}{name} @user")
     .setGuard("group", "admin", "botAdmin")
     .addOption("target", "string", "@mention, reply, or phone number")
     .setHandler(async (interaction) => {

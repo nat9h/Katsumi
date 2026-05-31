@@ -1,4 +1,5 @@
 import { areJidsSameUser, jidNormalizedUser } from "baileys";
+import { findParticipant } from "#libs/utils/group";
 import { isOwner } from "#libs/utils/permission";
 
 /**
@@ -11,29 +12,6 @@ export class GuardError extends Error {
         this.name = "GuardError";
     }
 }
-
-/**
- * @param {object} meta - Group metadata
- * @param {string} jid
- * @returns {object|undefined}
- */
-const findParticipant = (meta, jid) => {
-    if (!meta?.participants || !jid) {
-        return undefined;
-    }
-    const normalized = jidNormalizedUser(jid);
-    return meta.participants.find((p) => {
-        try {
-            return (
-                p.id === jid ||
-                p.id === normalized ||
-                areJidsSameUser(p.id, jid)
-            );
-        } catch {
-            return p.id === jid;
-        }
-    });
-};
 
 /**
  * @param {import('./Interaction.js').Interaction} i

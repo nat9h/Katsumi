@@ -13,7 +13,7 @@ export default new CommandBuilder()
     .setAliases("lirik", "lyric")
     .setDescription("Search song lyrics (synced & plain)")
     .setUsage("{prefix}{name} <song title / artist>")
-    .setExample("{prefix}lyrics yoasobi idol")
+    .setExample("{prefix}{name} yoasobi idol")
     .setReact("🎶")
     .setRateLimit(8_000, 3)
     .setHandler(async (interaction) => {

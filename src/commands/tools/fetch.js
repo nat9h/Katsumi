@@ -16,7 +16,7 @@ export default new CommandBuilder()
     .setUsage(
         "{prefix}{name} <url> [--method] [--header] [--data] [--json] [--head] [--timeout]",
     )
-    .setExample("{prefix}fetch https://httpbin.org/get")
+    .setExample("{prefix}{name} https://httpbin.org/get")
     .setNote("Reply to a message containing a URL to use it as the target.")
     .setReact("🌐")
     .setRateLimit(8_000, 3)

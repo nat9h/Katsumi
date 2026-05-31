@@ -14,13 +14,14 @@ export default new CommandBuilder()
     .setAliases("tt", "ttdl", "ttsearch")
     .setDescription("Download or search TikTok videos")
     .setUsage("{prefix}{name} <url|query>")
-    .setExample("{prefix}tt https://vt.tiktok.com/xxx")
+    .setExample("{prefix}{name} https://vt.tiktok.com/xxx")
     .setNote("Without URL, searches TikTok. Sends video + audio automatically.")
     .setReact("🎵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
         const query = (
             interaction.body ||
+            interaction.quoted?.url ||
             interaction.quoted?.text ||
             ""
         ).trim();

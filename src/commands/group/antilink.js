@@ -12,7 +12,7 @@ export default new CommandBuilder()
         "Toggle anti-link in this group (deletes links from non-admins)",
     )
     .setUsage("{prefix}{name} <on|off>")
-    .setExample("{prefix}antilink on")
+    .setExample("{prefix}{name} on")
     .setGuard("group", "admin")
     .setHandler(async (interaction) => {
         const sub = interaction.rawArgs[0]?.toLowerCase();

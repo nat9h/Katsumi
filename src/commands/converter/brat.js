@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setName("brat")
     .setDescription("Generate a brat-style text sticker.")
     .setUsage("{prefix}{name} <text>")
-    .setExample("{prefix}brat hi everyone!")
+    .setExample("{prefix}{name} hi everyone!")
     .setReact("📃")
     .setRateLimit(5_000, 3)
     .setHandler(async (interaction) => {

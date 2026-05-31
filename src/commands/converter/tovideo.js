@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setAliases("tomp4", "tv")
     .setDescription("Convert an animated sticker to MP4 video")
     .setUsage("{prefix}{name}")
-    .setExample("{prefix}tovideo")
+    .setExample("{prefix}{name}")
     .setReact("🎬")
     .setRateLimit(8000, 3)
     .setHandler(async (interaction) => {

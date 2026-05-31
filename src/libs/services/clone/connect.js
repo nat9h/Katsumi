@@ -20,6 +20,7 @@ import makeWASocket, {
 import Database from "better-sqlite3";
 import pino from "pino";
 import config from "#config";
+import { createSignalKeyStore } from "#db";
 import { print } from "#libs/utils/logger";
 import { processMessage } from "#middleware";
 
@@ -196,61 +197,18 @@ function saveAuth(jid, ownerJid, creds, keys) {
 }
 
 /**
- * Create a Signal key store with a persist callback.
+ * Create a Signal key store for a clone, optionally hydrated with initial keys.
+ * Wraps the shared createSignalKeyStore from db.js.
  * @param {object} [initialKeys]
  * @param {Function} [onChange]
+ * @returns {object}
  */
-function createKeyStore(initialKeys, onChange) {
-    const map = new Map();
-
+function createCloneKeyStore(initialKeys, onChange) {
+    const store = createSignalKeyStore(onChange);
     if (initialKeys) {
-        for (const [type, obj] of Object.entries(initialKeys)) {
-            if (!obj || typeof obj !== "object") {
-                continue;
-            }
-            for (const [id, v] of Object.entries(obj)) {
-                map.set(`${type}:${id}`, v);
-            }
-        }
+        store.fromJSON(initialKeys);
     }
-
-    return {
-        get: async (type, ids) => {
-            const result = {};
-            for (const id of ids) {
-                const v = map.get(`${type}:${id}`);
-                if (v !== undefined) {
-                    result[id] = v;
-                }
-            }
-            return result;
-        },
-        set: async (data) => {
-            for (const [type, obj] of Object.entries(data)) {
-                if (!obj || typeof obj !== "object") {
-                    continue;
-                }
-                for (const [id, value] of Object.entries(obj)) {
-                    if (value === null || value === undefined) {
-                        map.delete(`${type}:${id}`);
-                    } else {
-                        map.set(`${type}:${id}`, value);
-                    }
-                }
-            }
-            onChange?.();
-        },
-        toJSON: () => {
-            const result = {};
-            for (const [k, v] of map) {
-                const i = k.indexOf(":");
-                const type = k.slice(0, i);
-                const id = k.slice(i + 1);
-                (result[type] ||= {})[id] = v;
-            }
-            return result;
-        },
-    };
+    return store;
 }
 
 /**
@@ -438,7 +396,7 @@ export async function createClone(ownerJid, mainClient) {
     }
 
     const creds = initAuthCreds();
-    const keys = createKeyStore();
+    const keys = createCloneKeyStore();
 
     let sock = await buildSocket(creds, keys);
 
@@ -502,7 +460,7 @@ export async function createClone(ownerJid, mainClient) {
 
 async function startCloneFromRow(row, mainClient) {
     const { creds, keys: rawKeys } = parseAuth(row);
-    const keys = createKeyStore(rawKeys);
+    const keys = createCloneKeyStore(rawKeys);
     let sock = await buildSocket(creds, keys);
 
     const restart = async () => {
@@ -551,7 +509,6 @@ export function deleteClone(jid) {
 export function deleteCloneByOwner(ownerJid) {
     const row = store.getByOwner(ownerJid);
     if (row) {
-        // Mark as stopped even if no live session (covers in-flight restarts)
         stoppedJids.add(row.jid);
         destroySession(row.jid);
         store.delete(row.jid);

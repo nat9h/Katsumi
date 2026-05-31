@@ -12,7 +12,7 @@ export default new CommandBuilder()
     .setAliases("df", "deletefile")
     .setDescription("Delete a file or folder")
     .setUsage("{prefix}{name} <path>")
-    .setExample("{prefix}df src/commands/tools/test.js")
+    .setExample("{prefix}{name} src/commands/tools/test.js")
     .setGuard("owner")
     .setHandler(async (interaction) => {
         const targetPath = interaction.body;
