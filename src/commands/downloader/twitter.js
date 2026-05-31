@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setDescription("Download tweets, stalk profiles, or view trends")
     .setUsage("{prefix}{name} <url|@user|trend>")
     .setExample(
-        "{prefix}tw https://x.com/user/status/123\n{prefix}tw @elonmusk\n{prefix}tw trend",
+        "{prefix}{name} https://x.com/user/status/123\n{prefix}tw @elonmusk\n{prefix}tw trend",
     )
     .setNote("URL → download. @user → stalk. 'trend' → trending.")
     .setReact("🐦")

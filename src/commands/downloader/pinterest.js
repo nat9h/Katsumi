@@ -15,7 +15,7 @@ export default new CommandBuilder()
     .setDescription("Download, search, or visual search Pinterest pins")
     .setUsage("{prefix}{name} <url|query|image> [count]")
     .setExample(
-        "{prefix}pin https://pinterest.com/pin/123\n{prefix}pin anime wallpaper\n{prefix}pin anime wallpaper 5\n{prefix}pin (send/reply image)",
+        "{prefix}{name} https://pinterest.com/pin/123\n{prefix}pin anime wallpaper\n{prefix}pin anime wallpaper 5\n{prefix}pin (send/reply image)",
     )
     .setNote(
         "URL → download. Text → random pin(s). Image → visual match (lens).",

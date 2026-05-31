@@ -1,8 +1,9 @@
 /**
- * @fileoverview YouTube command — search and download YouTube audio/video via yt-dlp.
+ * @fileoverview YouTube command — search/download audio/video + community posts.
  * @module commands/downloader/youtube
  */
 
+import youtubePost from "#libs/scrapers/youtube-post";
 import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDuration } from "#libs/utils/format";
@@ -21,7 +22,7 @@ const formatResult = (r, i) =>
 export default new CommandBuilder()
     .setName("youtube")
     .setAliases("yt", "ytdl", "play")
-    .setDescription("Search or download YouTube audio/video")
+    .setDescription("Search or download YouTube audio/video/community posts")
     .setUsage("{prefix}{name} <query|url> [--video | -v]")
     .setExample("{prefix}{name} yoasobi idol")
     .setReact("▶️")
@@ -46,6 +47,66 @@ export default new CommandBuilder()
         }
 
         await interaction.typing();
+
+        if (/youtube\.com\/post\//i.test(query)) {
+            const post = await youtubePost.download(query);
+
+            const postCaption = [
+                `👤 *${post.author}*`,
+                `👍 ${post.likes}`,
+                ...(post.text ? ["", post.text] : []),
+            ].join("\n");
+
+            if (post.images.length) {
+                if (post.images.length === 1) {
+                    await interaction.reply({
+                        image: { url: post.images[0].url },
+                        caption: postCaption,
+                    });
+                } else {
+                    await interaction.reply({
+                        image: { url: post.images[0].url },
+                        caption: postCaption,
+                    });
+                    const albumItems = post.images.slice(1).map((img) => ({
+                        url: img.url,
+                        type: "image",
+                    }));
+                    await interaction.sendAlbum(albumItems);
+                }
+                return;
+            }
+
+            if (post.videos.length) {
+                const vid = post.videos[0];
+                return interaction.reply(
+                    [
+                        postCaption,
+                        "",
+                        `🎬 *${vid.title}*`,
+                        ...(vid.duration ? [`⏱ ${vid.duration}`] : []),
+                        `🔗 ${vid.url}`,
+                    ].join("\n"),
+                );
+            }
+
+            if (post.poll) {
+                const pollLines = post.poll.choices.map(
+                    (c, i) => `${i + 1}. ${c.text}`,
+                );
+                return interaction.reply(
+                    [
+                        postCaption,
+                        "",
+                        "📊 *Poll:*",
+                        ...pollLines,
+                        `Total votes: ${post.poll.totalVotes}`,
+                    ].join("\n"),
+                );
+            }
+
+            return interaction.reply(postCaption);
+        }
 
         let url = query;
         let meta;
@@ -118,3 +179,4 @@ export default new CommandBuilder()
             return interaction.followUp(err.message);
         }
     });
+

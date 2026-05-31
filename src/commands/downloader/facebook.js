@@ -14,7 +14,7 @@ export default new CommandBuilder()
     .setDescription("Download or search Facebook videos, reels, and posts")
     .setUsage("{prefix}{name} <url|query>")
     .setExample(
-        "{prefix}fb https://www.facebook.com/reel/123456\n{prefix}fb kucing lucu\n{prefix}fb tutorial masak",
+        "{prefix}{name} https://www.facebook.com/reel/123456\n{prefix}fb kucing lucu\n{prefix}fb tutorial masak",
     )
     .setNote(
         "URL → direct download. Text → search videos, pick a number, download.",

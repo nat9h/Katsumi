@@ -16,7 +16,7 @@ export default new CommandBuilder()
     .setDescription("Download or search Instagram posts")
     .setUsage("{prefix}{name} <url|query>")
     .setExample(
-        "{prefix}ig https://www.instagram.com/reel/xxx\n{prefix}ig kucinglucu",
+        "{prefix}{name} https://www.instagram.com/reel/xxx\n{prefix}ig kucinglucu",
     )
     .setNote("URL → download. Text → search by hashtag.")
     .setReact("📸")
