@@ -45,9 +45,7 @@ class Instagram {
      * @returns {string|null}
      */
     extractHighlight(url) {
-        const match = url.match(
-            /instagram\.com\/stories\/highlights\/(\d+)/,
-        );
+        const match = url.match(/instagram\.com\/stories\/highlights\/(\d+)/);
         return match ? match[1] : null;
     }
 
@@ -320,8 +318,7 @@ class Instagram {
                 url: isVideo
                     ? item.video_versions[0].url
                     : item.image_versions2?.candidates?.[0]?.url || "",
-                thumbnail:
-                    item.image_versions2?.candidates?.[0]?.url || "",
+                thumbnail: item.image_versions2?.candidates?.[0]?.url || "",
                 width: item.original_width || 0,
                 height: item.original_height || 0,
             };

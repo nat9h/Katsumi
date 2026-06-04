@@ -1,35 +1,35 @@
 {
-  "files": {
-    "includes": ["src/**"]
-  },
-  "formatter": {
-    "indentStyle": "space",
-    "indentWidth": 4,
-    "lineWidth": 80
-  },
-  "javascript": {
+    "files": {
+        "includes": ["src/**"]
+    },
     "formatter": {
-      "quoteStyle": "double",
-      "trailingCommas": "all",
-      "arrowParentheses": "always",
-      "semicolons": "always"
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 80
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "double",
+            "trailingCommas": "all",
+            "arrowParentheses": "always",
+            "semicolons": "always"
+        }
+    },
+    "linter": {
+        "rules": {
+            "recommended": true,
+            "correctness": {
+                "noUnusedVariables": "warn",
+                "noUnusedImports": "warn"
+            },
+            "style": {
+                "useConst": "error",
+                "useBlockStatements": "error"
+            },
+            "suspicious": {
+                "noAssignInExpressions": "off",
+                "useIterableCallbackReturn": "off"
+            }
+        }
     }
-  },
-  "linter": {
-    "rules": {
-      "recommended": true,
-      "correctness": {
-        "noUnusedVariables": "warn",
-        "noUnusedImports": "warn"
-      },
-      "style": {
-        "useConst": "error",
-        "useBlockStatements": "error"
-      },
-      "suspicious": {
-        "noAssignInExpressions": "off",
-        "useIterableCallbackReturn": "off"
-      }
-    }
-  }
 }

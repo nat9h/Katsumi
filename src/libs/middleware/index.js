@@ -317,7 +317,11 @@ async function runGuards(client, interaction, cmd) {
         return null;
     }
 
-    if (client._isClone && cmd.guards.some(isOwnerGuard) && !isOwner(interaction)) {
+    if (
+        client._isClone &&
+        cmd.guards.some(isOwnerGuard) &&
+        !isOwner(interaction)
+    ) {
         return "🚫 Owner commands are not available on clones.";
     }
 
