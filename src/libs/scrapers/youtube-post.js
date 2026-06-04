@@ -63,7 +63,7 @@ class YouTubePost {
             return null;
         }
         const best = thumbnails[thumbnails.length - 1];
-        const url = best.url?.split("=s")[0] + "=s0";
+        const url = `${best.url?.split("=s")[0]}=s0`;
         return { url, width: best.width, height: best.height };
     }
 

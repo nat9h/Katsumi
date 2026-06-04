@@ -554,7 +554,7 @@ export class Interaction {
         time = 60_000,
         max = 1,
     } = {}) {
-        return new Collector(this.sock, this.chatJid, this.user, filter, {
+        return new Collector(this.client, this.chatJid, this.user, filter, {
             time,
             max,
         });

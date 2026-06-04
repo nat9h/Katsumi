@@ -30,11 +30,25 @@ class Instagram {
      * @returns {{username: string, storyId: string}|null}
      */
     extractStory(url) {
-        const match = url.match(/instagram\.com\/stories\/([^/?]+)\/(\d+)/);
+        const match = url.match(
+            /instagram\.com\/stories\/(?!highlights\/)([^/?]+)\/(\d+)/,
+        );
         if (!match) {
             return null;
         }
         return { username: match[1], storyId: match[2] };
+    }
+
+    /**
+     * Extract highlight ID from a highlight URL.
+     * @param {string} url
+     * @returns {string|null}
+     */
+    extractHighlight(url) {
+        const match = url.match(
+            /instagram\.com\/stories\/highlights\/(\d+)/,
+        );
+        return match ? match[1] : null;
     }
 
     /**
@@ -268,8 +282,73 @@ class Instagram {
     }
 
     /**
-     * Download Instagram post/reel/story by URL.
+     * Fetch highlight items via REST API.
+     * @param {string} highlightId - Numeric highlight ID
+     * @returns {Promise<object>}
+     */
+    async fetchHighlight(highlightId) {
+        const { cookies, csrf } = this.getSession();
+        const reelId = `highlight:${highlightId}`;
+
+        const { data } = await axios.get(
+            `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${reelId}`,
+            {
+                headers: {
+                    "User-Agent": this.#ua,
+                    "X-IG-App-ID": "936619743392459",
+                    "X-CSRFToken": csrf,
+                    "X-Requested-With": "XMLHttpRequest",
+                    Cookie: cookies,
+                    Referer: "https://www.instagram.com/",
+                },
+                timeout: 15_000,
+            },
+        );
+
+        const reel = data?.reels?.[reelId];
+        if (!reel?.items?.length) {
+            throw new Error(
+                "Failed to fetch highlight. It may be private or session expired.",
+            );
+        }
+
+        const media = reel.items.map((item) => {
+            const isVideo =
+                item.media_type === 2 || !!item.video_versions?.length;
+            return {
+                type: isVideo ? "video" : "image",
+                url: isVideo
+                    ? item.video_versions[0].url
+                    : item.image_versions2?.candidates?.[0]?.url || "",
+                thumbnail:
+                    item.image_versions2?.candidates?.[0]?.url || "",
+                width: item.original_width || 0,
+                height: item.original_height || 0,
+            };
+        });
+
+        return {
+            shortcode: "",
+            type: "Highlight",
+            isVideo: false,
+            isStory: false,
+            caption: "",
+            title: reel.title || "",
+            author: {
+                username: reel.user?.username || "",
+                fullName: reel.user?.full_name || "",
+                avatar: reel.user?.profile_pic_url || "",
+            },
+            stats: { likes: 0, comments: 0, views: 0, plays: 0 },
+            comments: [],
+            media,
+        };
+    }
+
+    /**
+     * Download Instagram post/reel/story/highlight by URL.
      * Stories are fetched by converting media ID to shortcode.
+     * Highlights are fetched via reels_media endpoint.
      * @param {string} url - Instagram URL
      * @returns {Promise<object>}
      */
@@ -279,6 +358,12 @@ class Instagram {
         }
 
         const clean = url.trim().split("?")[0];
+
+        const highlightId = this.extractHighlight(clean);
+        if (highlightId) {
+            return this.fetchHighlight(highlightId);
+        }
+
         const { cookies, csrf } = this.getSession();
         let shortcode;
 
@@ -291,7 +376,7 @@ class Instagram {
 
         if (!shortcode) {
             throw new Error(
-                "Invalid Instagram URL. Supported: /p/, /reel/, /reels/, /tv/, /stories/",
+                "Invalid Instagram URL. Supported: /p/, /reel/, /reels/, /tv/, /stories/, /stories/highlights/",
             );
         }
 

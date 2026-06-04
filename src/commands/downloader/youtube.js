@@ -179,4 +179,3 @@ export default new CommandBuilder()
             return interaction.followUp(err.message);
         }
     });
-

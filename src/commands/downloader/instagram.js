@@ -16,7 +16,7 @@ export default new CommandBuilder()
     .setDescription("Download or search Instagram posts")
     .setUsage("{prefix}{name} <url|query>")
     .setExample(
-        "{prefix}{name} https://www.instagram.com/reel/xxx\n{prefix}ig kucinglucu",
+        "{prefix}{name} https://www.instagram.com/reel/xxx\n{prefix}{name} kucinglucu",
     )
     .setNote("URL → download. Text → search by hashtag.")
     .setReact("📸")
@@ -42,14 +42,23 @@ export default new CommandBuilder()
 
             const lines = [
                 `👤 *@${post.author.username}*${post.author.fullName ? ` (${post.author.fullName})` : ""}`,
-                `❤️ ${formatCount(post.stats.likes)} • 💬 ${formatCount(post.stats.comments)}`,
-                ...(post.stats.views
-                    ? [`👁 ${formatCount(post.stats.views)} views`]
-                    : []),
-                ...(post.stats.plays
-                    ? [`▶️ ${formatCount(post.stats.plays)} plays`]
-                    : []),
             ];
+
+            if (post.type === "Highlight") {
+                lines.push(
+                    `📌 *${post.title || "Highlight"}* — ${post.media.length} items`,
+                );
+            } else {
+                lines.push(
+                    `❤️ ${formatCount(post.stats.likes)} • 💬 ${formatCount(post.stats.comments)}`,
+                    ...(post.stats.views
+                        ? [`👁 ${formatCount(post.stats.views)} views`]
+                        : []),
+                    ...(post.stats.plays
+                        ? [`▶️ ${formatCount(post.stats.plays)} plays`]
+                        : []),
+                );
+            }
 
             if (post.caption) {
                 lines.push("", post.caption);
@@ -72,7 +81,25 @@ export default new CommandBuilder()
 
             const caption = lines.join("\n");
 
-            for (const [i, media] of post.media.entries()) {
+            if (post.media.length > 1) {
+                const albumItems = [];
+                for (const media of post.media) {
+                    if (media.type === "video") {
+                        const { data } = await axios.get(media.url, {
+                            responseType: "arraybuffer",
+                            timeout: 60_000,
+                        });
+                        albumItems.push({
+                            buffer: Buffer.from(data),
+                            type: "video",
+                        });
+                    } else {
+                        albumItems.push({ url: media.url, type: "image" });
+                    }
+                }
+                await interaction.sendAlbum(albumItems, { caption });
+            } else {
+                const media = post.media[0];
                 if (media.type === "video") {
                     const { data } = await axios.get(media.url, {
                         responseType: "arraybuffer",
@@ -80,12 +107,12 @@ export default new CommandBuilder()
                     });
                     await interaction.followUp({
                         video: Buffer.from(data),
-                        ...(i === 0 ? { caption } : {}),
+                        caption,
                     });
                 } else {
                     await interaction.followUp({
                         image: { url: media.url },
-                        ...(i === 0 ? { caption } : {}),
+                        caption,
                     });
                 }
             }

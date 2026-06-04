@@ -99,7 +99,6 @@ async function maybeAntiLink(client, interaction) {
     }
 
     const text = interaction.text;
-    // Also check extendedTextMessage matchedText/canonicalUrl for auto-detected links
     const m = interaction.msg.message;
     const ext =
         m?.extendedTextMessage ||
@@ -318,7 +317,7 @@ async function runGuards(client, interaction, cmd) {
         return null;
     }
 
-    if (client._isClone && cmd.guards.some(isOwnerGuard)) {
+    if (client._isClone && cmd.guards.some(isOwnerGuard) && !isOwner(interaction)) {
         return "🚫 Owner commands are not available on clones.";
     }
 

@@ -14,7 +14,6 @@ import {
 import { captureStatus } from "#libs/utils/status";
 import { processMessage } from "#middleware";
 
-let botIdPrefix = "";
 const pairingJid = config.pairingNumber
     ? `${config.pairingNumber.replace(/\D/g, "")}@s.whatsapp.net`
     : null;
@@ -67,17 +66,15 @@ function extractExpiration(message) {
 }
 
 /**
+ * @param {import('../Client.js').Client} client
  * @param {object} msg
  * @returns {boolean}
  */
-function isOwnEcho(msg) {
+function isOwnEcho(client, msg) {
     if (!msg.key.fromMe) {
         return false;
     }
-    if (!botIdPrefix) {
-        botIdPrefix = `${config.botId}_`;
-    }
-    if ((msg.key.id ?? "").startsWith(botIdPrefix)) {
+    if (client.wasSentByMe?.(msg.key.id)) {
         return true;
     }
     if (!config.selfMode) {
@@ -413,7 +410,7 @@ export async function handleMessagesUpsert(client, { type, messages }) {
             client.messageCache.set(`${msg.key.remoteJid}_${msg.key.id}`, msg);
         }
 
-        if (isOwnEcho(msg)) {
+        if (isOwnEcho(client, msg)) {
             continue;
         }
 

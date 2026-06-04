@@ -5,7 +5,6 @@
 
 import { EventEmitter } from "node:events";
 import { areJidsSameUser } from "baileys";
-import config from "#config";
 
 /**
  * @typedef {object} CollectorOptions
@@ -20,6 +19,9 @@ import config from "#config";
  * @extends EventEmitter
  */
 export class Collector extends EventEmitter {
+    /** @type {import('../../handlers/Client.js').Client} */
+    #client;
+
     /** @type {import('baileys').WASocket} */
     #sock;
 
@@ -50,29 +52,27 @@ export class Collector extends EventEmitter {
     /**
      * Create a new message collector.
      *
-     * @param {import('baileys').WASocket} sock - The Baileys socket instance.
+     * @param {import('../../handlers/Client.js').Client} client - The bot client.
      * @param {string} chatJid - The chat JID to listen in.
      * @param {string} userJid - The user JID to filter messages from.
      * @param {(msg: object) => boolean} filter - Custom filter function.
      * @param {CollectorOptions} options - Collector configuration.
      */
-    constructor(sock, chatJid, userJid, filter, { time = 60_000, max = 1 }) {
+    constructor(client, chatJid, userJid, filter, { time = 60_000, max = 1 }) {
         super();
-        this.#sock = sock;
+        this.#client = client;
+        this.#sock = client.sock;
         this.#chatJid = chatJid;
         this.#userJid = userJid;
         this.#filter = filter;
         this.#max = max;
-
-        const ownIdPrefix = `${config.botId}_`;
 
         this.#handler = ({ type, messages }) => {
             if (type !== "notify") {
                 return;
             }
             for (const msg of messages) {
-                const msgId = msg.key.id ?? "";
-                if (msg.key.fromMe && msgId.startsWith(ownIdPrefix)) {
+                if (msg.key.fromMe && this.#client.wasSentByMe?.(msg.key.id)) {
                     continue;
                 }
                 if (msg.key.remoteJid !== this.#chatJid) {

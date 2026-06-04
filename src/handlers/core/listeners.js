@@ -187,8 +187,6 @@ export function handleMessageRevoke(client, msg) {
     return revokeData;
 }
 
-// ─── Reaction Tracking ───────────────────────────────────────────────────────
-
 /**
  * Handle reaction events from messages.reaction or messages.upsert.
  *

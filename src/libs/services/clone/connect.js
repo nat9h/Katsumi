@@ -14,6 +14,7 @@ import makeWASocket, {
     BufferJSON,
     DisconnectReason,
     fetchLatestBaileysVersion,
+    generateMessageIDV2,
     initAuthCreds,
     makeCacheableSignalKeyStore,
 } from "baileys";
@@ -22,6 +23,7 @@ import pino from "pino";
 import config from "#config";
 import { createSignalKeyStore } from "#db";
 import { print } from "#libs/utils/logger";
+import { MemCache } from "#libs/utils/runtime";
 import { processMessage } from "#middleware";
 
 const cloneLogger = pino({
@@ -234,6 +236,19 @@ function bindCloneEvents({
 }) {
     const phoneTag = `[clone:${ownerJid.split("@")[0]}]`;
 
+    /** Track message IDs sent by this clone to distinguish bot replies from user input. */
+    const sentMsgIds = new MemCache({ ttl: 10 * 60_000, max: 5000 });
+
+    const cloneGenerateMsgId = () => {
+        const id = generateMessageIDV2(sock.user?.id);
+        sentMsgIds.set(id, true);
+        return id;
+    };
+
+    const cloneWasSentByMe = (id) => {
+        return id ? sentMsgIds.peek(id) === true : false;
+    };
+
     const persist = () => {
         const jid = sock.user?.id || knownJid;
         if (jid) {
@@ -252,7 +267,6 @@ function bindCloneEvents({
             saveAuth(jid, ownerJid, creds, keys.toJSON());
             print.ok(`Clone connected: ${jid.split("@")[0]}`);
 
-            // Notify owner only on the first connect (not reconnects)
             if (!knownJid) {
                 mainClient
                     .sendMessage(ownerJid, {
@@ -270,7 +284,6 @@ function bindCloneEvents({
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const jid = sock.user?.id || knownJid;
 
-            // Intentionally stopped → don't reconnect
             if (jid && stoppedJids.has(jid)) {
                 stoppedJids.delete(jid);
                 sessions.delete(jid);
@@ -331,7 +344,11 @@ function bindCloneEvents({
             return;
         }
         for (const msg of messages) {
-            if (!msg.message || msg.key.fromMe) {
+            if (!msg.message) {
+                continue;
+            }
+
+            if (msg.key.fromMe && cloneWasSentByMe(msg.key.id)) {
                 continue;
             }
 
@@ -340,14 +357,21 @@ function bindCloneEvents({
             processMessage(
                 {
                     sock,
-                    sendMessage: (j, c, o) => sock.sendMessage(j, c, o),
+                    sendMessage: async (j, c, o) => {
+                        const sent = await sock.sendMessage(j, c, o);
+                        if (sent?.key?.id) {
+                            sentMsgIds.set(sent.key.id, true);
+                        }
+                        return sent;
+                    },
                     db: mainClient.db,
                     store: mainClient.store,
                     groupCache: mainClient.groupCache,
                     ephemeralCache: mainClient.ephemeralCache,
                     messageCache: mainClient.messageCache,
                     stats: mainClient.stats,
-                    generateMsgId: () => mainClient.generateMsgId(),
+                    generateMsgId: cloneGenerateMsgId,
+                    wasSentByMe: cloneWasSentByMe,
                     _isClone: true,
                     _cloneOwner: ownerJid,
                 },
