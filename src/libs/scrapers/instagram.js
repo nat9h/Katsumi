@@ -45,8 +45,23 @@ class Instagram {
      * @returns {string|null}
      */
     extractHighlight(url) {
-        const match = url.match(/instagram\.com\/stories\/highlights\/(\d+)/);
-        return match ? match[1] : null;
+        const direct = url.match(/instagram\.com\/stories\/highlights\/(\d+)/);
+        if (direct) {
+            return direct[1];
+        }
+
+        const shareMatch = url.match(/instagram\.com\/s\/([A-Za-z0-9_-]+)/);
+        if (shareMatch) {
+            const decoded = Buffer.from(shareMatch[1], "base64").toString(
+                "utf8",
+            );
+            const hlMatch = decoded.match(/^highlight:(\d+)$/);
+            if (hlMatch) {
+                return hlMatch[1];
+            }
+        }
+
+        return null;
     }
 
     /**
