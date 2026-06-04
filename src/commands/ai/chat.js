@@ -1,9 +1,10 @@
 /**
- * @fileoverview AI command — chat, image vision, and image generation.
+ * @fileoverview AI command — chat and image vision via Morphic.
  * @module commands/ai/chat
  */
 
 import { getAI } from "#libs/scrapers/ai";
+import morphic from "#libs/scrapers/morphic";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { truncate } from "#libs/utils/format";
 import { fetchMedia } from "#libs/utils/message";
@@ -11,11 +12,11 @@ import { fetchMedia } from "#libs/utils/message";
 export default new CommandBuilder()
     .setName("ai")
     .setAliases("ai", "gpt", "chat")
-    .setDescription("Chat with AI, analyze images, or generate images")
+    .setDescription("Chat with AI or analyze images")
     .setUsage("{prefix}{name} <prompt> | --imagine <prompt>")
     .setExample("{prefix}{name} Explain what JavaScript is")
     .setNote(
-        "Use --imagine to generate images. Send/reply to an image to analyze it.",
+        "Send/reply to an image to analyze it. Use --imagine to generate images.",
     )
     .setReact("🤖")
     .setRateLimit(10_000, 3)
@@ -39,7 +40,7 @@ export default new CommandBuilder()
                     `\`${interaction.prefix}${interaction.commandName} <prompt>\``,
                     `\`${interaction.prefix}${interaction.commandName} --imagine <prompt>\`\n`,
                     "*Features:*",
-                    "• Ask anything to AI",
+                    "• Ask anything to AI (powered by Morphic)",
                     "• Send/reply to an image to analyze it",
                     "• Use `--imagine` to generate images from text\n",
                     "*Examples:*",
@@ -50,21 +51,27 @@ export default new CommandBuilder()
             );
         }
 
-        const ai = getAI();
-
         if (flags.imagine) {
+            const ai = getAI();
             const buffer = await ai.imagine(query);
             return interaction.reply({ image: buffer, caption: query });
         }
 
         if (isImage) {
             await interaction.reply("Analyzing image...");
-            const reply = await ai.vision(media.buffer, {
-                prompt: query || "What is in this image? Describe in detail.",
-                mimeType:
-                    media.type === "sticker" ? "image/webp" : "image/jpeg",
+            const prompt =
+                query || "What is in this image? Describe in detail.";
+            const mimeType =
+                media.type === "sticker" ? "image/webp" : "image/jpeg";
+            const ext = mimeType === "image/webp" ? "webp" : "jpg";
+
+            const result = await morphic.chat(prompt, {
+                imageBuffer: media.buffer,
+                imageFilename: `image.${ext}`,
+                imageMimetype: mimeType,
             });
-            return interaction.editReply(truncate(reply, 65_000));
+
+            return interaction.editReply(truncate(result.text, 65_000));
         }
 
         let prompt = text || quoted;
@@ -73,8 +80,6 @@ export default new CommandBuilder()
         }
 
         await interaction.reply("Thinking...");
-        const reply = await ai.chat(prompt, {
-            system: "You are a helpful AI assistant. Answer clearly and concisely.",
-        });
-        return interaction.editReply(truncate(reply, 65_000));
+        const result = await morphic.chat(prompt);
+        return interaction.editReply(truncate(result.text, 65_000));
     });

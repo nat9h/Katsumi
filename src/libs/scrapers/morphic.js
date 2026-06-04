@@ -233,6 +233,22 @@ class Morphic {
     }
 
     /**
+     * Clean response text — remove citation refs and normalize formatting.
+     * @param {string} text
+     * @returns {string}
+     */
+    cleanText(text) {
+        return text
+            .replace(/\[(\d+)\]\s*\(#[a-zA-Z0-9_-]+\)/g, "")
+            .replace(/\[\d+\]/g, "")
+            .replace(/\*\*\*(.+?)\*\*\*/g, "*_$1_*")
+            .replace(/\*\*(.+?)\*\*/g, "*$1*")
+            .replace(/^###?\s*(.+)/gm, "*$1*")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+    }
+
+    /**
      * Parse SSE stream data into structured response
      * @param {string} rawData - Raw SSE response text
      * @returns {object}
@@ -299,6 +315,7 @@ class Morphic {
         }
 
         result.text = result.text.replace(/```spec[\s\S]*?```\s*$/g, "").trim();
+        result.text = this.cleanText(result.text);
 
         return result;
     }

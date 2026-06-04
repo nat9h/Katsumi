@@ -192,7 +192,123 @@ class Facebook {
     }
 
     /**
+     * Build Facebook session cookies from env.
+     * @returns {string|null}
+     */
+    getCookies() {
+        const cUser = process.env.FB_C_USER || "";
+        const xs = process.env.FB_XS || "";
+        if (!cUser || !xs) {
+            return null;
+        }
+        return `c_user=${cUser}; xs=${xs}; presence=C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A0%7D;`;
+    }
+
+    /**
+     * Common request headers for Facebook.
+     * @returns {object}
+     */
+    get requestHeaders() {
+        return {
+            "User-Agent": this.UA,
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "max-age=0",
+            "sec-ch-ua":
+                '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="8"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "sec-fetch-user": "?1",
+            "upgrade-insecure-requests": "1",
+        };
+    }
+
+    /**
+     * Extract video URLs from authenticated (React SPA) HTML.
+     * Facebook serves video data in different JSON structures when logged in.
+     * @param {string} html
+     * @returns {{ hd: string|null, sd: string|null }}
+     */
+    extractVideoAuth(html) {
+        let hd = null;
+        let sd = null;
+
+        const hdPatterns = [
+            /"playable_url_quality_hd"\s*:\s*"(https?[^"]+)"/,
+            /"browser_native_hd_url"\s*:\s*"(https?[^"]+)"/,
+            /"hd_src"\s*:\s*"(https?[^"]+)"/,
+        ];
+        for (const re of hdPatterns) {
+            const m = html.match(re);
+            if (m) {
+                hd = this.decode(m[1]);
+                break;
+            }
+        }
+
+        const sdPatterns = [
+            /"playable_url"\s*:\s*"(https?[^"]+)"/,
+            /"browser_native_sd_url"\s*:\s*"(https?[^"]+)"/,
+            /"sd_src"\s*:\s*"(https?[^"]+)"/,
+            /"progressive_url"\s*:\s*"(https?[^"]+)"/,
+            /"video_url"\s*:\s*"(https?[^"]+)"/,
+            /"base_url"\s*:\s*"(https?:\/\/video[^"]+)"/,
+        ];
+        for (const re of sdPatterns) {
+            const m = html.match(re);
+            if (m) {
+                sd = this.decode(m[1]);
+                break;
+            }
+        }
+
+        return { hd, sd };
+    }
+
+    /**
+     * Extract images from authenticated HTML (different JSON structure).
+     * @param {string} html
+     * @returns {string[]}
+     */
+    extractImagesAuth(html) {
+        const seen = new Set();
+        const images = [];
+
+        const patterns = [
+            /"uri"\s*:\s*"(https?:\\\/\\\/scontent[^"]+)"/g,
+            /"url"\s*:\s*"(https?:\\\/\\\/scontent[^"]+\.jpg[^"]*)"/g,
+            /"uri"\s*:\s*"(https?:\/\/scontent[^"]+)"/g,
+            /"url"\s*:\s*"(https?:\/\/scontent[^"]+\.jpg[^"]*)"/g,
+        ];
+
+        for (const re of patterns) {
+            for (const m of html.matchAll(re)) {
+                const url = m[1].replace(/\\\//g, "/");
+                if (!url.includes("/t39.30808-6/")) {
+                    continue;
+                }
+                const key = url.match(/\/(\d+_\d+_\d+_n\.jpg)/)?.[1] || url;
+                if (seen.has(key)) {
+                    continue;
+                }
+                seen.add(key);
+                images.push(url);
+            }
+            if (images.length > 0) {
+                break;
+            }
+        }
+
+        return images;
+    }
+
+    /**
      * Download media from a public Facebook URL.
+     * Strategy: try without cookies first, fallback with cookies if available.
      * @param {string} url - Facebook video, reel, or photo post URL.
      * @returns {Promise<object>}
      */
@@ -201,18 +317,16 @@ class Facebook {
             throw new Error("Facebook URL is required.");
         }
 
-        const { data: html } = await axios.get(this.normalize(url.trim()), {
-            headers: {
-                "User-Agent": this.UA,
-                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "sec-fetch-mode": "navigate",
-            },
+        const normalizedUrl = this.normalize(url.trim());
+        const headers = this.requestHeaders;
+
+        const { data: html } = await axios.get(normalizedUrl, {
+            headers,
             timeout: 15_000,
             maxRedirects: 5,
         });
 
-        const title =
+        let title =
             this.extractCaption(html) ||
             (html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
                 html.match(/<title>([^<]+)<\/title>/i))?.[1] ||
@@ -238,25 +352,77 @@ class Facebook {
 
         let images = this.extractImages(html);
 
-        if (images.length === 0 && thumbnail) {
-            images = [this.decode(thumbnail)];
+        if (images.length > 0) {
+            return {
+                type: "image",
+                title: title ? this.decode(title) : "",
+                thumbnail: thumbnail ? this.decode(thumbnail) : "",
+                sd: "",
+                hd: "",
+                video: "",
+                images,
+            };
         }
 
-        if (images.length === 0) {
-            throw new Error(
-                "Could not extract media. Post might be private or URL is invalid.",
-            );
+        const cookies = this.getCookies();
+        if (cookies) {
+            const { data: authHtml } = await axios.get(normalizedUrl, {
+                headers: { ...headers, Cookie: cookies },
+                timeout: 15_000,
+                maxRedirects: 5,
+            });
+
+            if (!title || title === "Facebook") {
+                title =
+                    this.extractCaption(authHtml) ||
+                    (authHtml.match(
+                        /<meta\s+property="og:title"\s+content="([^"]+)"/i,
+                    ) || authHtml.match(/<title>([^<]+)<\/title>/i))?.[1] ||
+                    "";
+            }
+
+            const authVideo = this.extractVideoAuth(authHtml);
+            if (authVideo.sd || authVideo.hd) {
+                return {
+                    type: "video",
+                    title: title ? this.decode(title) : "",
+                    thumbnail: thumbnail ? this.decode(thumbnail) : "",
+                    sd: authVideo.sd || "",
+                    hd: authVideo.hd || "",
+                    video: authVideo.hd || authVideo.sd,
+                    images: [],
+                };
+            }
+
+            images = this.extractImagesAuth(authHtml);
+            if (images.length > 0) {
+                return {
+                    type: "image",
+                    title: title ? this.decode(title) : "",
+                    thumbnail: thumbnail ? this.decode(thumbnail) : "",
+                    sd: "",
+                    hd: "",
+                    video: "",
+                    images,
+                };
+            }
         }
 
-        return {
-            type: "image",
-            title: title ? this.decode(title) : "",
-            thumbnail: thumbnail ? this.decode(thumbnail) : "",
-            sd: "",
-            hd: "",
-            video: "",
-            images,
-        };
+        if (thumbnail) {
+            return {
+                type: "image",
+                title: title ? this.decode(title) : "",
+                thumbnail: this.decode(thumbnail),
+                sd: "",
+                hd: "",
+                video: "",
+                images: [this.decode(thumbnail)],
+            };
+        }
+
+        throw new Error(
+            "Could not extract media. Post might be private or URL is invalid.",
+        );
     }
 
     /**
