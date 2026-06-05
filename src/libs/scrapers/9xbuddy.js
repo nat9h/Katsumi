@@ -8,14 +8,12 @@ import axios from "axios";
 
 class NinexBuddyCrypto {
     decode64(e) {
-        if (
-            ((e = e.replace(/\s/g, "")),
-            !/^[a-z0-9+/\s]+=*$/i.test(e) || e.length % 4 > 0)
-        ) {
+        e = e.replace(/\s/g, "");
+        if (!/^[a-z0-9+/\s]+=*$/i.test(e) || e.length % 4 > 0) {
             return "";
         }
         let t = 0,
-            n, 
+            n,
             r,
             i,
             a = [];
