@@ -1,7 +1,7 @@
 /**
  * @fileoverview Project Sekai sticker scraper & maker.
  * Fetches sticker data from st.ayaka.one and generates sticker images with custom text.
- * Uses sharp (already installed) for text rendering via SVG overlay.
+ * Uses sharp for text rendering via SVG overlay — replicates the original site styling.
  * @module scrapers/sekai-sticker
  */
 
@@ -18,11 +18,13 @@ class SekaiSticker {
     #stickers = null;
     #characters = null;
     #base = "https://st.ayaka.one";
+    #fontFaceCache = null;
+    #imageCache = new Map();
+    #imageCacheMax = 50;
 
     /**
      * Load sticker data from the frontend bundle.
      * Caches the result for subsequent calls.
-     * @returns {Promise<Array<{id: string, name: string, character: string, img: string, color: string, defaultText: {text: string, x: number, y: number, r: number, s: number}}>>}
      */
     async #loadStickers() {
         if (this.#stickers) {
@@ -57,7 +59,7 @@ class SekaiSticker {
     /**
      * Get all stickers for a specific character.
      * @param {string} character - Character name (case-insensitive)
-     * @returns {Promise<Array<{id: string, name: string, character: string, img: string, color: string, url: string}>>}
+     * @returns {Promise<Array>}
      */
     async getStickers(character) {
         const stickers = await this.#loadStickers();
@@ -73,7 +75,7 @@ class SekaiSticker {
     /**
      * Search stickers by name or character.
      * @param {string} query - Search query
-     * @returns {Promise<Array<{id: string, name: string, character: string, img: string, color: string, url: string}>>}
+     * @returns {Promise<Array>}
      */
     async search(query) {
         const stickers = await this.#loadStickers();
@@ -93,7 +95,6 @@ class SekaiSticker {
     /**
      * Get a random sticker, optionally filtered by character.
      * @param {string} [character] - Optional character filter
-     * @returns {Promise<{id: string, name: string, character: string, img: string, color: string, url: string, defaultText: object}>}
      */
     async random(character) {
         const stickers = await this.#loadStickers();
@@ -111,7 +112,7 @@ class SekaiSticker {
     }
 
     /**
-     * Get sticker image as Buffer.
+     * Get sticker image as Buffer (with LRU cache).
      * @param {string} stickerImg - The img path (e.g. "airi/Airi_01.png")
      * @returns {Promise<Buffer>}
      */
@@ -119,17 +120,30 @@ class SekaiSticker {
         const url = stickerImg.startsWith("http")
             ? stickerImg
             : `${this.#base}/img/${stickerImg}`;
+
+        if (this.#imageCache.has(url)) {
+            return this.#imageCache.get(url);
+        }
+
         const { data } = await axios.get(url, {
             responseType: "arraybuffer",
             timeout: 15_000,
         });
-        return Buffer.from(data);
+        const buffer = Buffer.from(data);
+
+        // Simple LRU: evict oldest when cache is full
+        if (this.#imageCache.size >= this.#imageCacheMax) {
+            const firstKey = this.#imageCache.keys().next().value;
+            this.#imageCache.delete(firstKey);
+        }
+        this.#imageCache.set(url, buffer);
+
+        return buffer;
     }
 
     /**
      * Get a sticker by ID.
      * @param {string} id - Sticker ID
-     * @returns {Promise<{id: string, name: string, character: string, img: string, color: string, url: string, defaultText: object}|null>}
      */
     async getById(id) {
         const stickers = await this.#loadStickers();
@@ -158,21 +172,150 @@ class SekaiSticker {
     }
 
     /**
+     * Estimate character width (CJK-aware).
+     * Based on average glyph widths for YurukaStd / rounded sans-serif fonts.
+     * Intentionally slightly under-estimates to avoid premature wrapping.
+     * @param {string} ch - Single character
+     * @param {number} fontSize - Font size in px
+     * @returns {number} Estimated pixel width
+     */
+    #charWidth(ch, fontSize) {
+        const code = ch.charCodeAt(0);
+        if (
+            (code >= 0x3000 && code <= 0x9fff) ||
+            (code >= 0xf900 && code <= 0xfaff) ||
+            (code >= 0xff00 && code <= 0xffef)
+        ) {
+            return fontSize * 0.9;
+        }
+        if ("il1|!.,;:'".includes(ch)) {
+            return fontSize * 0.3;
+        }
+        if ("ftjrI()[]{}".includes(ch)) {
+            return fontSize * 0.38;
+        }
+        if ("mMwWOQD@%".includes(ch)) {
+            return fontSize * 0.7;
+        }
+        if (code >= 0x41 && code <= 0x5a) {
+            return fontSize * 0.58;
+        }
+        return fontSize * 0.5;
+    }
+
+    /**
+     * Measure estimated width of a string.
+     * @param {string} str
+     * @param {number} fontSize
+     * @returns {number}
+     */
+    #measureText(str, fontSize) {
+        let w = 0;
+        for (const ch of str) {
+            w += this.#charWidth(ch, fontSize);
+        }
+        return w;
+    }
+
+    /**
+     * Wrap text into multiple lines with word-aware breaking.
+     * Prefers breaking on spaces/hyphens, falls back to character wrap for long words.
+     * @param {string} text - Input text
+     * @param {number} maxWidth - Maximum pixel width per line
+     * @param {number} fontSize - Current font size
+     * @returns {string[]} Array of text lines
+     */
+    #wrapText(text, maxWidth, fontSize) {
+        const tokens = text.match(/[\S]+|\s+/g) || [text];
+        const lines = [];
+        let currentLine = "";
+        let currentWidth = 0;
+
+        for (const token of tokens) {
+            const tokenWidth = this.#measureText(token, fontSize);
+            if (tokenWidth > maxWidth && token.trim().length > 0) {
+                if (currentLine.trim()) {
+                    lines.push(currentLine.trim());
+                    currentLine = "";
+                    currentWidth = 0;
+                }
+                let chunk = "";
+                let chunkW = 0;
+                for (const ch of token) {
+                    const cw = this.#charWidth(ch, fontSize);
+                    if (chunkW + cw > maxWidth && chunk.length > 0) {
+                        lines.push(chunk);
+                        chunk = ch;
+                        chunkW = cw;
+                    } else {
+                        chunk += ch;
+                        chunkW += cw;
+                    }
+                }
+                if (chunk) {
+                    currentLine = chunk;
+                    currentWidth = chunkW;
+                }
+                continue;
+            }
+
+            if (currentWidth + tokenWidth > maxWidth && currentLine.trim()) {
+                lines.push(currentLine.trim());
+                currentLine = token.trimStart();
+                currentWidth = this.#measureText(currentLine, fontSize);
+            } else {
+                currentLine += token;
+                currentWidth += tokenWidth;
+            }
+        }
+
+        if (currentLine.trim()) {
+            lines.push(currentLine.trim());
+        }
+
+        return lines.length > 0 ? lines : [text];
+    }
+
+    /**
+     * Escape text for safe SVG embedding.
+     * @param {string} str
+     * @returns {string}
+     */
+    #escapeSvg(str) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&apos;");
+    }
+
+    /**
      * Generate a sticker with custom text overlay.
      * Renders text on the character image using sharp + SVG.
-     * Replicates the original site's style: YurukaStd font, white stroke, colored fill.
+     * Styling: YurukaStd font, thick white stroke, colored fill, drop shadow.
      *
      * @param {object} options
      * @param {string} options.character - Character name (case-insensitive)
      * @param {string} options.text - Text to render on the sticker
-     * @param {number} [options.index=0] - Sticker index for the character (0-12)
-     * @param {number} [options.fontSize] - Font size (default from sticker data)
-     * @param {number} [options.rotate] - Text rotation in degrees (default from sticker data)
-     * @param {number} [options.x] - Text X position (default from sticker data)
-     * @param {number} [options.y] - Text Y position (default from sticker data)
+     * @param {number} [options.index=0] - Sticker index for the character (0-based)
+     * @param {number} [options.fontSize] - Font size override
+     * @param {number} [options.rotate] - Text rotation in degrees
+     * @param {number} [options.x] - Text X position override
+     * @param {number} [options.y] - Text Y position override
+     * @param {"normal"|"italic"} [options.style="normal"] - Font style
      * @returns {Promise<Buffer>} PNG image buffer
      */
-    async make({ character, text, index = 0, fontSize, rotate, x, y }) {
+    async make({
+        character,
+        text,
+        index = 0,
+        fontSize,
+        rotate,
+        x,
+        y,
+        style = "normal",
+    }) {
         if (!text?.trim()) {
             throw new Error("Text is required.");
         }
@@ -203,36 +346,79 @@ class SekaiSticker {
         const height = meta.height || 256;
 
         const maxTextWidth = width * 0.9;
-        const estimatedWidth = text.length * textS * 0.6;
-        if (estimatedWidth > maxTextWidth) {
-            textS = Math.floor(maxTextWidth / (text.length * 0.6));
-            textS = Math.max(textS, 14);
+        const maxLines = 4;
+        const minFontSize = 16;
+
+        const isSingleWord = !text.includes(" ");
+        if (isSingleWord) {
+            const wordWidth = this.#measureText(text, textS);
+            if (wordWidth > maxTextWidth) {
+                textS = Math.max(
+                    minFontSize,
+                    Math.floor(textS * (maxTextWidth / wordWidth)),
+                );
+            }
+        }
+
+        let lines = this.#wrapText(text, maxTextWidth, textS);
+
+        let attempts = 0;
+        while (lines.length > maxLines && textS > minFontSize && attempts < 5) {
+            const ratio = Math.max(0.7, maxLines / lines.length);
+            textS = Math.max(minFontSize, Math.floor(textS * ratio));
+            lines = this.#wrapText(text, maxTextWidth, textS);
+            attempts++;
+        }
+
+        if (lines.length > maxLines) {
+            lines = lines.slice(0, maxLines);
+            const last = lines[maxLines - 1];
+            lines[maxLines - 1] =
+                last.length > 3 ? `${last.slice(0, -3)}...` : `${last}...`;
         }
 
         const fontFace = await this.#getFontFace();
-
-        const escaped = text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
-
-        const strokeWidth = Math.max(5, Math.round(textS * 0.19));
+        const strokeWidth = Math.max(5, Math.round(textS * 0.2));
+        const shadowOffset = Math.max(2, Math.round(textS * 0.06));
         const fontFamily =
-            "YurukaStd, 'Arial Rounded MT Bold', 'Comic Sans MS', sans-serif";
+            "YurukaStd, 'Arial Rounded MT Bold', 'Rounded Mplus 1c', 'Comic Sans MS', sans-serif";
+        const lineHeight = textS * 1.3;
+        const fontStyle = style === "italic" ? "italic" : "normal";
+
+        const totalTextHeight = (lines.length - 1) * lineHeight;
+        const startY = textY - totalTextHeight / 2;
+
+        const tspans = lines
+            .map((line, i) => {
+                const escaped = this.#escapeSvg(line);
+                const ly = Math.round(startY + i * lineHeight);
+                return `<tspan x="${textX}" y="${ly}">${escaped}</tspan>`;
+            })
+            .join("\n                    ");
+
+        const filterId = "sekaiShadow";
+        const filterDef = `
+                <filter id="${filterId}" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="${shadowOffset}" dy="${shadowOffset}" stdDeviation="1.5" flood-color="rgba(0,0,0,0.3)" />
+                </filter>`;
+
+        const textAttrs = `text-anchor="middle" font-family="${fontFamily}" font-size="${textS}px" font-weight="bold" font-style="${fontStyle}"`;
 
         const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <style>${fontFace}</style>
+                ${filterDef}
             </defs>
-            <g transform="rotate(${textR}, ${textX}, ${textY})">
-                <text x="${textX}" y="${textY}" text-anchor="middle"
-                    font-family="${fontFamily}" font-size="${textS}px" font-weight="bold"
+            <g transform="rotate(${textR}, ${textX}, ${textY})" filter="url(#${filterId})">
+                <text ${textAttrs}
                     stroke="white" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round"
-                    fill="none">${escaped}</text>
-                <text x="${textX}" y="${textY}" text-anchor="middle"
-                    font-family="${fontFamily}" font-size="${textS}px" font-weight="bold"
-                    fill="${color}">${escaped}</text>
+                    fill="white" paint-order="stroke">
+                    ${tspans}
+                </text>
+                <text ${textAttrs}
+                    fill="${color}">
+                    ${tspans}
+                </text>
             </g>
         </svg>`;
 
@@ -244,26 +430,33 @@ class SekaiSticker {
         return result;
     }
 
-    /** @type {string|null} */
-    #fontFaceCache = null;
-
     /**
-     * Get CSS @font-face rule. Tries local font file (OTF/TTF), falls back to empty.
-     * If YurukaStd.otf or .ttf exists in fonts/ dir, it will be loaded.
+     * Get CSS @font-face rule. Loads local YurukaStd font if available.
+     * @returns {Promise<string>}
      */
     async #getFontFace() {
         if (this.#fontFaceCache !== null) {
             return this.#fontFaceCache;
         }
 
-        for (const ext of ["otf", "ttf"]) {
+        for (const ext of ["otf", "ttf", "woff2", "woff"]) {
             const fontPath = resolve(_fonts, `YurukaStd.${ext}`);
             if (existsSync(fontPath)) {
                 const data = readFileSync(fontPath);
                 const base64 = data.toString("base64");
-                const mime = ext === "otf" ? "font/otf" : "font/ttf";
-                const format = ext === "otf" ? "opentype" : "truetype";
-                this.#fontFaceCache = `@font-face { font-family: 'YurukaStd'; src: url('data:${mime};base64,${base64}') format('${format}'); }`;
+                const mimeMap = {
+                    otf: "font/otf",
+                    ttf: "font/ttf",
+                    woff2: "font/woff2",
+                    woff: "font/woff",
+                };
+                const formatMap = {
+                    otf: "opentype",
+                    ttf: "truetype",
+                    woff2: "woff2",
+                    woff: "woff",
+                };
+                this.#fontFaceCache = `@font-face { font-family: 'YurukaStd'; font-weight: bold; src: url('data:${mimeMap[ext]};base64,${base64}') format('${formatMap[ext]}'); }`;
                 return this.#fontFaceCache;
             }
         }

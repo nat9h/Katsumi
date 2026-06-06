@@ -44,7 +44,7 @@ export default new CommandBuilder()
         }
 
         const caption = `☁️ *TeraBox*\n\n📄 ${file.name}\n📦 ${file.size}`;
-        
+
         if (file.sizeBytes > 100 * 1024 * 1024) {
             return interaction.reply(
                 file.thumbnail
