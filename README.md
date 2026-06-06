@@ -130,6 +130,37 @@ The Twitter scraper uses internal API endpoints. You need these values in `.env`
 > [!NOTE]
 > `X_BEARER` is a static public token shared by all twitter.com users and rarely changes. `X_EP_TWEET` and `X_EP_PROFILE` are GraphQL queryIds that **can change** when Twitter deploys updates. If the scraper suddenly breaks, re-grab these from DevTools.
 
+### Getting Facebook Credentials
+
+The Facebook downloader requires session cookies for accessing videos and posts.
+
+1. Login to [facebook.com](https://facebook.com) in your browser
+2. Open DevTools (F12) → **Application** → **Cookies** → `https://www.facebook.com`
+3. Copy these cookie values:
+
+| Variable | Cookie name | Notes |
+|----------|-------------|-------|
+| `FB_C_USER` | `c_user` | Your numeric Facebook user ID |
+| `FB_XS` | `xs` | Session token |
+
+> [!NOTE]
+> Facebook cookies expire after a while. If the FB downloader stops working, re-login and grab fresh cookies.
+
+### Getting TeraBox Credentials
+
+The TeraBox downloader requires an `ndus` cookie to download files.
+
+1. Login to [terabox.com](https://www.terabox.com/) or [1024terabox.com](https://1024terabox.com/)
+2. Open DevTools (F12) → **Application** → **Cookies**
+3. Copy the value of the `ndus` cookie
+
+| Variable | Cookie name | Notes |
+|----------|-------------|-------|
+| `TERABOX_NDUS` | `ndus` | Required for downloading files from share links |
+
+> [!NOTE]
+> The `ndus` cookie expires periodically. If TeraBox downloads start failing, re-login and grab a fresh cookie.
+
 ### Getting Instagram Credentials
 
 The Instagram downloader requires session cookies. Login to Instagram in your browser, then:
