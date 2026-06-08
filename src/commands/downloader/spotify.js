@@ -4,7 +4,6 @@
  */
 
 import axios from "axios";
-import spotidown from "#libs/scrapers/spotidown";
 import { getSpotify } from "#libs/scrapers/spotify";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDurationMs, sanitizeFilename } from "#libs/utils/format";
@@ -82,7 +81,7 @@ export default new CommandBuilder()
             thumbnail ? { image: { url: thumbnail }, caption } : caption,
         );
 
-        const result = await spotidown.download(track.url);
+        const result = await sp.download(track.url);
         if (!result?.downloadUrl) {
             return interaction.followUp("Failed to get download link.");
         }

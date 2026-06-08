@@ -1,4 +1,9 @@
-import { jidNormalizedUser } from "baileys";
+import { randomBytes } from "node:crypto";
+import {
+    generateWAMessageFromContent,
+    jidNormalizedUser,
+    proto,
+} from "baileys";
 import { convertAudio } from "#libs/utils/converter/audio";
 import { parseFlags } from "#libs/utils/flags";
 import logger from "#libs/utils/logger";
@@ -541,6 +546,365 @@ export class Interaction {
         this._lastMsg = albumMsg;
         this.stopTyping().catch(() => {});
         return albumMsg;
+    }
+
+    /**
+     * Send a quiz poll (single-select with a correct answer).
+     *
+     * Uses pollCreationMessageV5 + Message.PollType.QUIZ so the WhatsApp client
+     * highlights the correct answer after voting. Each option needs a hash for
+     * vote-encryption to keep working when WA dispatches PollUpdateMessage.
+     *
+     * @param {string} name - Quiz question
+     * @param {string[]} options - Answer choices
+     * @param {number} correctIndex - 0-based index of the correct answer
+     * @param {{ ephemeralExpiration?: number }} [opts]
+     * @returns {Promise<object>}
+     */
+    async sendQuiz(name, options, correctIndex, { ephemeralExpiration } = {}) {
+        if (!Array.isArray(options) || options.length < 2) {
+            throw new Error("Quiz requires at least 2 options.");
+        }
+        if (
+            !Number.isInteger(correctIndex) ||
+            correctIndex < 0 ||
+            correctIndex >= options.length
+        ) {
+            throw new Error(
+                `correctIndex must be 0..${options.length - 1}, got ${correctIndex}`,
+            );
+        }
+
+        const expiration =
+            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
+
+        const messageSecret = randomBytes(32);
+        const builtOptions = options.map((optionName) => ({
+            optionName: String(optionName),
+        }));
+
+        const pollCreation = {
+            name,
+            options: builtOptions,
+            selectableOptionsCount: 1,
+            pollContentType: proto.Message.PollContentType.TEXT,
+            pollType: proto.Message.PollType.QUIZ,
+            correctAnswer: builtOptions[correctIndex],
+        };
+
+        const content = proto.Message.fromObject({
+            messageContextInfo: { messageSecret },
+            pollCreationMessageV5: pollCreation,
+        });
+
+        const generated = await generateWAMessageFromContent(
+            this.chatJid,
+            content,
+            {
+                userJid: this.sock.user?.id,
+                quoted: this.msg,
+                messageId: this.client.generateMsgId(),
+                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
+            },
+        );
+
+        await this.sock.relayMessage(this.chatJid, generated.message, {
+            messageId: generated.key.id,
+            additionalNodes: [
+                {
+                    tag: "meta",
+                    attrs: { contenttype: "text", polltype: "creation" },
+                },
+            ],
+        });
+
+        if (generated?.key?.id) {
+            this.client.messageCache.set(
+                `${this.chatJid}_${generated.key.id}`,
+                generated.message,
+            );
+        }
+
+        this._replied = true;
+        this._lastMsg = generated;
+        this.stopTyping().catch(() => {});
+        return generated;
+    }
+
+    /**
+     * Forward an existing StickerPackMessage to this chat, optionally
+     * overriding the pack name, publisher, caption, or per-sticker emojis.
+     *
+     * Why forward? Building a fresh StickerPackMessage requires uploading a
+     * proprietary archive blob to WhatsApp's MMS endpoint that no public
+     * library can produce yet. Forwarding an existing pack reuses its
+     * `directPath` + `mediaKey`, so receivers see a real native pack bubble
+     * with "Lihat paket stiker" — exactly like Plan A in your screenshot.
+     *
+     * @param {object} sourceMessage - The full Message proto containing a
+     *   stickerPackMessage (typically interaction.quoted.message).
+     * @param {object} [overrides]
+     * @param {string} [overrides.name]
+     * @param {string} [overrides.publisher]
+     * @param {string} [overrides.packDescription]
+     * @param {string} [overrides.caption]
+     * @param {string[][]} [overrides.emojis] - Replace per-sticker emoji lists.
+     * @returns {Promise<object>}
+     */
+    async repackStickerPack(sourceMessage, overrides = {}) {
+        const pack =
+            sourceMessage?.stickerPackMessage ||
+            sourceMessage?.ephemeralMessage?.message?.stickerPackMessage ||
+            sourceMessage?.viewOnceMessageV2?.message?.stickerPackMessage;
+
+        if (!pack) {
+            throw new Error("Source message has no stickerPackMessage.");
+        }
+
+        const cloned = proto.Message.StickerPackMessage.fromObject({
+            ...pack,
+            name: overrides.name ?? pack.name,
+            publisher: overrides.publisher ?? pack.publisher,
+            packDescription: overrides.packDescription ?? pack.packDescription,
+            caption: overrides.caption ?? pack.caption,
+        });
+
+        if (Array.isArray(overrides.emojis) && cloned.stickers?.length) {
+            for (let i = 0; i < cloned.stickers.length; i++) {
+                if (Array.isArray(overrides.emojis[i])) {
+                    cloned.stickers[i].emojis = overrides.emojis[i];
+                }
+            }
+        }
+
+        // Reset forwarding metadata so it appears as a fresh share, not a
+        // chain forward.
+        cloned.contextInfo = {
+            ...(cloned.contextInfo || {}),
+            forwardingScore: undefined,
+            isForwarded: undefined,
+        };
+
+        const content = proto.Message.fromObject({
+            stickerPackMessage: cloned,
+        });
+
+        const expiration = this.autoEphemeral ? this.expiration : 0;
+
+        const generated = await generateWAMessageFromContent(
+            this.chatJid,
+            content,
+            {
+                userJid: this.sock.user?.id,
+                messageId: this.client.generateMsgId(),
+                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
+            },
+        );
+
+        await this.sock.relayMessage(this.chatJid, generated.message, {
+            messageId: generated.key.id,
+        });
+
+        if (generated?.key?.id) {
+            this.client.messageCache.set(
+                `${this.chatJid}_${generated.key.id}`,
+                generated.message,
+            );
+        }
+
+        this._replied = true;
+        this._lastMsg = generated;
+        this.stopTyping().catch(() => {});
+        return generated;
+    }
+
+    /**
+     * Send a sticker with `isLottie=true` flagged on the StickerMessage.
+     *
+     * The buffer should already be an animated WebP. WhatsApp clients
+     * supporting native lottie playback will treat it differently from a
+     * regular animated WebP; older clients fall back to the WebP frames.
+     *
+     * @param {Buffer} buffer - Animated WebP buffer
+     * @param {{ ephemeralExpiration?: number, isAnimated?: boolean }} [opts]
+     * @returns {Promise<object>}
+     */
+    async sendLottieSticker(
+        buffer,
+        { ephemeralExpiration, isAnimated = true } = {},
+    ) {
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+            throw new Error("sendLottieSticker requires a non-empty Buffer.");
+        }
+
+        const opts = await this.#baseOptions(ephemeralExpiration);
+
+        const sent = await this.#send(
+            {
+                sticker: buffer,
+                mimetype: "image/webp",
+                isAnimated,
+                contextInfo: {
+                    isLottie: true,
+                },
+            },
+            opts,
+        );
+
+        // Patch the protobuf flag after Baileys built the StickerMessage.
+        try {
+            if (sent?.message?.stickerMessage) {
+                sent.message.stickerMessage.isLottie = true;
+                if (isAnimated) {
+                    sent.message.stickerMessage.isAnimated = true;
+                }
+            }
+        } catch {}
+
+        this._replied = true;
+        this._lastMsg = sent;
+        this.stopTyping().catch(() => {});
+        return sent;
+    }
+
+    /**
+     * Create and send a NATIVE StickerPackMessage (the real "Lihat paket stiker" bubble).
+     *
+     * This uses the same approach as Baileys PR #1561:
+     * - Converts stickers to WebP, ZIPs them (native, no external deps)
+     * - Encrypts + uploads the ZIP archive
+     * - Builds a proper stickerPackMessage proto
+     *
+     * @param {Buffer[]} stickerBuffers - Array of image/sticker buffers
+     * @param {{ name?: string, publisher?: string, description?: string, cover?: Buffer, ephemeralExpiration?: number }} [opts]
+     * @returns {Promise<object>}
+     */
+    async createNativeStickerPack(
+        stickerBuffers,
+        { name, publisher, description, cover, ephemeralExpiration } = {},
+    ) {
+        const { buildStickerPackMessage } = await import(
+            "#libs/utils/converter/stickerpack"
+        );
+
+        const stickers = stickerBuffers.map((buf) => ({ data: buf }));
+
+        const coverBuf = cover || stickerBuffers[0];
+
+        const msgContent = await buildStickerPackMessage(
+            {
+                stickers,
+                cover: coverBuf,
+                name: name || "@natsumiworld",
+                publisher: publisher || "",
+                description: description || "",
+            },
+            this.sock,
+        );
+
+        const content = proto.Message.fromObject(msgContent);
+        const expiration =
+            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
+
+        const generated = await generateWAMessageFromContent(
+            this.chatJid,
+            content,
+            {
+                userJid: this.sock.user?.id,
+                messageId: this.client.generateMsgId(),
+                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
+            },
+        );
+
+        await this.sock.relayMessage(this.chatJid, generated.message, {
+            messageId: generated.key.id,
+        });
+
+        if (generated?.key?.id) {
+            this.client.messageCache.set(
+                `${this.chatJid}_${generated.key.id}`,
+                generated.message,
+            );
+        }
+
+        this._replied = true;
+        this._lastMsg = generated;
+        this.stopTyping().catch(() => {});
+        return generated;
+    }
+
+    /**
+     * Bulk-send a collection of stickers with the same pack metadata.
+     *
+     * NOTE: This is NOT a native StickerPackMessage — that message type
+     * requires uploading a packaged pack archive that WhatsApp's MMS endpoints
+     * don't currently accept from third-party clients. Instead, this method
+     * sends each sticker individually with identical pack/author EXIF so they
+     * appear grouped under one pack inside the WhatsApp sticker drawer.
+     *
+     * @param {Buffer[]} stickers - WebP sticker buffers (already converted)
+     * @param {{ pack?: string, author?: string, delayMs?: number, ephemeralExpiration?: number }} [opts]
+     * @returns {Promise<{ sent: number, failed: number }>}
+     */
+    async sendStickerPack(
+        stickers,
+        { pack, author, delayMs = 600, ephemeralExpiration } = {},
+    ) {
+        if (!Array.isArray(stickers) || !stickers.length) {
+            throw new Error("sendStickerPack requires at least one sticker.");
+        }
+
+        const { createSticker } = await import("#libs/utils/converter/sticker");
+
+        const expiration =
+            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
+
+        let sent = 0;
+        let failed = 0;
+
+        for (let i = 0; i < stickers.length; i++) {
+            try {
+                const src = stickers[i];
+                const isWebp =
+                    Buffer.isBuffer(src) &&
+                    src.length >= 12 &&
+                    src.toString("ascii", 0, 4) === "RIFF" &&
+                    src.toString("ascii", 8, 12) === "WEBP";
+
+                const buffer = await createSticker(src, false, {
+                    pack: pack || "@natsumiworld",
+                    author: author || "",
+                    skipConvert: isWebp,
+                });
+
+                const itemOpts = {
+                    messageId: this.client.generateMsgId(),
+                };
+                if (expiration > 0) {
+                    itemOpts.ephemeralExpiration = expiration;
+                }
+
+                const result = await this.sock.sendMessage(
+                    this.chatJid,
+                    { sticker: buffer },
+                    itemOpts,
+                );
+
+                this._lastMsg = result;
+                sent++;
+            } catch (err) {
+                logger.warn({ err }, `sticker pack item ${i} failed`);
+                failed++;
+            }
+
+            if (delayMs > 0 && i < stickers.length - 1) {
+                await new Promise((r) => setTimeout(r, delayMs));
+            }
+        }
+
+        this._replied = true;
+        this.stopTyping().catch(() => {});
+        return { sent, failed };
     }
 
     /**

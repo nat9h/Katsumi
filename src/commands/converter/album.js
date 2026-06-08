@@ -1,6 +1,7 @@
 /**
  * @fileoverview Album command — collect multiple images/videos and send as an album.
- * Uses baileys native album support: album header + albumParentKey on each media.
+ * Uses Interaction.sendAlbum which wraps the native AlbumMessage + albumParentKey
+ * mechanism so all media are grouped into a single album bubble.
  * @module commands/converter/album
  */
 
@@ -8,18 +9,17 @@ import { downloadMediaMessage } from "baileys";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { detectMedia, extractText } from "#libs/utils/message";
 
-const MAX_ITEMS = 10;
-
 export default new CommandBuilder()
     .setName("album")
     .setDescription("Collect images/videos and send as an album")
     .setUsage("{prefix}{name} [caption]")
     .setExample("{prefix}{name} vacation photos")
-    .setNote(
-        "Send images/videos after the command. Type 'done' or 'kirim' to send.",
-    )
+    .setReact("📸")
     .setRateLimit(30_000, 2)
     .setHandler(async (interaction) => {
+        const MAX_ITEMS = 10;
+        const MIN_ITEMS = 2;
+        const TIMEOUT = 60_000;
         const caption = interaction.body || "";
         const media = [];
 
@@ -47,19 +47,26 @@ export default new CommandBuilder()
 
         await interaction.reply(
             `📸 *Album mode* — send up to ${MAX_ITEMS} images/videos.\n` +
-                `Type *done* or *kirim* when finished.\n` +
-                `_Timeout: 60s | Collected: ${media.length}/${MAX_ITEMS}_`,
+                `Type *done* / *kirim* / *send* to finish, *cancel* to abort.\n` +
+                `_Timeout: ${Math.floor(TIMEOUT / 1000)}s | Collected: ${media.length}/${MAX_ITEMS}_`,
         );
 
         const collector = interaction.createMessageCollector({
             filter: () => true,
-            time: 60_000,
+            time: TIMEOUT,
             max: MAX_ITEMS + 5,
         });
+
+        let cancelled = false;
 
         await new Promise((resolve) => {
             collector.on("collect", async (msg) => {
                 const text = extractText(msg.message)?.toLowerCase().trim();
+                if (text === "cancel" || text === "batal") {
+                    cancelled = true;
+                    collector.stop("cancel");
+                    return;
+                }
                 if (text === "done" || text === "kirim" || text === "send") {
                     collector.stop("done");
                     return;
@@ -87,53 +94,16 @@ export default new CommandBuilder()
             collector.on("end", () => resolve());
         });
 
-        if (media.length < 2) {
+        if (cancelled) {
+            return interaction.followUp("Album cancelled.");
+        }
+
+        if (media.length < MIN_ITEMS) {
             return interaction.followUp(
-                "Need at least 2 images/videos for an album.",
+                `Need at least ${MIN_ITEMS} images/videos for an album.`,
             );
         }
 
-        await interaction.followUp(`Sending album (${media.length} items)...`);
-
-        const imageCount = media.filter((m) => m.type === "image").length;
-        const videoCount = media.filter((m) => m.type === "video").length;
-
-        const sendOpts = { messageId: interaction.client.generateMsgId() };
-        if (interaction.autoEphemeral && interaction.expiration > 0) {
-            sendOpts.ephemeralExpiration = interaction.expiration;
-        }
-
-        const albumMsg = await interaction.sock.sendMessage(
-            interaction.chatJid,
-            {
-                album: {
-                    expectedImageCount: imageCount,
-                    expectedVideoCount: videoCount,
-                },
-            },
-            sendOpts,
-        );
-
-        for (let i = 0; i < media.length; i++) {
-            const item = media[i];
-            const content =
-                item.type === "image"
-                    ? { image: item.buffer }
-                    : { video: item.buffer };
-
-            if (i === 0 && caption) {
-                content.caption = caption;
-            }
-
-            const itemOpts = { messageId: interaction.client.generateMsgId() };
-            if (interaction.autoEphemeral && interaction.expiration > 0) {
-                itemOpts.ephemeralExpiration = interaction.expiration;
-            }
-
-            await interaction.sock.sendMessage(
-                interaction.chatJid,
-                { ...content, albumParentKey: albumMsg.key },
-                itemOpts,
-            );
-        }
+        await interaction.followUp(`Sending album (${media.length} items)…`);
+        await interaction.sendAlbum(media, { caption });
     });

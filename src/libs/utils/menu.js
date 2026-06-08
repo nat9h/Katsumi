@@ -62,7 +62,7 @@ export function renderCommandDetail(prefix, cmd) {
         lines.push(`• Aliases: ${aliases}`);
     }
     if (cmd.note) {
-        lines.push(`• Note: ${cmd.note}`);
+        lines.push(`• Note: ${replacePfx(cmd.note)}`);
     }
 
     return lines.join("\n");

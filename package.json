@@ -9,7 +9,7 @@
     "start": "node --env-file=.env src/app.js",
     "dev": "node --env-file=.env --watch src/app.js",
     "pm2": "pm2 start ecosystem.config.cjs",
-    "postinstall": "node patches/baileys-device-sent-fix.js",
+    "postinstall": "node patches/baileys-device-sent-fix.js && node patches/baileys-sticker-pack.js && node patches/baileys-poll-v5.js",
     "lint": "biome check src/",
     "lint:fix": "biome check --write --unsafe src/",
     "format": "biome format --write src/"
