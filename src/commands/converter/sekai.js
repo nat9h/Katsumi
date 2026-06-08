@@ -42,27 +42,17 @@ export default new CommandBuilder()
 
         if (!args || args.toLowerCase() === "list") {
             await interaction.typing();
-            const stickers = await sekai.search("");
             const characters = await sekai.getCharacters();
-            const grouped = {};
-            for (const s of stickers) {
-                const c = s.character;
-                if (!grouped[c]) {
-                    grouped[c] = { count: 0, img: s.img };
-                }
-                grouped[c].count++;
-            }
+            const list = [];
 
-            const list = characters
-                .map((c) => {
-                    const info = grouped[c] || { count: 0 };
-                    return `• *${c}* — ${info.count} poses`;
-                })
-                .join("\n");
+            for (const c of characters) {
+                const stickers = await sekai.getStickers(c);
+                list.push(`• *${c}* — ${stickers.length} poses`);
+            }
 
             return interaction.reply(
                 `*Project Sekai Sticker Maker*\n\n` +
-                    `${list}\n\n` +
+                    `${list.join("\n")}\n\n` +
                     `Usage: \`${interaction.prefix}${interaction.commandName} <character> <text>\`\n` +
                     `Example: \`${interaction.prefix}${interaction.commandName} emu Wonderhoy!\``,
             );

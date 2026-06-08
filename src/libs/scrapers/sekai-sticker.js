@@ -60,9 +60,20 @@ class SekaiSticker {
         for (const s of this.#stickers) {
             const c = s.character.toLowerCase();
             if (!byChar[c]) {
-                byChar[c] = { stickers: [], maxNum: 0, color: s.color };
+                byChar[c] = {
+                    stickers: [],
+                    maxNum: 0,
+                    color: s.color,
+                    folder: "",
+                };
             }
             byChar[c].stickers.push(s);
+            if (!byChar[c].folder) {
+                const slash = s.img.indexOf("/");
+                if (slash > 0) {
+                    byChar[c].folder = s.img.slice(0, slash);
+                }
+            }
             const numMatch = s.img.match(/_(\d+)\./);
             if (numMatch) {
                 const num = parseInt(numMatch[1], 10);
@@ -84,7 +95,7 @@ class SekaiSticker {
             }
 
             const probeMax = info.maxNum + 5;
-            const charName = info.stickers[0].character;
+            const folder = info.folder || char;
 
             for (let i = 1; i <= probeMax; i++) {
                 if (existingNums.has(i)) {
@@ -92,7 +103,7 @@ class SekaiSticker {
                 }
 
                 const num = String(i).padStart(2, "0");
-                const img = `${char}/${charName}_${num}.png`;
+                const img = `${folder}/${folder}_${num}.png`;
                 const url = `${this.#base}/img/${img}`;
 
                 probePromises.push(
@@ -100,7 +111,7 @@ class SekaiSticker {
                         .head(url, { timeout: 5_000 })
                         .then(() => ({
                             id: `extra_${char}_${i}`,
-                            name: `${charName} ${num}`,
+                            name: `${folder} ${num}`,
                             character: char,
                             img,
                             color: info.color,
