@@ -19,7 +19,7 @@ export default new CommandBuilder()
             "Create Project Sekai stickers with custom text!",
             "",
             "Options:",
-            "  -i <number> : pick sticker pose (0-12)",
+            "  -i <number> : pick sticker pose (varies per character)",
             "  -s <number> : font size override",
             "",
             "Examples:",

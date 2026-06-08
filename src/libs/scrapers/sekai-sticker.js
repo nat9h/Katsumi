@@ -24,6 +24,7 @@ class SekaiSticker {
 
     /**
      * Load sticker data from the frontend bundle.
+     * Also discovers extra images on the server that aren't in the bundle.
      * Caches the result for subsequent calls.
      */
     async #loadStickers() {
@@ -44,7 +45,92 @@ class SekaiSticker {
         this.#characters = [
             ...new Set(this.#stickers.map((s) => s.character.toLowerCase())),
         ];
+
+        await this.#discoverMissing();
+
         return this.#stickers;
+    }
+
+    /**
+     * Scan server for images that exist but aren't listed in the bundle.
+     * Uses HEAD requests to probe numbered images beyond what the bundle has.
+     */
+    async #discoverMissing() {
+        const byChar = {};
+        for (const s of this.#stickers) {
+            const c = s.character.toLowerCase();
+            if (!byChar[c]) {
+                byChar[c] = { stickers: [], maxNum: 0, color: s.color };
+            }
+            byChar[c].stickers.push(s);
+            const numMatch = s.img.match(/_(\d+)\./);
+            if (numMatch) {
+                const num = parseInt(numMatch[1], 10);
+                if (num > byChar[c].maxNum) {
+                    byChar[c].maxNum = num;
+                }
+            }
+        }
+
+        const probePromises = [];
+
+        for (const [char, info] of Object.entries(byChar)) {
+            const existingNums = new Set();
+            for (const s of info.stickers) {
+                const m = s.img.match(/_(\d+)\./);
+                if (m) {
+                    existingNums.add(parseInt(m[1], 10));
+                }
+            }
+
+            const probeMax = info.maxNum + 5;
+            const charName = info.stickers[0].character;
+
+            for (let i = 1; i <= probeMax; i++) {
+                if (existingNums.has(i)) {
+                    continue;
+                }
+
+                const num = String(i).padStart(2, "0");
+                const img = `${char}/${charName}_${num}.png`;
+                const url = `${this.#base}/img/${img}`;
+
+                probePromises.push(
+                    axios
+                        .head(url, { timeout: 5_000 })
+                        .then(() => ({
+                            id: `extra_${char}_${i}`,
+                            name: `${charName} ${num}`,
+                            character: char,
+                            img,
+                            color: info.color,
+                            defaultText: {
+                                text: "",
+                                x: 148,
+                                y: 58,
+                                r: 0,
+                                s: 40,
+                            },
+                        }))
+                        .catch(() => null),
+                );
+            }
+        }
+
+        const results = await Promise.all(probePromises);
+        const extras = results.filter(Boolean);
+
+        if (extras.length > 0) {
+            this.#stickers.push(...extras);
+            this.#stickers.sort((a, b) => {
+                if (a.character !== b.character) {
+                    return a.character.localeCompare(b.character);
+                }
+                const numA = parseInt(a.img.match(/_(\d+)\./)?.[1] || "0", 10);
+                const numB = parseInt(b.img.match(/_(\d+)\./)?.[1] || "0", 10);
+                return numA - numB;
+            });
+        }
     }
 
     /**
@@ -195,12 +281,12 @@ class SekaiSticker {
             return fontSize * 0.38;
         }
         if ("mMwWOQD@%".includes(ch)) {
-            return fontSize * 0.7;
+            return fontSize * 0.78;
         }
         if (code >= 0x41 && code <= 0x5a) {
-            return fontSize * 0.58;
+            return fontSize * 0.65;
         }
-        return fontSize * 0.5;
+        return fontSize * 0.52;
     }
 
     /**
@@ -345,71 +431,89 @@ class SekaiSticker {
         const width = meta.width || 296;
         const height = meta.height || 256;
 
-        const maxTextWidth = width * 0.9;
         const maxLines = 4;
-        const minFontSize = 16;
+        const minFontSize = 14;
+        const padding = 12;
+        const safeW = width - padding * 2;
+        const safeH = height - padding * 2;
+        const maxTextWidth = safeW * 0.88;
 
-        const isSingleWord = !text.includes(" ");
-        if (isSingleWord) {
-            const wordWidth = this.#measureText(text, textS);
-            if (wordWidth > maxTextWidth) {
-                textS = Math.max(
-                    minFontSize,
-                    Math.floor(textS * (maxTextWidth / wordWidth)),
-                );
+        const fitText = (txt, startSize) => {
+            let fs = startSize;
+            let lines;
+
+            for (let i = 0; i < 10; i++) {
+                lines = this.#wrapText(txt, maxTextWidth, fs);
+
+                const totalH = lines.length * fs * 1.3;
+                const fitsVertical = totalH <= safeH;
+                const fitsLines = lines.length <= maxLines;
+
+                if (fitsVertical && fitsLines) {
+                    break;
+                }
+                if (fs <= minFontSize) {
+                    break;
+                }
+
+                const ratio = fitsLines
+                    ? safeH / totalH
+                    : Math.max(0.7, maxLines / lines.length);
+                fs = Math.max(minFontSize, Math.floor(fs * ratio));
             }
-        }
 
-        let lines = this.#wrapText(text, maxTextWidth, textS);
+            if (lines.length > maxLines) {
+                lines = lines.slice(0, maxLines);
+                const last = lines[maxLines - 1];
+                lines[maxLines - 1] =
+                    last.length > 3 ? `${last.slice(0, -3)}...` : `${last}...`;
+            }
 
-        let attempts = 0;
-        while (lines.length > maxLines && textS > minFontSize && attempts < 5) {
-            const ratio = Math.max(0.7, maxLines / lines.length);
-            textS = Math.max(minFontSize, Math.floor(textS * ratio));
-            lines = this.#wrapText(text, maxTextWidth, textS);
-            attempts++;
-        }
+            return { lines, fontSize: fs };
+        };
 
-        const availableHeight = height * 0.85;
-        let lh = textS * 1.3;
-        while (lines.length * lh > availableHeight && textS > minFontSize && attempts < 8) {
-            textS = Math.max(minFontSize, textS - 2);
-            lh = textS * 1.3;
-            lines = this.#wrapText(text, maxTextWidth, textS);
-            attempts++;
-        }
-
-        if (lines.length > maxLines) {
-            lines = lines.slice(0, maxLines);
-            const last = lines[maxLines - 1];
-            lines[maxLines - 1] =
-                last.length > 3 ? `${last.slice(0, -3)}...` : `${last}...`;
-        }
+        const { lines, fontSize: finalSize } = fitText(text, textS);
+        textS = finalSize;
 
         const fontFace = await this.#getFontFace();
-        const strokeWidth = Math.max(5, Math.round(textS * 0.2));
+        const strokeWidth = Math.max(4, Math.round(textS * 0.18));
         const shadowOffset = Math.max(2, Math.round(textS * 0.06));
         const fontFamily =
             "YurukaStd, 'Arial Rounded MT Bold', 'Rounded Mplus 1c', 'Comic Sans MS', sans-serif";
         const lineHeight = textS * 1.3;
         const fontStyle = style === "italic" ? "italic" : "normal";
 
-        const totalTextHeight = (lines.length - 1) * lineHeight;
-        const minTop = textS + strokeWidth;
-        const maxBottom = height - strokeWidth;
-        let startY = Math.max(minTop, textY - totalTextHeight / 2);
+        const maxLineWidth = Math.max(
+            ...lines.map((l) => this.#measureText(l, textS)),
+        );
+        // clamp X: gunakan center canvas kalau text terlalu lebar buat posisi default
+        const safeHalfW = maxLineWidth / 2 + strokeWidth + padding;
+        let finalX = textX;
+        if (finalX - safeHalfW < 0) {
+            finalX = safeHalfW;
+        }
+        if (finalX + safeHalfW > width) {
+            finalX = width - safeHalfW;
+        }
+        // kalau masih gak fit (text hampir selebar canvas), paksa center
+        if (finalX - safeHalfW < 0 || finalX + safeHalfW > width) {
+            finalX = width / 2;
+        }
 
-        const lastLineY = startY + totalTextHeight;
-        if (lastLineY > maxBottom) {
-            startY -= lastLineY - maxBottom;
-            startY = Math.max(minTop, startY);
+        const totalH = (lines.length - 1) * lineHeight;
+        const topMargin = textS + strokeWidth + padding;
+        const bottomMargin = height - strokeWidth - padding;
+        let finalY = Math.max(topMargin, textY - totalH / 2);
+        if (finalY + totalH > bottomMargin) {
+            finalY = bottomMargin - totalH;
+            finalY = Math.max(topMargin, finalY);
         }
 
         const tspans = lines
             .map((line, i) => {
                 const escaped = this.#escapeSvg(line);
-                const ly = Math.round(startY + i * lineHeight);
-                return `<tspan x="${textX}" y="${ly}">${escaped}</tspan>`;
+                const ly = Math.round(finalY + i * lineHeight);
+                return `<tspan x="${finalX}" y="${ly}">${escaped}</tspan>`;
             })
             .join("\n                    ");
 
@@ -426,7 +530,7 @@ class SekaiSticker {
                 <style>${fontFace}</style>
                 ${filterDef}
             </defs>
-            <g transform="rotate(${textR}, ${textX}, ${textY})" filter="url(#${filterId})">
+            <g transform="rotate(${textR}, ${finalX}, ${textY})" filter="url(#${filterId})">
                 <text ${textAttrs}
                     stroke="white" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round"
                     fill="white" paint-order="stroke">
