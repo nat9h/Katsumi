@@ -370,6 +370,15 @@ class SekaiSticker {
             attempts++;
         }
 
+        const availableHeight = height * 0.85;
+        let lh = textS * 1.3;
+        while (lines.length * lh > availableHeight && textS > minFontSize && attempts < 8) {
+            textS = Math.max(minFontSize, textS - 2);
+            lh = textS * 1.3;
+            lines = this.#wrapText(text, maxTextWidth, textS);
+            attempts++;
+        }
+
         if (lines.length > maxLines) {
             lines = lines.slice(0, maxLines);
             const last = lines[maxLines - 1];
@@ -386,7 +395,15 @@ class SekaiSticker {
         const fontStyle = style === "italic" ? "italic" : "normal";
 
         const totalTextHeight = (lines.length - 1) * lineHeight;
-        const startY = textY - totalTextHeight / 2;
+        const minTop = textS + strokeWidth;
+        const maxBottom = height - strokeWidth;
+        let startY = Math.max(minTop, textY - totalTextHeight / 2);
+
+        const lastLineY = startY + totalTextHeight;
+        if (lastLineY > maxBottom) {
+            startY -= lastLineY - maxBottom;
+            startY = Math.max(minTop, startY);
+        }
 
         const tspans = lines
             .map((line, i) => {
