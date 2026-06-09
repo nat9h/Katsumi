@@ -46,102 +46,7 @@ class SekaiSticker {
             ...new Set(this.#stickers.map((s) => s.character.toLowerCase())),
         ];
 
-        await this.#discoverMissing();
-
         return this.#stickers;
-    }
-
-    /**
-     * Scan server for images that exist but aren't listed in the bundle.
-     * Uses HEAD requests to probe numbered images beyond what the bundle has.
-     */
-    async #discoverMissing() {
-        const byChar = {};
-        for (const s of this.#stickers) {
-            const c = s.character.toLowerCase();
-            if (!byChar[c]) {
-                byChar[c] = {
-                    stickers: [],
-                    maxNum: 0,
-                    color: s.color,
-                    folder: "",
-                };
-            }
-            byChar[c].stickers.push(s);
-            if (!byChar[c].folder) {
-                const slash = s.img.indexOf("/");
-                if (slash > 0) {
-                    byChar[c].folder = s.img.slice(0, slash);
-                }
-            }
-            const numMatch = s.img.match(/_(\d+)\./);
-            if (numMatch) {
-                const num = parseInt(numMatch[1], 10);
-                if (num > byChar[c].maxNum) {
-                    byChar[c].maxNum = num;
-                }
-            }
-        }
-
-        const probePromises = [];
-
-        for (const [char, info] of Object.entries(byChar)) {
-            const existingNums = new Set();
-            for (const s of info.stickers) {
-                const m = s.img.match(/_(\d+)\./);
-                if (m) {
-                    existingNums.add(parseInt(m[1], 10));
-                }
-            }
-
-            const probeMax = info.maxNum + 5;
-            const folder = info.folder || char;
-
-            for (let i = 1; i <= probeMax; i++) {
-                if (existingNums.has(i)) {
-                    continue;
-                }
-
-                const num = String(i).padStart(2, "0");
-                const img = `${folder}/${folder}_${num}.png`;
-                const url = `${this.#base}/img/${img}`;
-
-                probePromises.push(
-                    axios
-                        .head(url, { timeout: 5_000 })
-                        .then(() => ({
-                            id: `extra_${char}_${i}`,
-                            name: `${folder} ${num}`,
-                            character: char,
-                            img,
-                            color: info.color,
-                            defaultText: {
-                                text: "",
-                                x: 148,
-                                y: 58,
-                                r: 0,
-                                s: 40,
-                            },
-                        }))
-                        .catch(() => null),
-                );
-            }
-        }
-
-        const results = await Promise.all(probePromises);
-        const extras = results.filter(Boolean);
-
-        if (extras.length > 0) {
-            this.#stickers.push(...extras);
-            this.#stickers.sort((a, b) => {
-                if (a.character !== b.character) {
-                    return a.character.localeCompare(b.character);
-                }
-                const numA = parseInt(a.img.match(/_(\d+)\./)?.[1] || "0", 10);
-                const numB = parseInt(b.img.match(/_(\d+)\./)?.[1] || "0", 10);
-                return numA - numB;
-            });
-        }
     }
 
     /**
@@ -222,13 +127,17 @@ class SekaiSticker {
             return this.#imageCache.get(url);
         }
 
-        const { data } = await axios.get(url, {
+        const { data, headers } = await axios.get(url, {
             responseType: "arraybuffer",
             timeout: 15_000,
         });
         const buffer = Buffer.from(data);
 
-        // Simple LRU: evict oldest when cache is full
+        const ct = headers["content-type"] || "";
+        if (ct.includes("text/html") || buffer.length < 100) {
+            throw new Error(`Invalid image response from ${url}`);
+        }
+
         if (this.#imageCache.size >= this.#imageCacheMax) {
             const firstKey = this.#imageCache.keys().next().value;
             this.#imageCache.delete(firstKey);
@@ -283,21 +192,21 @@ class SekaiSticker {
             (code >= 0xf900 && code <= 0xfaff) ||
             (code >= 0xff00 && code <= 0xffef)
         ) {
-            return fontSize * 0.9;
+            return fontSize * 1.0;
         }
         if ("il1|!.,;:'".includes(ch)) {
-            return fontSize * 0.3;
+            return fontSize * 0.4;
         }
         if ("ftjrI()[]{}".includes(ch)) {
-            return fontSize * 0.38;
+            return fontSize * 0.5;
         }
         if ("mMwWOQD@%".includes(ch)) {
-            return fontSize * 0.78;
+            return fontSize * 0.85;
         }
         if (code >= 0x41 && code <= 0x5a) {
-            return fontSize * 0.65;
+            return fontSize * 0.72;
         }
-        return fontSize * 0.52;
+        return fontSize * 0.6;
     }
 
     /**
@@ -447,11 +356,20 @@ class SekaiSticker {
         const padding = 12;
         const safeW = width - padding * 2;
         const safeH = height - padding * 2;
-        const maxTextWidth = safeW * 0.88;
+        const maxTextWidth = safeW * 0.95;
 
         const fitText = (txt, startSize) => {
             let fs = startSize;
             let lines;
+
+            if (!txt.includes(" ") && !txt.includes("\n")) {
+                let w = this.#measureText(txt, fs);
+                while (w > maxTextWidth && fs > minFontSize) {
+                    fs = Math.max(minFontSize, fs - 2);
+                    w = this.#measureText(txt, fs);
+                }
+                return { lines: [txt], fontSize: fs };
+            }
 
             for (let i = 0; i < 10; i++) {
                 lines = this.#wrapText(txt, maxTextWidth, fs);
@@ -487,8 +405,7 @@ class SekaiSticker {
         textS = finalSize;
 
         const fontFace = await this.#getFontFace();
-        const strokeWidth = Math.max(4, Math.round(textS * 0.18));
-        const shadowOffset = Math.max(2, Math.round(textS * 0.06));
+        const strokeWidth = 9;
         const fontFamily =
             "YurukaStd, 'Arial Rounded MT Bold', 'Rounded Mplus 1c', 'Comic Sans MS', sans-serif";
         const lineHeight = textS * 1.3;
@@ -497,7 +414,6 @@ class SekaiSticker {
         const maxLineWidth = Math.max(
             ...lines.map((l) => this.#measureText(l, textS)),
         );
-        // clamp X: gunakan center canvas kalau text terlalu lebar buat posisi default
         const safeHalfW = maxLineWidth / 2 + strokeWidth + padding;
         let finalX = textX;
         if (finalX - safeHalfW < 0) {
@@ -506,19 +422,21 @@ class SekaiSticker {
         if (finalX + safeHalfW > width) {
             finalX = width - safeHalfW;
         }
-        // kalau masih gak fit (text hampir selebar canvas), paksa center
         if (finalX - safeHalfW < 0 || finalX + safeHalfW > width) {
             finalX = width / 2;
         }
 
         const totalH = (lines.length - 1) * lineHeight;
         const topMargin = textS + strokeWidth + padding;
-        const bottomMargin = height - strokeWidth - padding;
+        const descender = textS * 0.3;
+        const bottomMargin = height - strokeWidth - padding - descender;
         let finalY = Math.max(topMargin, textY - totalH / 2);
         if (finalY + totalH > bottomMargin) {
             finalY = bottomMargin - totalH;
             finalY = Math.max(topMargin, finalY);
         }
+
+        const rotateDeg = (textR / 10) * (180 / Math.PI);
 
         const tspans = lines
             .map((line, i) => {
@@ -528,20 +446,13 @@ class SekaiSticker {
             })
             .join("\n                    ");
 
-        const filterId = "sekaiShadow";
-        const filterDef = `
-                <filter id="${filterId}" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="${shadowOffset}" dy="${shadowOffset}" stdDeviation="1.5" flood-color="rgba(0,0,0,0.3)" />
-                </filter>`;
-
         const textAttrs = `text-anchor="middle" font-family="${fontFamily}" font-size="${textS}px" font-weight="bold" font-style="${fontStyle}"`;
 
         const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <style>${fontFace}</style>
-                ${filterDef}
             </defs>
-            <g transform="rotate(${textR}, ${finalX}, ${textY})" filter="url(#${filterId})">
+            <g transform="rotate(${rotateDeg.toFixed(2)}, ${finalX}, ${finalY})">
                 <text ${textAttrs}
                     stroke="white" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round"
                     fill="white" paint-order="stroke">

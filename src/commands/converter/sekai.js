@@ -47,14 +47,17 @@ export default new CommandBuilder()
 
             for (const c of characters) {
                 const stickers = await sekai.getStickers(c);
-                list.push(`• *${c}* — ${stickers.length} poses`);
+                list.push(
+                    `• *${c}* — ${stickers.length} poses (0-${stickers.length - 1})`,
+                );
             }
 
             return interaction.reply(
                 `*Project Sekai Sticker Maker*\n\n` +
                     `${list.join("\n")}\n\n` +
                     `Usage: \`${interaction.prefix}${interaction.commandName} <character> <text>\`\n` +
-                    `Example: \`${interaction.prefix}${interaction.commandName} emu Wonderhoy!\``,
+                    `Use \`-i <number>\` to pick a pose.\n` +
+                    `Example: \`${interaction.prefix}${interaction.commandName} emu -i 5 Wonderhoy!\``,
             );
         }
 
