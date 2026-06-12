@@ -258,6 +258,7 @@ export class Client extends EventEmitter {
 
         sock.ev.on("messages.upsert", (m) => handleMessagesUpsert(this, m));
         sock.ev.on("messages.update", (u) => this.#onMessagesUpdate(u));
+        sock.ev.on("message-receipt.update", (u) => this.#onMessageReceipt(u));
         sock.ev.on("messages.delete", (d) => this.emit("messageDelete", d));
         sock.ev.on("messages.reaction", (r) => {
             this.emit("messageReaction", r);
@@ -384,6 +385,46 @@ export class Client extends EventEmitter {
             };
             this.emit("pollUpdate", pollData);
             handlePollVote(this, pollData);
+        }
+    }
+
+    /**
+     * Receipt updates for group + status-broadcast messages.
+     *
+     * Baileys parses raw `CB:receipt` nodes in handleReceipt and emits this
+     * event for group/status messages (direct chats go through
+     * messages.update instead). For each update, `receipt.userJid` is the
+     * viewer, `readTimestamp` means they viewed it, and `receiptTimestamp`
+     * means it was delivered.
+     *
+     * @param {Array<{ key: object, receipt: object }>} updates
+     */
+    #onMessageReceipt(updates) {
+        for (const u of updates) {
+            const isStatus = u.key?.remoteJid === "status@broadcast";
+
+            if (isStatus) {
+                const viewer = u.receipt?.userJid;
+                const read = u.receipt?.readTimestamp != null;
+
+                this.emit("statusReceipt", {
+                    msgId: u.key?.id,
+                    viewer,
+                    read,
+                    delivered: u.receipt?.receiptTimestamp != null,
+                });
+
+                logger.debug(
+                    {
+                        msgId: u.key?.id,
+                        viewer,
+                        state: read ? "viewed" : "delivered",
+                    },
+                    "status receipt",
+                );
+            }
+
+            this.emit("messageReceipt", u);
         }
     }
 

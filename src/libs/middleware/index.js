@@ -182,7 +182,7 @@ function parseInvocation(text, interaction) {
         };
     }
 
-    let prefix = config.prefixes.find((p) => text.startsWith(p));
+    let prefix = config.prefixes.find((p) => p && text.startsWith(p));
     if (prefix === undefined && state.noPrefix && isOwner(interaction)) {
         prefix = "";
     }

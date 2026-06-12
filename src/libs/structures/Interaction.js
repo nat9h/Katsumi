@@ -123,6 +123,15 @@ export class Interaction {
         return this.msg.key.remoteJid;
     }
 
+    /**
+     * True if the message is a status update reshared into / originating from
+     * a group context (proto.ContextInfo.isGroupStatus).
+     * @returns {boolean}
+     */
+    get isGroupStatus() {
+        return this.#getCtx()?.isGroupStatus === true;
+    }
+
     /** @returns {boolean} */
     get fromMe() {
         return this.msg.key.fromMe === true;

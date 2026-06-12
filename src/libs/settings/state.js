@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 const BOT_ID_PREFIX = "KTSM";
 const DEFAULT_PREFIXES = (process.env.PREFIX || "!")
     .split(",")
-    .map((p) => p.trim());
+    .map((p) => p.trim())
+    .filter(Boolean);
 
 /** Boolean toggles. The key is the property name; the setter is `set<Capitalized>`. */
 const TOGGLES = [

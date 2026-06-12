@@ -4,12 +4,7 @@
  * @module commands/owner/story
  */
 
-import { randomBytes } from "node:crypto";
-import {
-    downloadMediaMessage,
-    generateWAMessageContent,
-    generateWAMessageFromContent,
-} from "baileys";
+import { downloadMediaMessage } from "baileys";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { detectMedia, extractText, fetchMedia } from "#libs/utils/message";
 import {
@@ -138,25 +133,13 @@ export default new CommandBuilder()
                 maxBytes: 16 * 1024 * 1024,
             }).catch(() => null);
 
-            let msgContent;
-            let genOpts = {};
             if (media) {
                 if (!["image", "video", "sticker"].includes(media.type)) {
                     return interaction.reply(
                         "Only image or video can be posted as story.",
                     );
                 }
-                msgContent =
-                    media.type === "video"
-                        ? { video: media.buffer, caption: text }
-                        : { image: media.buffer, caption: text };
-            } else if (text) {
-                msgContent = { text };
-                genOpts = {
-                    backgroundColor: flags.bg || "#128C7E",
-                    font: parseInt(flags.font, 10) || 0,
-                };
-            } else {
+            } else if (!text) {
                 return interaction.reply(
                     "Provide text or reply to media first.",
                 );
@@ -182,87 +165,63 @@ export default new CommandBuilder()
                 return;
             }
 
-            try {
-                const inside = await generateWAMessageContent(msgContent, {
-                    upload: sock.waUploadToServer,
-                    ...genOpts,
-                });
+            const sentNames = [];
+            const failed = [];
 
-                const sentNames = [];
-                for (const g of selectedGroups) {
-                    const statusJidList = (g.participants || [])
-                        .map((p) => p.id)
-                        .filter(
-                            (id) =>
-                                id?.endsWith("@s.whatsapp.net") ||
-                                id?.endsWith("@lid"),
-                        );
-
-                    if (!statusJidList.length) {
-                        continue;
-                    }
-
-                    const messageSecret = randomBytes(32);
-
-                    const contentKey = inside.imageMessage
-                        ? "imageMessage"
-                        : inside.videoMessage
-                          ? "videoMessage"
-                          : inside.extendedTextMessage
-                            ? "extendedTextMessage"
-                            : null;
-
-                    const innerMessage = { ...inside };
-                    if (contentKey && innerMessage[contentKey]) {
-                        innerMessage[contentKey] = {
-                            ...innerMessage[contentKey],
-                            contextInfo: {
-                                ...(innerMessage[contentKey].contextInfo || {}),
-                                mentionedJid: statusJidList,
-                                groupMentions: [
-                                    {
-                                        groupJid: g.id,
-                                        groupSubject: g.subject,
-                                    },
-                                ],
-                                isGroupStatus: true,
-                            },
-                        };
-                    }
-
-                    const msg = generateWAMessageFromContent(
-                        "status@broadcast",
-                        {
-                            messageContextInfo: { messageSecret },
-                            groupStatusMentionMessage: {
-                                message: {
-                                    ...innerMessage,
-                                    messageContextInfo: { messageSecret },
-                                },
-                            },
-                        },
-                        { userJid: sock.user.id },
+            for (const g of selectedGroups) {
+                const participantJids = (g.participants || [])
+                    .map((p) => p.id)
+                    .filter(
+                        (id) =>
+                            id?.endsWith("@s.whatsapp.net") ||
+                            id?.endsWith("@lid"),
                     );
 
-                    await sock.relayMessage("status@broadcast", msg.message, {
-                        messageId: msg.key.id,
-                        statusJidList,
-                    });
+                const contextInfo = {
+                    mentionedJid: participantJids,
+                    groupMentions: [
+                        { groupJid: g.id, groupSubject: g.subject },
+                    ],
+                    isGroupStatus: true,
+                };
+
+                const content = media
+                    ? media.type === "video"
+                        ? { video: media.buffer, caption: text, contextInfo }
+                        : { image: media.buffer, caption: text, contextInfo }
+                    : { text, contextInfo };
+
+                const options = { messageId: client.generateMsgId() };
+                if (!media) {
+                    options.backgroundColor = flags.bg || "#128C7E";
+                    options.font = parseInt(flags.font, 10) || 0;
+                }
+
+                try {
+                    await sock.sendMessage(g.id, content, options);
                     sentNames.push(g.subject);
+                } catch (err) {
+                    failed.push(`${g.subject}: ${err.message}`);
                 }
-
-                if (!sentNames.length) {
-                    return interaction.followUp(
-                        "No groups with valid participants found.",
-                    );
-                }
-
-                return interaction.followUp(
-                    `✅ Group status sent to:\n${sentNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}`,
-                );
-            } catch (err) {
-                return interaction.followUp(`Failed: ${err.message}`);
             }
+
+            if (!sentNames.length) {
+                return interaction.followUp(
+                    failed.length
+                        ? `Failed:\n${failed.join("\n")}`
+                        : "No groups with valid participants found.",
+                );
+            }
+
+            const okLines = sentNames
+                .map((n, i) => `${i + 1}. ${n}`)
+                .join("\n");
+            const failNote = failed.length
+                ? `\n\nFailed:\n${failed.join("\n")}`
+                : "";
+            return interaction.followUp(
+                `✅ Group status sent to:\n${okLines}${failNote}`,
+            );
         }
 
         if (sub === "get") {
