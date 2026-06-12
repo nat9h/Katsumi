@@ -57,7 +57,9 @@ class Facebook {
             .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
                 String.fromCodePoint(Number.parseInt(hex, 16)),
             )
-            .replace(/\\u0025/g, "%")
+            .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+                String.fromCharCode(Number.parseInt(hex, 16)),
+            )
             .replace(/\\\//g, "/");
     }
 
