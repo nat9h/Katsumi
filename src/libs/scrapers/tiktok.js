@@ -136,8 +136,8 @@ class TikTok {
         const downloadUrls = video.download_addr?.url_list || [];
         const playUrls = video.play_addr?.url_list || [];
 
-        const videoNowm = downloadUrls[0] || playUrls[0] || "";
-        const videoPlay = playUrls[0] || "";
+        const videoNowm = playUrls[0] || downloadUrls[0] || "";
+        const videoWm = downloadUrls[0] || "";
 
         let images = null;
         if (imagePostInfo?.images?.length) {
@@ -163,7 +163,7 @@ class TikTok {
             duration: video.duration ? Math.round(video.duration / 1000) : 0,
             video: videoNowm,
             videoHd: videoNowm,
-            videoSd: videoPlay,
+            videoSd: videoWm,
             music: music.play_url?.url_list?.[0] || "",
             musicInfo: {
                 title: music.title || "",
@@ -268,18 +268,20 @@ class TikTok {
             return false;
         }
         try {
-            const res = await axios.head(url, {
+            const res = await axios.get(url, {
                 timeout: 8_000,
+                responseType: "arraybuffer",
+                validateStatus: () => true,
                 headers: {
                     "User-Agent": this.UA,
                     Referer: "https://www.tiktok.com/",
+                    Range: "bytes=0-1023",
                 },
             });
             if (res.status < 200 || res.status >= 400) {
                 return false;
             }
-            const len = Number(res.headers["content-length"] || 0);
-            return len > 1000;
+            return (res.data?.byteLength || 0) > 0;
         } catch {
             return false;
         }
