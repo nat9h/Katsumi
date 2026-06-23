@@ -1,3 +1,13 @@
+import makeWASocket, {
+	DisconnectReason,
+	fetchLatestBaileysVersion,
+	getAggregateVotesInPollMessage,
+	makeCacheableSignalKeyStore,
+	proto,
+	Browsers,
+} from "baileys";
+import NodeCache from "@cacheable/node-cache";
+import qrcode from "qrcode";
 import { BOT_CONFIG } from "#config/index";
 import Message from "#core/message";
 import getAuthState from "#lib/auth/state";
@@ -14,17 +24,6 @@ import {
 	hashString,
 	safeNorm,
 } from "#utils/message";
-import NodeCache from "@cacheable/node-cache";
-import {
-	Browsers,
-	DisconnectReason,
-	fetchLatestBaileysVersion,
-	getAggregateVotesInPollMessage,
-	makeCacheableSignalKeyStore,
-	makeWASocket,
-	proto,
-} from "baileys";
-import qrcode from "qrcode";
 
 /**
  * Cache used by Baileys to track message retry counters.
@@ -122,12 +121,34 @@ class Connect {
 		this.pluginManager.watchPlugins();
 
 		this.sock = makeWASocket({
+			version,
+			browser: Browsers.macOS("Safari"),
+			connectTimeoutMs: 60000,
+      		keepAliveIntervalMs: 30000,
+			logger,
+			defaultQueryTimeoutMs: 60000,
+      		retryRequestDelayMs: 300,
+      		maxMsgRetryCount: 10,
 			auth: {
 				creds: state.creds,
 				keys: makeCacheableSignalKeyStore(state.keys, logger),
 			},
-			version,
-			logger,
+			markOnlineOnConnect: false,
+      		syncFullHistory: false,
+      		patchMessageBeforeSending: (msg) => msg,
+			shouldHistorySyncMessage: () => false,
+      		shouldIgnoreJid: () => false,
+      		linkPreviewImageThumbnailWidth: 192,
+      		generateHighQualityLinkPreview: true,
+      		enableAutoSessionRecreation: true,
+      		enableRecentMessageCache: true,
+      		appStateMacVerification: {
+        		patch: false,
+        		snapshot: false,
+      		},
+			qrTimeout: usePairingCode ? undefined : 60000,
+			printQRInTerminal: qrMode,
+			msgRetryCounterCache,
 			getMessage: async (key) => {
 				const jid = safeNorm(key.remoteJid);
 				return this.store.loadMessage(jid, key.id)?.message || null;
@@ -155,12 +176,6 @@ class Connect {
 					return null;
 				}
 			},
-			browser: Browsers.macOS("Safari"),
-			syncFullHistory: false,
-			generateHighQualityLinkPreview: true,
-			qrTimeout: usePairingCode ? undefined : 60000,
-			printQRInTerminal: qrMode,
-			msgRetryCounterCache,
 		});
 
 		this.sock = Client({
