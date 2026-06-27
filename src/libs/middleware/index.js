@@ -5,6 +5,7 @@ import { findParticipant } from "#libs/utils/group";
 import logger from "#libs/utils/logger";
 import { findContextInfo } from "#libs/utils/message";
 import { commandMap, customPrefixCommands } from "#libs/utils/plugin";
+import { isPremium } from "#libs/utils/premium";
 import { QueueFullError, userQueue } from "#libs/utils/runtime";
 import { sendWarmup } from "#libs/utils/warmup";
 import { state } from "#state";
@@ -265,6 +266,14 @@ async function passesGates(interaction, cmd) {
         if (!findParticipant(meta, user)?.admin) {
             return false;
         }
+    }
+
+    if (
+        state.premiumOnly &&
+        !isOwner(interaction) &&
+        !isPremium(interaction.db, interaction.user)
+    ) {
+        return false;
     }
 
     return true;

@@ -35,6 +35,15 @@ export const GUARDS = {
         }
     },
 
+    premium(i) {
+        if (isOwner(i)) {
+            return;
+        }
+        if (!i.isPremium) {
+            throw new GuardError("Premium user only.");
+        }
+    },
+
     group: requireGroup,
 
     private(i) {

@@ -6,6 +6,7 @@
 import axios from "axios";
 
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
+import { extractUrl } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("screenshot")
@@ -22,7 +23,9 @@ export default new CommandBuilder()
         });
 
         let url = (
+            extractUrl(positional.join(" ")) ||
             positional.join(" ") ||
+            interaction.quoted?.url ||
             interaction.quoted?.text ||
             ""
         ).trim();

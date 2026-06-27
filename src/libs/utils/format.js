@@ -121,6 +121,33 @@ export function formatUptime(ms) {
 }
 
 /**
+ * Format a duration in milliseconds into a compact string (e.g. '2d 4h 30m').
+ * Unlike formatUptime, this omits seconds for cleaner premium expiry display.
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
+export function formatExpiry(ms) {
+    if (ms <= 0) {
+        return "0m";
+    }
+    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const mins = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+    const parts = [];
+    if (days) {
+        parts.push(`${days}d`);
+    }
+    if (hours) {
+        parts.push(`${hours}h`);
+    }
+    if (mins) {
+        parts.push(`${mins}m`);
+    }
+    return parts.join(" ") || "0m";
+}
+
+/**
  * @param {number} sec
  * @returns {string}
  */

@@ -34,6 +34,11 @@ const TOGGLES = {
         set: (v) => state.setPrivateOnly(v),
         label: "Private only",
     },
+    premium: {
+        get: () => state.premiumOnly,
+        set: (v) => state.setPremiumOnly(v),
+        label: "Premium only",
+    },
     anticall: {
         get: () => state.antiCall,
         set: (v) => state.setAntiCall(v),
@@ -56,7 +61,7 @@ export default new CommandBuilder()
     .setAliases("setting", "settings")
     .setDescription("Bot settings (owner only)")
     .setUsage(
-        "{prefix}{name} <self|admin|private|anticall|autoread|warmup|ban|unban|banlist>",
+        "{prefix}{name} <self|admin|private|premium|anticall|autoread|warmup|ban|unban|banlist>",
     )
     .setExample("{prefix}{name} self on")
     .setGuard("owner")
@@ -72,6 +77,7 @@ export default new CommandBuilder()
                     `• Self mode: *${statusIcon(state.selfMode)}*`,
                     `• Admin only: *${statusIcon(state.adminOnly)}*`,
                     `• Private only: *${statusIcon(state.privateOnly)}*`,
+                    `• Premium only: *${statusIcon(state.premiumOnly)}*`,
                     `• Anti-call: *${statusIcon(state.antiCall)}*`,
                     `• Auto-read: *${statusIcon(state.autoRead)}*`,
                     `• Warmup: *${statusIcon(state.warmup)}*`,
@@ -233,7 +239,7 @@ export default new CommandBuilder()
 
             default:
                 return interaction.reply(
-                    `Unknown: *${action}*\n\nAvailable: \`self\`, \`admin\`, \`private\`, \`anticall\`, \`autoread\`, \`warmup\`, \`ban\`, \`unban\`, \`banlist\``,
+                    `Unknown: *${action}*\n\nAvailable: \`self\`, \`admin\`, \`private\`, \`premium\`, \`anticall\`, \`autoread\`, \`warmup\`, \`ban\`, \`unban\`, \`banlist\``,
                 );
         }
     });

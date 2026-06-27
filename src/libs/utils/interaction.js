@@ -3,7 +3,7 @@
  * @module utils/interaction
  */
 
-import { extractText } from "#libs/utils/message";
+import { extractText, findContextInfo } from "#libs/utils/message";
 
 /**
  * Shared on/off/set/show handler for welcome and leave commands.
@@ -76,13 +76,22 @@ export async function selectFromList({
 }) {
     const lines = items.map((item, i) => format(item, i));
     const caption = typeof header === "string" ? header : header.caption;
-    const body = `${caption}\n\n${lines.join("\n")}\n\n_Reply number._`;
+    const body = `${caption}\n\n${lines.join("\n")}\n\n_Reply with the number._`;
     const image = typeof header === "object" ? header.image : null;
 
-    await interaction.reply(image ? { image, caption: body } : body);
+    const sentMsg = await interaction.reply(
+        image ? { image, caption: body } : body,
+    );
+    const targetMsgId = sentMsg?.key?.id;
 
     try {
-        const reply = await interaction.awaitReply(() => true, timeout);
+        const reply = await interaction.awaitReply((msg) => {
+            if (!targetMsgId) {
+                return true;
+            }
+            const ctx = findContextInfo(msg.message);
+            return ctx?.stanzaId === targetMsgId;
+        }, timeout);
         const num = Number.parseInt(extractText(reply.message).trim(), 10);
 
         if (!Number.isInteger(num) || num < 1 || num > items.length) {

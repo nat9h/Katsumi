@@ -15,6 +15,7 @@ export default new CommandBuilder()
     .setExample("{prefix}{name}")
     .setNote("Send or reply to an image.")
     .setReact("🔍")
+    .setGuard("premium") // example usage for premium user
     .setRateLimit(15_000, 2)
     .setHandler(async (interaction) => {
         const media = await fetchMedia(interaction, {

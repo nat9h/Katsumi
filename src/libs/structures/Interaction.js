@@ -13,6 +13,7 @@ import {
     findContextInfo,
     unwrapMessage,
 } from "#libs/utils/message";
+import { isPremium } from "#libs/utils/premium";
 import { Collector } from "./Collector.js";
 
 /**
@@ -135,6 +136,11 @@ export class Interaction {
     /** @returns {boolean} */
     get fromMe() {
         return this.msg.key.fromMe === true;
+    }
+
+    /** @returns {boolean} */
+    get isPremium() {
+        return isPremium(this.db, this.user);
     }
 
     /** @returns {string} */
@@ -972,12 +978,19 @@ export class Interaction {
      */
     async pickFromList(items, title) {
         const lines = items.map((it, i) => `${i + 1}. ${it.subject || it.id}`);
-        await this.reply(
+        const sentMsg = await this.reply(
             `📋 *${title}:*\n\n${lines.join("\n")}\n\n_Reply with number._`,
         );
+        const targetMsgId = sentMsg?.key?.id;
 
         try {
-            const reply = await this.awaitReply(() => true, DEFAULT_AWAIT_MS);
+            const reply = await this.awaitReply((msg) => {
+                if (!targetMsgId) {
+                    return true;
+                }
+                const ctx = findContextInfo(msg.message);
+                return ctx?.stanzaId === targetMsgId;
+            }, DEFAULT_AWAIT_MS);
             const num = Number.parseInt(extractText(reply.message).trim(), 10);
 
             if (!Number.isInteger(num) || num < 1 || num > items.length) {
@@ -1001,12 +1014,19 @@ export class Interaction {
      */
     async pickMultipleFromList(items, title) {
         const lines = items.map((it, i) => `${i + 1}. ${it.subject || it.id}`);
-        await this.reply(
+        const sentMsg = await this.reply(
             `📋 *${title}:*\n\n${lines.join("\n")}\n\n_Reply with numbers (e.g. 1,2,3 or 1-5 or all)._`,
         );
+        const targetMsgId = sentMsg?.key?.id;
 
         try {
-            const reply = await this.awaitReply(() => true, DEFAULT_AWAIT_MS);
+            const reply = await this.awaitReply((msg) => {
+                if (!targetMsgId) {
+                    return true;
+                }
+                const ctx = findContextInfo(msg.message);
+                return ctx?.stanzaId === targetMsgId;
+            }, DEFAULT_AWAIT_MS);
             const text = extractText(reply.message).trim().toLowerCase();
 
             if (text === "all" || text === "*") {

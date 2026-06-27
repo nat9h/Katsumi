@@ -11,6 +11,7 @@ const TOGGLES = [
     "selfMode",
     "adminOnly",
     "privateOnly",
+    "premiumOnly",
     "noPrefix",
     "antiCall",
     "autoRead",

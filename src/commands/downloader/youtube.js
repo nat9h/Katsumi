@@ -8,6 +8,7 @@ import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDuration } from "#libs/utils/format";
 import { selectFromList } from "#libs/utils/interaction";
+import { extractUrl } from "#libs/utils/message";
 
 const FALLBACK_META = {
     title: "YouTube",
@@ -33,8 +34,10 @@ export default new CommandBuilder()
         });
         const wantVideo = flags.video === true;
 
+        const body = positional.join(" ").trim();
         const query = (
-            positional.join(" ").trim() ||
+            extractUrl(body) ||
+            body ||
             interaction.quoted?.url ||
             interaction.quoted?.text ||
             ""
