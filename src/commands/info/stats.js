@@ -14,7 +14,14 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const stats = interaction.client.stats.getGlobal();
         const mem = process.memoryUsage();
-        const groups = interaction.store.getAllGroups().length;
+        let groups;
+        try {
+            const participating =
+                await interaction.sock.groupFetchAllParticipating();
+            groups = Object.keys(participating).length;
+        } catch {
+            groups = interaction.store.getAllGroups().length;
+        }
 
         return interaction.reply(
             [

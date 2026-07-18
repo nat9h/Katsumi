@@ -16,6 +16,7 @@ const api = "https://wink.ai";
 const storage = "https://strategy.app.meitudata.com";
 const ua =
     "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36";
+const appVersion = "5.3.6";
 
 /** Generate sentry tracing headers for request authenticity. */
 function sentryHeaders() {
@@ -26,8 +27,8 @@ function sentryHeaders() {
         "sentry-trace": trace,
         baggage: [
             "sentry-environment=release",
-            "sentry-release=5.1.2%20(b60d25c477f43c6dfac4107810f26d442320f4f1)",
-            "sentry-public_key=e1bf914f3448d9bc8a10c7e499d17d54",
+            `sentry-release=wink%40${appVersion}%2B087a840fecc686880c06289abff413c4d102423c`,
+            "sentry-public_key=f30b1d76ddd78270878e718b3c5ac84e",
             `sentry-trace_id=${traceId}`,
             "sentry-sampled=true",
             "sentry-sample_rate=0.75",
@@ -39,7 +40,7 @@ function sentryHeaders() {
 function baseParams(sessionId, extra = {}) {
     return new URLSearchParams({
         client_id: "1189857605",
-        version: "5.1.2",
+        version: appVersion,
         country_code: "ID",
         gnum: sessionId,
         client_language: "en_US",
@@ -303,18 +304,8 @@ async function pollTranscode(
         saveCookies(res);
 
         const data = res.data?.data;
-        const source = data?.video || data?.url || data?.source_url || "";
-        let transcoded =
-            data?.video_transcoded ||
-            data?.transcoded_video ||
-            data?.video_url ||
-            "";
-
-        if (!transcoded && data?.status === 2 && source) {
-            transcoded = source;
-        }
-        if (transcoded) {
-            return { source: source || transcoded, transcoded };
+        if (data?.status === 2 && data?.video) {
+            return { url: data.video, fileKey: data.video_file_key };
         }
     }
 
@@ -455,11 +446,15 @@ export class WinkUpscaler {
 
         const post = postHeaders();
 
-        await axios.post(
+        const coverInfo = await axios.post(
             `${api}/api/file/video_cover_and_display_info_ext.json`,
             baseParams(id, { file_key: key }).toString(),
             { headers: post, validateStatus: () => true },
         );
+        const duration =
+            coverInfo.data?.data?.display_info?.video_duration ||
+            coverInfo.data?.data?.display_info?.format_duration ||
+            0;
 
         const transcode = await axios.post(
             `${api}/api/file/video_trans_start.json`,
@@ -482,29 +477,49 @@ export class WinkUpscaler {
             this.timeout,
         );
 
+        const typeParams = {
+            is_mirror: 0,
+            orientation_tag: 1,
+            j_420_trans: "1",
+            return_ext: "2",
+        };
+        const ticket = {
+            source: "1",
+            touch_type: "4",
+            function_id: "630",
+            material_id: "63011",
+            url: `${api}/video-enhancer/upload`,
+        };
+
+        const item = {
+            type: 1,
+            ext_value: "1",
+            content_type: 2,
+            source_url: video.url,
+            duration,
+            type_params: JSON.stringify(typeParams),
+            right_detail: JSON.stringify(ticket),
+        };
+
+        await axios.post(
+            `${api}/api/subscribe/batch_calc_need_beans.json`,
+            baseParams(id, {
+                item_list: JSON.stringify([item]),
+            }).toString(),
+            { headers: post, validateStatus: () => true },
+        );
+
         const delivery = await axios.post(
             `${api}/api/meitu_ai/delivery.json`,
             baseParams(id, {
-                type: "11",
-                content_type: "2",
-                source_url: video.source,
-                type_params: JSON.stringify({
-                    is_mirror: 0,
-                    orientation_tag: 1,
-                    j_420_trans: "1",
-                    return_ext: "2",
-                }),
-                right_detail: JSON.stringify({
-                    source: "1",
-                    touch_type: "4",
-                    function_id: "630",
-                    material_id: "63011",
-                    url: `${api}/video-enhancer/upload`,
-                }),
+                type: String(item.type),
+                content_type: String(item.content_type),
+                source_url: video.url,
+                type_params: item.type_params,
+                right_detail: item.right_detail,
                 ext_params: JSON.stringify({
                     task_name: `Enhancer-Ultra HD-${path.parse(filename).name}`,
-                    records: "11",
-                    video_transcoded: video.transcoded,
+                    records: String(item.type),
                 }),
                 with_prepare: "1",
             }).toString(),
@@ -520,6 +535,7 @@ export class WinkUpscaler {
         const taskId =
             delivery.data.data?.msg_id ||
             delivery.data.data?.prepare_msg_id ||
+            delivery.data.data?.group_id ||
             "";
         if (!taskId) {
             throw new Error("Delivery did not return task ID.");

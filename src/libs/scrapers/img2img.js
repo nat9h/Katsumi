@@ -35,27 +35,6 @@ export class Image2Image {
         };
     }
 
-    async getSignedUrl(fileName) {
-        const url = `https://toimage.app/api/uploads/signed-upload-url?path=images%2F${fileName}&bucket=to-image`;
-        const response = await fetch(url, {
-            method: "POST",
-            headers: this.getHeaders(),
-        });
-        const json = await response.json();
-        return json.signedUrl;
-    }
-
-    async uploadToStorage(signedUrl, buffer) {
-        const response = await fetch(signedUrl, {
-            method: "PUT",
-            headers: this.getHeaders({ "Content-Type": "image/png" }),
-            body: buffer,
-        });
-        if (!response.ok) {
-            throw new Error("Upload to storage failed.");
-        }
-    }
-
     async generateImage(uploadedImageUrl, prompt) {
         const response = await fetch(
             "https://toimage.app/api/task/image/generate",
@@ -118,19 +97,7 @@ export class Image2Image {
                     this.refreshIdentity();
                 }
 
-                const fileName = `${randomUUID()}.png`;
-
-                const imgRes = await fetch(imageUrl);
-                if (!imgRes.ok) {
-                    throw new Error(`Failed to fetch image: ${imgRes.status}`);
-                }
-                const buffer = Buffer.from(await imgRes.arrayBuffer());
-
-                const signedUrl = await this.getSignedUrl(fileName);
-                await this.uploadToStorage(signedUrl, buffer);
-
-                const publicUrl = `https://pub-0b8e9fd9929944af91cd191de51cb436.r2.dev/images/${fileName}`;
-                const taskResult = await this.generateImage(publicUrl, prompt);
+                const taskResult = await this.generateImage(imageUrl, prompt);
 
                 if (taskResult.code !== 200) {
                     throw new Error(taskResult.message || "Generate failed.");
@@ -140,11 +107,7 @@ export class Image2Image {
                     taskResult.data.taskId,
                 );
 
-                const finalRes = await fetch(resultUrl);
-                if (!finalRes.ok) {
-                    throw new Error("Failed to download result.");
-                }
-                const resultBuffer = Buffer.from(await finalRes.arrayBuffer());
+                const resultBuffer = await this.fetchResultBuffer(resultUrl);
 
                 return { url: resultUrl, buffer: resultBuffer };
             } catch (error) {
@@ -156,6 +119,20 @@ export class Image2Image {
         }
 
         throw lastError;
+    }
+
+    async fetchResultBuffer(resultUrl) {
+        const proxied = `https://images.weserv.nl/?url=${resultUrl.replace(/^https?:\/\//, "")}`;
+        const res = await fetch(proxied);
+        if (!res.ok) {
+            throw new Error(
+                `Failed to download result via proxy (${res.status}): ${await res
+                    .text()
+                    .catch(() => "")
+                    .slice(0, 200)}`,
+            );
+        }
+        return Buffer.from(await res.arrayBuffer());
     }
 }
 

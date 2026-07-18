@@ -38,5 +38,5 @@ export default new CommandBuilder()
         const imageUrl = await uguu(media.buffer);
         const transformer = new Image2Image();
         const result = await transformer.process(imageUrl, prompt);
-        return interaction.reply({ image: result.buffer, caption: prompt });
+        return interaction.reply({ image: result.buffer });
     });
