@@ -128,40 +128,41 @@ export async function ytdown(url, type = "video") {
 }
 
 /**
- * Download YouTube audio/video via API
+ * Download YouTube audio/video via local yt-dlp
  * @param {String} url
  * @param {Object} opts
  * @param {Boolean} opts.video
- * @param {String} opts.videoQuality
- * @param {String} opts.audioFormat
+ * @param {String} opts.title
  * @returns {Promise<{ buffer: Buffer, mimetype: string, fileName: string }>}
  */
 export async function downloadApiYt(url, opts = {}) {
-	const { video = false, title = "youtube" } = opts;
+        const { video = false, title = "youtube" } = opts;
 
-	const result = await ytdown(url, video ? "video" : "audio");
+        try {
+                // Use local yt-dlp instead of external API service
+                const result = await downloadYt(url, {
+                        video,
+                        title: title || "youtube",
+                });
 
-	if (!result?.download) {
-		throw new Error("Download link not found");
-	}
+                let buffer = result.buffer;
 
-	const { data } = await axios.get(result.download, {
-		responseType: "arraybuffer",
-	});
+                // Convert to MP3 if audio was requested
+                if (!video) {
+                        buffer = await to_audio(buffer, "mp3");
+                }
 
-	let buffer = Buffer.from(data);
+                const safeTitle = (title || "yt")
+                        .replace(/[\\/:*?"<>|]/g, "")
+                        .slice(0, 60);
 
-	if (!video) {
-		buffer = await to_audio(buffer, "mp3");
-	}
-
-	const safeTitle = (title || result.info.title || "yt")
-		.replace(/[\\/:*?"<>|]/g, "")
-		.slice(0, 60);
-
-	return {
-		buffer,
-		mimetype: video ? "video/mp4" : "audio/mpeg",
-		fileName: `${safeTitle}.${video ? "mp4" : "mp3"}`,
-	};
+                return {
+                        buffer,
+                        mimetype: video ? "video/mp4" : "audio/mpeg",
+                        fileName: `${safeTitle}.${video ? "mp4" : "mp3"}`,
+                };
+        } catch (error) {
+                console.error("[downloadApiYt] Error:", error.message);
+                throw error;
+        }
 }
