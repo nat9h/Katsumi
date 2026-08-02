@@ -58,6 +58,9 @@ export default new CommandBuilder()
         }
 
         const filePath = join(process.cwd(), targetPath);
+        if (!filePath.startsWith(process.cwd())) {
+            return interaction.reply("Path must stay inside the project.");
+        }
         const dir = dirname(filePath);
         if (!existsSync(dir)) {
             mkdirSync(dir, { recursive: true });

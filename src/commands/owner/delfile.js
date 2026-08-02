@@ -23,6 +23,9 @@ export default new CommandBuilder()
         }
 
         const filePath = join(process.cwd(), targetPath);
+        if (!filePath.startsWith(process.cwd())) {
+            return interaction.reply("Path must stay inside the project.");
+        }
         if (!existsSync(filePath)) {
             return interaction.reply(`Not found: \`${targetPath}\``);
         }
