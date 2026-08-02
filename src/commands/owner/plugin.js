@@ -4,33 +4,8 @@
  */
 
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
-import { commandMap } from "#libs/utils/plugin";
+import { groupAllCommands } from "#libs/utils/plugin";
 import { state } from "#state";
-
-/**
- * Resolve a command name (or alias) to its primary command name.
- * @param {string} input
- * @returns {string|null}
- */
-function resolveCommandName(input) {
-    const cmd = commandMap.get(input.toLowerCase());
-    return cmd ? cmd.name : null;
-}
-
-/** Get all unique commands grouped by category. */
-function getAllCommands() {
-    const seen = new Set();
-    const groups = {};
-
-    for (const [, cmd] of commandMap) {
-        if (seen.has(cmd.name)) {
-            continue;
-        }
-        seen.add(cmd.name);
-        (groups[cmd.category || "misc"] ??= []).push(cmd);
-    }
-    return groups;
-}
 
 export default new CommandBuilder()
     .setName("plugin")
@@ -100,7 +75,7 @@ export default new CommandBuilder()
         let target = positional.slice(1).join(" ").toLowerCase();
 
         if (!target) {
-            const grouped = getAllCommands();
+            const grouped = groupAllCommands();
             const globalDisabled = state.getDisabledPlugins();
             const groupDisabled = interaction.isGroup
                 ? state.getDisabledPluginsInGroup(interaction.chatJid)

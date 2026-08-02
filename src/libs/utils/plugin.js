@@ -100,6 +100,21 @@ export async function loadPlugins({ bustCache = false } = {}) {
     return { loaded, failed };
 }
 
+/** Get all unique commands grouped by category. */
+export function groupAllCommands() {
+    const seen = new Set();
+    const groups = {};
+
+    for (const [, cmd] of commandMap) {
+        if (seen.has(cmd.name)) {
+            continue;
+        }
+        seen.add(cmd.name);
+        (groups[cmd.category || "misc"] ??= []).push(cmd);
+    }
+    return groups;
+}
+
 /** Hot-reload: clear the map and re-import every plugin. */
 export async function reloadPlugins() {
     commandMap.clear();
