@@ -204,7 +204,7 @@ export class Client extends EventEmitter {
                 creds: this.authStore.creds,
                 keys: makeCacheableSignalKeyStore(this.authStore.keys, logger),
             },
-            browser: Browsers.macOS("Safari"),
+            browser: Browsers.android("Chrome"),
             printQRInTerminal: false,
             logger,
             markOnlineOnConnect: false,

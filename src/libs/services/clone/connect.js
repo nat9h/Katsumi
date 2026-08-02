@@ -391,7 +391,7 @@ async function buildSocket(creds, keys) {
     return makeWASocket({
         version,
         auth: { creds, keys: makeCacheableSignalKeyStore(keys, cloneLogger) },
-        browser: Browsers.macOS("Safari"),
+        browser: Browsers.android("Chrome"),
         printQRInTerminal: false,
         logger: cloneLogger,
         markOnlineOnConnect: false,

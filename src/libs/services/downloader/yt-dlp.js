@@ -165,14 +165,25 @@ export async function info(url) {
  */
 export async function download(url, type = "audio", opts = {}) {
     const isVideo = type === "video";
-    const format = isVideo
-        ? "best[ext=mp4][height<=480]"
-        : "bestaudio[ext=m4a]";
-    const ext = isVideo ? "mp4" : "m4a";
+    const ext = isVideo ? "mp4" : "mp3";
     const outFile = join(tmpdir(), `yt_${Date.now()}_${process.pid}.${ext}`);
 
     try {
-        await runYtDlp(["-f", format, "-o", outFile, "--no-playlist", url], {
+        const args = ["-o", outFile, "--no-playlist"];
+        if (isVideo) {
+            args.push("-f", "best[ext=mp4][height<=480]");
+        } else {
+            args.push(
+                "-f",
+                "bestaudio",
+                "--extract-audio",
+                "--audio-format",
+                "mp3",
+            );
+        }
+        args.push(url);
+
+        await runYtDlp(args, {
             timeout: opts.timeout || 180_000,
             maxBuffer: 300 * 1024 * 1024,
         });
@@ -181,7 +192,7 @@ export async function download(url, type = "audio", opts = {}) {
         return {
             buffer,
             fileName: `${sanitizeTitle(opts.title)}.${ext}`,
-            mimetype: isVideo ? "video/mp4" : "audio/mp4",
+            mimetype: isVideo ? "video/mp4" : "audio/mpeg",
         };
     } finally {
         await unlink(outFile).catch(() => {});

@@ -9,7 +9,6 @@ import axios from "axios";
 class Instagram {
     #ua =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-    DOC_ID = "8845758582119845";
 
     /**
      * Extract shortcode from a post/reel URL.
@@ -82,6 +81,21 @@ class Instagram {
     }
 
     /**
+     * Convert a shortcode to a media ID (pk).
+     * @param {string} shortcode
+     * @returns {string}
+     */
+    shortcodeToMediaId(shortcode) {
+        const alphabet =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let id = 0n;
+        for (const char of shortcode) {
+            id = id * 64n + BigInt(alphabet.indexOf(char));
+        }
+        return id.toString();
+    }
+
+    /**
      * Get session credentials.
      * @returns {{cookies: string, csrf: string}}
      */
@@ -111,187 +125,119 @@ class Instagram {
     }
 
     /**
-     * Fetch media data via GraphQL using shortcode.
+     * Fetch media data via REST API using shortcode.
      * @param {string} shortcode
      * @returns {Promise<object|null>}
      */
-    async fetchGraphQL(shortcode) {
+    async fetchMediaInfo(shortcode) {
         const { cookies, csrf } = this.getSession();
+        const mediaId = this.shortcodeToMediaId(shortcode);
 
-        const { data } = await axios.post(
-            "https://www.instagram.com/graphql/query",
-            new URLSearchParams({
-                doc_id: this.DOC_ID,
-                variables: JSON.stringify({
-                    shortcode,
-                    fetch_tagged_user_count: null,
-                    hoisted_comment_id: null,
-                    hoisted_reply_id: null,
-                }),
-            }).toString(),
+        const { data } = await axios.get(
+            `https://www.instagram.com/api/v1/media/${mediaId}/info/`,
             {
                 headers: {
                     "User-Agent": this.#ua,
-                    "Content-Type": "application/x-www-form-urlencoded",
                     "X-IG-App-ID": "936619743392459",
                     "X-CSRFToken": csrf,
                     Cookie: cookies,
-                    Origin: "https://www.instagram.com",
-                    Referer: `https://www.instagram.com/p/${shortcode}/`,
                 },
                 timeout: 15_000,
             },
         );
 
-        return data?.data?.xdt_shortcode_media || null;
+        return data?.items?.[0] || null;
     }
 
     /**
-     * Parse comments from GraphQL edges.
-     * @param {object} commentData
+     * Parse comments from REST API response.
+     * @param {Array} comments
      * @returns {Array}
      */
-    parseComments(commentData) {
-        if (!commentData?.edges?.length) {
+    parseComments(comments) {
+        if (!comments?.length) {
             return [];
         }
 
-        return commentData.edges.map(({ node }) => ({
-            username: node.owner?.username || "",
-            avatar: node.owner?.profile_pic_url || "",
-            text: node.text || "",
-            likes: node.edge_liked_by?.count || 0,
-            timestamp: node.created_at || 0,
+        return comments.map((c) => ({
+            username: c.user?.username || c.pk?.split?.("@")?.[0] || "",
+            avatar: c.user?.profile_pic_url || "",
+            text: c.text || c.caption || "",
+            likes: c.comment_like_count ?? c.like_count ?? 0,
+            timestamp: c.created_at ?? c.created_timestamp ?? 0,
         }));
     }
 
     /**
-     * Parse GraphQL media into a clean structure.
-     * Works for posts, reels, and stories.
-     * @param {object} media
-     * @returns {object}
+     * Pick the best image candidate URL.
+     * @param {object} item
+     * @returns {string}
      */
-    parse(media) {
-        const typename = media.__typename || "";
-        const isStory = typename.includes("Story");
-
-        const result = {
-            shortcode: media.shortcode || "",
-            type: typename,
-            isVideo: media.is_video || false,
-            isStory,
-            caption: media.edge_media_to_caption?.edges?.[0]?.node?.text || "",
-            author: {
-                username: media.owner?.username || "",
-                fullName: media.owner?.full_name || "",
-                avatar: media.owner?.profile_pic_url || "",
-            },
-            stats: {
-                likes: media.edge_media_preview_like?.count || 0,
-                comments: media.edge_media_to_parent_comment?.count || 0,
-                views: media.video_view_count || 0,
-                plays: media.video_play_count || 0,
-            },
-            comments: isStory
-                ? []
-                : this.parseComments(media.edge_media_to_parent_comment),
-            media: [],
-        };
-
-        if (typename === "XDTGraphSidecar") {
-            const edges = media.edge_sidecar_to_children?.edges || [];
-            for (const { node } of edges) {
-                const videoUrl =
-                    node.video_url ||
-                    node.video_resources?.[0]?.src ||
-                    node.video_versions?.[0]?.url;
-                result.media.push({
-                    type: node.is_video ? "video" : "image",
-                    url:
-                        node.is_video && videoUrl ? videoUrl : node.display_url,
-                    thumbnail: node.display_url || "",
-                    width: node.dimensions?.width || 0,
-                    height: node.dimensions?.height || 0,
-                });
-            }
-        } else if (media.is_video) {
-            const videoUrl =
-                media.video_url ||
-                media.video_resources?.[0]?.src ||
-                media.video_versions?.[0]?.url;
-
-            if (videoUrl) {
-                result.media.push({
-                    type: "video",
-                    url: videoUrl,
-                    thumbnail: media.display_url || media.thumbnail_src || "",
-                    width: media.dimensions?.width || 0,
-                    height: media.dimensions?.height || 0,
-                });
-            } else {
-                result.media.push({
-                    type: "image",
-                    url: media.display_url || "",
-                    thumbnail: media.display_url || media.thumbnail_src || "",
-                    width: media.dimensions?.width || 0,
-                    height: media.dimensions?.height || 0,
-                });
-            }
-        } else {
-            result.media.push({
-                type: "image",
-                url: media.display_url || "",
-                thumbnail: media.display_url || media.thumbnail_src || "",
-                width: media.dimensions?.width || 0,
-                height: media.dimensions?.height || 0,
-            });
-        }
-
-        return result;
+    #imageUrl(item) {
+        return item.image_versions2?.candidates?.[0]?.url || "";
     }
 
     /**
-     * Fetch story video URL via REST API (reels_media).
-     * @param {string} ownerId
-     * @param {string} storyId
-     * @param {string} csrf
-     * @param {string} cookies
-     * @returns {Promise<{url: string, thumbnail: string, width: number, height: number}|null>}
+     * Map a REST API media item to a clean media entry.
+     * @param {object} item
+     * @returns {{type: string, url: string, thumbnail: string, width: number, height: number}}
      */
-    async fetchStoryVideo(ownerId, storyId, csrf, cookies) {
-        try {
-            const { data } = await axios.get(
-                `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${ownerId}`,
-                {
-                    headers: {
-                        "User-Agent": this.#ua,
-                        "X-IG-App-ID": "936619743392459",
-                        "X-CSRFToken": csrf,
-                        "X-Requested-With": "XMLHttpRequest",
-                        Cookie: cookies,
-                        Referer: "https://www.instagram.com/",
-                    },
-                    timeout: 15_000,
-                    maxRedirects: 0,
-                    validateStatus: (s) => s === 200,
-                },
-            );
+    #mapMediaItem(item) {
+        const isVideo = item.media_type === 2 || !!item.video_versions?.length;
+        return {
+            type: isVideo ? "video" : "image",
+            url: isVideo ? item.video_versions[0].url : this.#imageUrl(item),
+            thumbnail: this.#imageUrl(item),
+            width: item.original_width || 0,
+            height: item.original_height || 0,
+        };
+    }
 
-            const reel = data?.reels?.[ownerId];
-            const item = reel?.items?.find((i) => String(i.pk) === storyId);
-            if (!item?.video_versions?.length) {
-                return null;
+    /**
+     * Parse REST API media into a clean structure.
+     * Works for posts, reels, and stories.
+     * @param {object} media - items[0] from /api/v1/media/{id}/info/
+     * @returns {object}
+     */
+    parse(media) {
+        const isStory = !!media.expiring_at;
+        const comments = media.comments || media.preview_comments || [];
+
+        const result = {
+            shortcode: media.code || "",
+            type:
+                media.media_type === 8
+                    ? "Sidecar"
+                    : media.media_type === 2
+                      ? "Video"
+                      : "Image",
+            isVideo: media.media_type === 2 || !!media.video_versions?.length,
+            isStory,
+            caption: media.caption?.text || "",
+            author: {
+                username: media.user?.username || "",
+                fullName: media.user?.full_name || "",
+                avatar: media.user?.profile_pic_url || "",
+            },
+            stats: {
+                likes: media.like_count || 0,
+                comments: media.comment_count || 0,
+                views: media.view_count || media.play_count || 0,
+                plays: media.play_count || 0,
+            },
+            comments: isStory ? [] : this.parseComments(comments),
+            media: [],
+        };
+
+        if (media.carousel_media?.length) {
+            for (const item of media.carousel_media) {
+                result.media.push(this.#mapMediaItem(item));
             }
-
-            return {
-                url: item.video_versions[0].url,
-                thumbnail: item.image_versions2?.candidates?.[0]?.url || "",
-                width: item.original_width || 0,
-                height: item.original_height || 0,
-            };
-        } catch {
-            return null;
+        } else {
+            result.media.push(this.#mapMediaItem(media));
         }
+
+        return result;
     }
 
     /**
@@ -376,7 +322,6 @@ class Instagram {
             return this.fetchHighlight(highlightId);
         }
 
-        const { cookies, csrf } = this.getSession();
         let shortcode;
 
         const storyInfo = this.extractStory(clean);
@@ -392,39 +337,11 @@ class Instagram {
             );
         }
 
-        const media = await this.fetchGraphQL(shortcode);
+        const media = await this.fetchMediaInfo(shortcode);
         if (!media) {
             throw new Error(
                 "Failed to fetch. Post may be private or session expired.",
             );
-        }
-
-        if (
-            media.__typename?.includes("Story") &&
-            media.is_video &&
-            media.owner?.id
-        ) {
-            const videoData = await this.fetchStoryVideo(
-                media.owner.id,
-                storyInfo?.storyId || "",
-                csrf,
-                cookies,
-            );
-            if (videoData) {
-                const result = this.parse(media);
-                result.media = [
-                    {
-                        type: "video",
-                        url: videoData.url,
-                        thumbnail:
-                            videoData.thumbnail || media.display_url || "",
-                        width: videoData.width || media.dimensions?.width || 0,
-                        height:
-                            videoData.height || media.dimensions?.height || 0,
-                    },
-                ];
-                return result;
-            }
         }
 
         const result = this.parse(media);
