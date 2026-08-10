@@ -20,6 +20,9 @@
   </p>
 </div>
 
+> [!IMPORTANT]
+> Active development has moved to the [`dev`](https://github.com/nat9h/Katsumi/tree/dev) branch. `main` is inactive and will not receive updates — it will be replaced once `dev` reaches final release. Use `dev` for the latest code.
+
 ---
 
 ## Table of Contents
