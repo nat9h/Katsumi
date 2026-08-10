@@ -353,6 +353,145 @@ class Instagram {
     }
 
     /**
+     * Resolve a username to its profile info + numeric user id.
+     * Tries web_profile_info (rich data); falls back to topsearch on
+     * rate-limit (id + basic fields only, no follower/bio counts).
+     * @param {string} username
+     * @returns {Promise<object>} normalized user object
+     */
+    async resolveUser(username) {
+        const user = username.trim().replace(/^@/, "").toLowerCase();
+        const { cookies, csrf } = this.getSession();
+        const headers = {
+            "User-Agent": this.#ua,
+            "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "129477",
+            "X-CSRFToken": csrf,
+            "X-Requested-With": "XMLHttpRequest",
+            Cookie: cookies,
+            Referer: `https://www.instagram.com/${user}/`,
+        };
+
+        try {
+            const { data } = await axios.get(
+                `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(user)}`,
+                { headers, timeout: 15_000 },
+            );
+            const u = data?.data?.user;
+            if (u) {
+                return {
+                    id: u.id,
+                    username: u.username,
+                    fullName: u.full_name || "",
+                    avatar: u.profile_pic_url_hd || u.profile_pic_url || "",
+                    bio: u.biography || "",
+                    isPrivate: !!u.is_private,
+                    isVerified: !!u.is_verified,
+                    posts: u.edge_owner_to_timeline_media?.count || 0,
+                    followers: u.edge_followed_by?.count || 0,
+                    following: u.edge_follow?.count || 0,
+                };
+            }
+        } catch (e) {
+            if (e.response?.status !== 429) {
+                throw e;
+            }
+        }
+
+        const { data } = await axios.get(
+            `https://www.instagram.com/api/v1/web/search/topsearch/?query=${encodeURIComponent(user)}&context=blended`,
+            {
+                headers: { ...headers, Referer: "https://www.instagram.com/" },
+                timeout: 15_000,
+            },
+        );
+        const hit =
+            data?.users?.find((x) => x.user?.username === user)?.user ||
+            data?.users?.[0]?.user;
+        if (!hit) {
+            throw new Error("User not found or session expired.");
+        }
+        return {
+            id: String(hit.pk),
+            username: hit.username,
+            fullName: hit.full_name || "",
+            avatar: hit.profile_pic_url || "",
+            bio: "",
+            isPrivate: !!hit.is_private,
+            isVerified: !!hit.is_verified,
+            posts: 0,
+            followers: 0,
+            following: 0,
+        };
+    }
+
+    /**
+     * Fetch a full profile: info, posts, active stories, highlights.
+     * Stories/highlights require the session to follow private accounts.
+     * @param {string} username
+     * @param {number} [postCount=12] - Number of recent posts to fetch
+     * @returns {Promise<{user: object, posts: Array, stories: Array, highlights: Array}>}
+     */
+    async fetchProfile(username, postCount = 12) {
+        const user = await this.resolveUser(username);
+        const userId = user.id;
+        const { cookies, csrf } = this.getSession();
+        const headers = {
+            "User-Agent": this.#ua,
+            "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "129477",
+            "X-CSRFToken": csrf,
+            "X-Requested-With": "XMLHttpRequest",
+            Cookie: cookies,
+            Referer: `https://www.instagram.com/${user.username}/`,
+        };
+
+        const get = async (url) => {
+            try {
+                const { data } = await axios.get(url, {
+                    headers,
+                    timeout: 15_000,
+                });
+                return data;
+            } catch {
+                return null;
+            }
+        };
+
+        const [feed, storyData, tray] = await Promise.all([
+            get(
+                `https://www.instagram.com/api/v1/feed/user/${userId}/?count=${postCount}`,
+            ),
+            get(
+                `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${userId}`,
+            ),
+            get(
+                `https://www.instagram.com/api/v1/highlights/${userId}/highlights_tray/`,
+            ),
+        ]);
+
+        const posts = (feed?.items || []).map((item) => ({
+            shortcode: item.code || "",
+            caption: item.caption?.text || "",
+            likes: item.like_count || 0,
+            comments: item.comment_count || 0,
+            isVideo: item.media_type === 2 || !!item.video_versions?.length,
+            thumbnail: this.#imageUrl(item),
+        }));
+
+        const storyItems = storyData?.reels?.[userId]?.items || [];
+        const stories = storyItems.map((item) => this.#mapMediaItem(item));
+
+        const highlights = (tray?.tray || []).map((h) => ({
+            id: String(h.id).replace(/^highlight:/, ""),
+            title: h.title || "",
+            cover: h.cover_media?.cropped_image_version?.url || "",
+        }));
+
+        return { user, posts, stories, highlights };
+    }
+
+    /**
      * Search posts by hashtag.
      * @param {string} query - Hashtag (without #)
      * @param {"recent"|"top"} [tab="recent"]

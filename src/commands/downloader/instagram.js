@@ -19,7 +19,7 @@ export default new CommandBuilder()
     .setExample(
         "{prefix}{name} https://www.instagram.com/reel/xxx\n{prefix}{name} kucinglucu",
     )
-    .setNote("URL → download. Text → search by hashtag.")
+    .setNote("URL → download. @username → profile. Text → hashtag search.")
     .setReact("📸")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
@@ -38,6 +38,127 @@ export default new CommandBuilder()
         }
 
         await interaction.typing();
+
+        const profileUrl = query.match(
+            /(?:instagram\.com|instagr\.am)\/(?!p\/|reel|reels|tv\/|stories\/|explore\/|s\/)([A-Za-z0-9._]+)\/?$/i,
+        );
+        const atName = query.match(/^@([A-Za-z0-9._]+)$/);
+        const usernameQuery = profileUrl?.[1] || atName?.[1];
+
+        if (usernameQuery) {
+            const { user, posts, stories, highlights } =
+                await instagram.fetchProfile(usernameQuery);
+
+            const info = [
+                `👤 *@${user.username}*${user.isVerified ? " ✅" : ""}${user.fullName ? `\n${user.fullName}` : ""}`,
+                `📊 ${formatCount(user.posts)} posts • ${formatCount(user.followers)} followers • ${formatCount(user.following)} following`,
+                ...(user.bio ? ["", user.bio] : []),
+                "",
+                `📸 ${posts.length} recent posts • 📖 ${stories.length} stories • 📌 ${highlights.length} highlights`,
+            ].join("\n");
+
+            const choices = [
+                ...posts.map((p) => ({
+                    kind: "post",
+                    ref: p.shortcode,
+                    label: `📸 ${p.caption?.slice(0, 40) || "(no caption)"} (❤️${formatCount(p.likes)})`,
+                })),
+                ...(stories.length
+                    ? [
+                          {
+                              kind: "story",
+                              ref: null,
+                              label: `📖 Active stories (${stories.length})`,
+                          },
+                      ]
+                    : []),
+                ...highlights.map((h) => ({
+                    kind: "highlight",
+                    ref: h.id,
+                    label: `📌 ${h.title || "Highlight"}`,
+                })),
+            ];
+
+            if (!choices.length) {
+                return interaction.reply(
+                    `${info}\n\n${user.isPrivate ? "🔒 Private account — nothing accessible." : "No content found."}`,
+                );
+            }
+
+            const selected = await selectFromList({
+                interaction,
+                items: choices,
+                format: (c, i) => `${i + 1}. ${c.label}`,
+                header: {
+                    image: user.avatar ? { url: user.avatar } : null,
+                    caption: info,
+                },
+            });
+
+            if (!selected) {
+                return;
+            }
+
+            if (selected.kind === "story") {
+                for (const [i, m] of stories.entries()) {
+                    const payload =
+                        m.type === "video"
+                            ? {
+                                  video: Buffer.from(
+                                      (
+                                          await axios.get(m.url, {
+                                              responseType: "arraybuffer",
+                                              timeout: 60_000,
+                                          })
+                                      ).data,
+                                  ),
+                              }
+                            : { image: { url: m.url } };
+                    if (i === 0) {
+                        payload.caption = `📖 @${user.username} stories`;
+                    }
+                    await interaction.followUp(payload);
+                }
+                return;
+            }
+
+            const targetUrl =
+                selected.kind === "highlight"
+                    ? `https://www.instagram.com/stories/highlights/${selected.ref}/`
+                    : `https://www.instagram.com/p/${selected.ref}/`;
+            const post = await instagram.download(targetUrl);
+
+            const caption = [
+                `👤 @${post.author.username}`,
+                ...(post.type === "Highlight"
+                    ? [`📌 ${post.title || "Highlight"}`]
+                    : [
+                          `❤️ ${formatCount(post.stats.likes)} • 💬 ${formatCount(post.stats.comments)}`,
+                      ]),
+                ...(post.caption ? ["", post.caption] : []),
+            ].join("\n");
+
+            for (const [i, media] of post.media.entries()) {
+                const payload =
+                    media.type === "video"
+                        ? {
+                              video: Buffer.from(
+                                  (
+                                      await axios.get(media.url, {
+                                          responseType: "arraybuffer",
+                                          timeout: 60_000,
+                                      })
+                                  ).data,
+                              ),
+                          }
+                        : { image: { url: media.url } };
+                if (i === 0) {
+                    payload.caption = caption;
+                }
+                await interaction.followUp(payload);
+            }
+            return;
+        }
 
         if (/(?:instagram\.com|instagr\.am)\//i.test(query)) {
             const post = await instagram.download(query);
