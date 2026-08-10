@@ -46,6 +46,49 @@ async function runFfmpeg(inputBuffer, inExt, outExt, configure) {
 }
 
 /**
+ * Merge a video buffer and an audio buffer into a single MP4.
+ *
+ * @param {Buffer} videoBuffer - Input video buffer (no audio).
+ * @param {Buffer} audioBuffer - Input audio buffer.
+ * @returns {Promise<Buffer>} Merged MP4 buffer.
+ */
+export async function mergeVideoAudio(videoBuffer, audioBuffer) {
+    await mkdir(TMP_DIR, { recursive: true });
+
+    const id = randomUUID();
+    const videoFile = join(TMP_DIR, `${id}_v.mp4`);
+    const audioFile = join(TMP_DIR, `${id}_a.mp4`);
+    const outputFile = join(TMP_DIR, `${id}_out.mp4`);
+
+    await writeFile(videoFile, videoBuffer);
+    await writeFile(audioFile, audioBuffer);
+
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(videoFile)
+                .input(audioFile)
+                .outputOptions([
+                    "-c:v",
+                    "copy",
+                    "-c:a",
+                    "aac",
+                    "-movflags",
+                    "+faststart",
+                ])
+                .save(outputFile)
+                .on("end", resolve)
+                .on("error", reject);
+        });
+        return await readFile(outputFile);
+    } finally {
+        for (const f of [videoFile, audioFile, outputFile]) {
+            await unlink(f).catch(() => {});
+        }
+    }
+}
+
+/**
  * Extract the audio stream from a video/audio buffer and re-encode as MP3.
  *
  * @param {Buffer} buffer - Input media buffer.
