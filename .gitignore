@@ -6,3 +6,4 @@ cookies/
 .continue/
 tmp/
 auth_info_baileys/
+.claude/
