@@ -157,9 +157,10 @@ export default new CommandBuilder()
                 return interaction.reply("No groups found.");
             }
 
-            const selectedGroups = await interaction.pickMultipleFromList(
+            const selectedGroups = await interaction.pickFromList(
                 groups,
                 "Select target group(s)",
+                { multi: true },
             );
             if (!selectedGroups) {
                 return;

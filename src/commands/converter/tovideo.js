@@ -20,7 +20,7 @@ export default new CommandBuilder()
             maxBytes: 8 * 1024 * 1024,
         });
 
-        if (!media || media.type !== "sticker") {
+        if (media?.type !== "sticker") {
             return interaction.reply("Send or reply to an animated sticker.");
         }
 

@@ -16,17 +16,10 @@ export default new CommandBuilder()
     .setReact("🧵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const raw = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const raw = interaction.urlArg();
 
         if (!raw || !/threads\.net/i.test(raw)) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <threads url>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

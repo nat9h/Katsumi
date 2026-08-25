@@ -29,12 +29,14 @@ setInterval(() => {
  * Permissive owner check used by the command pipeline.
  *
  * Treats fromMe as owner so the bot account can always run commands in
- * self-mode. Strict ownership (for guards) lives in `#utils/permission`.
+ * self-mode — hence the name. Strict ownership, which the `owner` guard
+ * enforces, is `isOwner` in `#libs/utils/permission` and must not be
+ * confused with this one.
  *
  * @param {Interaction} interaction
  * @returns {boolean}
  */
-export function isOwner(interaction) {
+export function isSelfOrOwner(interaction) {
     if (interaction.msg.key.fromMe) {
         return true;
     }
@@ -92,7 +94,7 @@ function matchesOwner(normJid, rawJid, target) {
  * @returns {Promise<boolean>}
  */
 async function maybeAntiLink(client, interaction) {
-    if (!interaction.isGroup || isOwner(interaction)) {
+    if (!interaction.isGroup || isSelfOrOwner(interaction)) {
         return false;
     }
     if (!client.db.get(`antilink:${interaction.chatJid}`)) {
@@ -166,7 +168,7 @@ async function maybeAntiLink(client, interaction) {
  * @param {Interaction} interaction
  * @returns {{ cmd: object, name: string, rawArgs: string[], prefix: string }|null}
  */
-function parseInvocation(text, interaction) {
+export function parseInvocation(text, interaction) {
     for (const cmd of customPrefixCommands) {
         if (!text.startsWith(cmd.prefix)) {
             continue;
@@ -184,7 +186,7 @@ function parseInvocation(text, interaction) {
     }
 
     let prefix = config.prefixes.find((p) => p && text.startsWith(p));
-    if (prefix === undefined && state.noPrefix && isOwner(interaction)) {
+    if (prefix === undefined && state.noPrefix && isSelfOrOwner(interaction)) {
         prefix = "";
     }
     if (prefix === undefined) {
@@ -214,7 +216,7 @@ function parseInvocation(text, interaction) {
  * @param {string} name
  * @returns {string}
  */
-function extractRawBody(text, prefix, name) {
+export function extractRawBody(text, prefix, name) {
     let body = text.slice(prefix.length).replace(/^[ \t]+/, "");
     if (name && body.toLowerCase().startsWith(name.toLowerCase())) {
         body = body.slice(name.length).replace(/^[ \t\r\n]/, "");
@@ -231,20 +233,27 @@ function extractRawBody(text, prefix, name) {
  * @returns {Promise<boolean>}
  */
 async function passesGates(interaction, cmd) {
-    if (state.selfMode && !interaction.fromMe && !isOwner(interaction)) {
+    if (state.selfMode && !interaction.fromMe && !isSelfOrOwner(interaction)) {
         return false;
     }
-    if (!isOwner(interaction) && state.isChatBanned(interaction.chatJid)) {
+    if (
+        !isSelfOrOwner(interaction) &&
+        state.isChatBanned(interaction.chatJid)
+    ) {
         return false;
     }
-    if (!isOwner(interaction) && state.isUserBanned(interaction.user)) {
+    if (!isSelfOrOwner(interaction) && state.isUserBanned(interaction.user)) {
         return false;
     }
-    if (state.privateOnly && interaction.isGroup && !isOwner(interaction)) {
+    if (
+        state.privateOnly &&
+        interaction.isGroup &&
+        !isSelfOrOwner(interaction)
+    ) {
         return false;
     }
 
-    if (!isOwner(interaction)) {
+    if (!isSelfOrOwner(interaction)) {
         if (state.isPluginDisabled(cmd.name)) {
             return false;
         }
@@ -256,7 +265,7 @@ async function passesGates(interaction, cmd) {
         }
     }
 
-    if (state.adminOnly && !isOwner(interaction)) {
+    if (state.adminOnly && !isSelfOrOwner(interaction)) {
         if (!interaction.isGroup) {
             return false;
         }
@@ -270,7 +279,7 @@ async function passesGates(interaction, cmd) {
 
     if (
         state.premiumOnly &&
-        !isOwner(interaction) &&
+        !isSelfOrOwner(interaction) &&
         !isPremium(interaction.db, interaction.user)
     ) {
         return false;
@@ -288,7 +297,7 @@ async function passesGates(interaction, cmd) {
  * @returns {string|null}
  */
 function checkRateLimit(interaction, cmd) {
-    if (!cmd.rateLimit || isOwner(interaction)) {
+    if (!cmd.rateLimit || isSelfOrOwner(interaction)) {
         return null;
     }
 
@@ -329,7 +338,7 @@ async function runGuards(client, interaction, cmd) {
     if (
         client._isClone &&
         cmd.guards.some(isOwnerGuard) &&
-        !isOwner(interaction)
+        !isSelfOrOwner(interaction)
     ) {
         return "🚫 Owner commands are not available on clones.";
     }
@@ -481,6 +490,7 @@ export async function processMessage(client, msg) {
 
     interaction.prefix = prefix;
     interaction.commandName = name;
+    interaction.command = cmd;
     interaction.rawArgs = rawArgs;
     interaction.body = rawArgs.join(" ");
     interaction.rawBody = extractRawBody(text, prefix, name);

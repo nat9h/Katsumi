@@ -19,9 +19,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const input = interaction.body || interaction.quoted?.text;
         if (!input) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <song title / artist>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

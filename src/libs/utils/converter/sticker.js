@@ -10,9 +10,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpeg from "fluent-ffmpeg";
 import webpmux from "node-webpmux";
-
-/** @type {string} Temporary directory for ffmpeg operations. */
-const TMP_DIR = join(process.cwd(), "tmp");
+import { TMP_DIR } from "#libs/utils/tmp";
 
 const VF_FILTER = [
     "scale=320:320:force_original_aspect_ratio=decrease",

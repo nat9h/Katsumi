@@ -22,7 +22,7 @@ export default new CommandBuilder()
         const targetPath = interaction.body;
         if (!targetPath) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <path>\`\nReply to text or document.`,
+                interaction.usage("Reply to text or document."),
             );
         }
 

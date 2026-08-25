@@ -46,30 +46,29 @@ function debounce(fn, ms = 250) {
 /** @type {Set<Function>} Registered flush callbacks for shutdown. */
 const _flushers = new Set();
 
-// Ensure all pending writes are flushed on process exit
-process.once("beforeExit", () => {
+/**
+ * Flush every pending debounced write and close the SQLite handle.
+ *
+ * Signal handling deliberately lives in `Client.#installShutdownHandlers`
+ * only — two independent SIGINT handlers calling `process.exit(0)` raced
+ * each other and could cut socket teardown short.
+ */
+export function flushAll() {
     for (const f of _flushers) {
         try {
             f();
         } catch {}
     }
-});
-process.once("SIGINT", () => {
-    for (const f of _flushers) {
+    if (_sqliteDb) {
         try {
-            f();
+            _sqliteDb.close();
         } catch {}
+        _sqliteDb = null;
     }
-    process.exit(0);
-});
-process.once("SIGTERM", () => {
-    for (const f of _flushers) {
-        try {
-            f();
-        } catch {}
-    }
-    process.exit(0);
-});
+}
+
+// Last-resort net for a natural exit (no signal involved).
+process.once("beforeExit", flushAll);
 
 /**
  * Create an in-memory signal key store with persistence callback.
@@ -273,6 +272,31 @@ class JsonKeyValueStore {
  * JSON file-based data store for contacts, groups, and chats.
  * Persists to store.json with debounced writes.
  */
+/**
+ * Merge an incoming group metadata patch onto what is already stored.
+ *
+ * A payload carrying participants is authoritative and replaces the row
+ * wholesale; a partial one (e.g. a subject change) is merged, with undefined
+ * keys dropped so they don't blank out stored values.
+ *
+ * @param {object} existing
+ * @param {object} meta
+ * @returns {object}
+ */
+function mergeGroup(existing, meta) {
+    if (Array.isArray(meta.participants) && meta.participants.length) {
+        return meta;
+    }
+
+    const clean = {};
+    for (const k in meta) {
+        if (meta[k] !== undefined) {
+            clean[k] = meta[k];
+        }
+    }
+    return { ...existing, ...clean };
+}
+
 class JsonDataStore {
     constructor() {
         this.contacts = {};
@@ -323,19 +347,7 @@ class JsonDataStore {
         if (!meta?.id || !config.storeGroups) {
             return;
         }
-        const existing = this.groups[meta.id] || {};
-
-        if (Array.isArray(meta.participants) && meta.participants.length) {
-            this.groups[meta.id] = meta;
-        } else {
-            const clean = {};
-            for (const k in meta) {
-                if (meta[k] !== undefined) {
-                    clean[k] = meta[k];
-                }
-            }
-            this.groups[meta.id] = { ...existing, ...clean };
-        }
+        this.groups[meta.id] = mergeGroup(this.groups[meta.id] || {}, meta);
         this._write();
     }
 
@@ -423,12 +435,7 @@ function getSqliteDb() {
     CREATE TABLE IF NOT EXISTS chats    (jid TEXT PRIMARY KEY, data TEXT NOT NULL);
   `);
 
-    process.once("beforeExit", () => {
-        try {
-            _sqliteDb.close();
-        } catch {}
-    });
-
+    // Closing is handled by flushAll() — see the top of this file.
     return _sqliteDb;
 }
 
@@ -637,20 +644,8 @@ class SqliteDataStore {
         if (!meta?.id || !config.storeGroups) {
             return;
         }
-
-        if (Array.isArray(meta.participants) && meta.participants.length) {
-            this._put("groups", meta.id, meta);
-            return;
-        }
-
         const existing = this._getRow("groups", meta.id) || {};
-        const clean = {};
-        for (const k in meta) {
-            if (meta[k] !== undefined) {
-                clean[k] = meta[k];
-            }
-        }
-        this._put("groups", meta.id, { ...existing, ...clean });
+        this._put("groups", meta.id, mergeGroup(existing, meta));
     }
 
     getGroup(jid) {

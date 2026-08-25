@@ -6,7 +6,6 @@
 import bluesky from "#libs/scrapers/bluesky";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatCount } from "#libs/utils/format";
-import { extractUrl } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("bluesky")
@@ -20,18 +19,10 @@ export default new CommandBuilder()
     .setReact("🦋")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const query = (
-            extractUrl(interaction.body) ||
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg();
 
         if (!query || !/bsky\.app/i.test(query)) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <url>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

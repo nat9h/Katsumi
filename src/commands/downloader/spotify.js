@@ -18,16 +18,9 @@ export default new CommandBuilder()
     .setReact("🎵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const input = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const input = interaction.urlArg();
         if (!input) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <query|url>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         const sp = getSpotify();

@@ -8,17 +8,6 @@ import * as ytdlp from "#libs/services/downloader/yt-dlp";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatDuration } from "#libs/utils/format";
 import { selectFromList } from "#libs/utils/interaction";
-import { extractUrl } from "#libs/utils/message";
-
-const FALLBACK_META = {
-    title: "YouTube",
-    channel: "",
-    description: "",
-    duration: 0,
-    thumbnail: null,
-};
-const formatResult = (r, i) =>
-    `${i + 1}. *${r.title}* - ${r.channel} (${formatDuration(r.duration)})`;
 
 export default new CommandBuilder()
     .setName("youtube")
@@ -34,19 +23,10 @@ export default new CommandBuilder()
         });
         const wantVideo = flags.video === true;
 
-        const body = positional.join(" ").trim();
-        const query = (
-            extractUrl(body) ||
-            body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg(positional.join(" ").trim());
 
         if (!query) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <query|url> [--video | -v]\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();
@@ -127,7 +107,9 @@ export default new CommandBuilder()
             meta = await selectFromList({
                 interaction,
                 items: results,
-                format: formatResult,
+                format: (r, i) =>
+                    `${i + 1}. *${r.title}* - ${r.channel} ` +
+                    `(${formatDuration(r.duration)})`,
                 header: {
                     image: results[0].thumbnail
                         ? { url: results[0].thumbnail }
@@ -141,7 +123,7 @@ export default new CommandBuilder()
             url = meta.url;
         }
 
-        meta ??= await ytdlp.info(url).catch(() => FALLBACK_META);
+        meta ??= await ytdlp.info(url);
 
         const desc = meta.description
             ? meta.description.length > 150

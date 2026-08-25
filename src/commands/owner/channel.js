@@ -33,7 +33,7 @@ export default new CommandBuilder()
             const list = subcommands.map((s) => `• ${s}`).join("\n");
             return interaction.reply(
                 `*Channel Subcommands:*\n${list}\n\n` +
-                    `Usage: \`${interaction.prefix}${interaction.commandName} <subcommand> [args]\`\n` +
+                    `${interaction.usage()}\n` +
                     `Details: \`${interaction.prefix}menu ${interaction.commandName}\``,
             );
         }
@@ -189,7 +189,7 @@ export default new CommandBuilder()
                 const media = await fetchMedia(interaction, {
                     maxBytes: 16 * 1024 * 1024,
                 });
-                if (!media || media.type !== "image") {
+                if (media?.type !== "image") {
                     return interaction.reply("Send or reply to an image.");
                 }
                 await sock.newsletterUpdatePicture(channel.jid, media.buffer);

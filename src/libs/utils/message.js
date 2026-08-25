@@ -107,6 +107,55 @@ export function findContextInfo(message) {
 }
 
 /**
+ * Scan a raw `msg.message` for an ephemeral expiration, before any unwrapping.
+ *
+ * Checks, in order: the `ephemeralMessage` wrapper, `contextInfo` on each
+ * content field, then `contextInfo` inside a nested `editedMessage`.
+ *
+ * @param {object} message
+ * @returns {number} Expiration in seconds, or 0 when absent.
+ */
+export function extractExpiration(message) {
+    if (!message || typeof message !== "object") {
+        return 0;
+    }
+
+    const inner = message.ephemeralMessage?.message;
+    if (inner) {
+        for (const v of Object.values(inner)) {
+            if (v && typeof v === "object") {
+                const exp = Number(v.contextInfo?.expiration);
+                if (exp > 0) {
+                    return exp;
+                }
+            }
+        }
+    }
+
+    for (const v of Object.values(message)) {
+        if (!v || typeof v !== "object" || Array.isArray(v)) {
+            continue;
+        }
+
+        const exp = Number(v.contextInfo?.expiration);
+        if (exp > 0) {
+            return exp;
+        }
+
+        for (const ev of Object.values(v.editedMessage ?? {})) {
+            if (ev && typeof ev === "object") {
+                const e = Number(ev.contextInfo?.expiration);
+                if (e > 0) {
+                    return e;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
  * Returns true if the message is a view-once message in any of its variants.
  *
  * @param {object} message

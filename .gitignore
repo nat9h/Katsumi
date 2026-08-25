@@ -7,3 +7,4 @@ cookies/
 tmp/
 auth_info_baileys/
 .claude/
+test/

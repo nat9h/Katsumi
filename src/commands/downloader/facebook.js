@@ -14,7 +14,7 @@ export default new CommandBuilder()
     .setDescription("Download or search Facebook videos, reels, and posts")
     .setUsage("{prefix}{name} <url|query>")
     .setExample(
-        "{prefix}{name} https://www.facebook.com/reel/123456\n{prefix}fb kucing lucu\n{prefix}fb tutorial masak",
+        "{prefix}{name} https://www.facebook.com/reel/123456\n{prefix}fb kucing lucu\n{prefix}{name} tutorial masak",
     )
     .setNote(
         "URL → direct download. Text → search videos, pick a number, download.",
@@ -22,17 +22,10 @@ export default new CommandBuilder()
     .setReact("📘")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const input = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const input = interaction.urlArg();
 
         if (!input) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <url|query>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

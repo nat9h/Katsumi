@@ -19,12 +19,7 @@ export default new CommandBuilder()
     .setReact("☁️")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const url = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const url = interaction.urlArg();
 
         if (!url || !terabox.isValid(url)) {
             return interaction.reply(

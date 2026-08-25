@@ -24,7 +24,7 @@ export default new CommandBuilder()
 
         if (!input) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <number>\`\nSeparate multiple numbers with commas.`,
+                interaction.usage("Separate multiple numbers with commas."),
             );
         }
 

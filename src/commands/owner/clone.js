@@ -37,7 +37,7 @@ export default new CommandBuilder()
 
                 if (!target || target.length < 8) {
                     return interaction.reply(
-                        `Usage: \`${interaction.prefix}${interaction.commandName} pair <number>\`\n\n` +
+                        `${interaction.usage()}\n\n` +
                             `Number must include country code. Examples:\n` +
                             `• \`${interaction.prefix}${interaction.commandName} pair 628123456789\`\n` +
                             `• \`${interaction.prefix}${interaction.commandName} pair +62 812-345-6789\`\n` +

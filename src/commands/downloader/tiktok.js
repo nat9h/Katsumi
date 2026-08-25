@@ -8,7 +8,6 @@ import tiktok from "#libs/scrapers/tiktok";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { formatCount, formatDuration } from "#libs/utils/format";
 import { selectFromList } from "#libs/utils/interaction";
-import { extractUrl } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("tiktok")
@@ -20,18 +19,10 @@ export default new CommandBuilder()
     .setReact("🎵")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const query = (
-            extractUrl(interaction.body) ||
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg();
 
         if (!query) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <url|query>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

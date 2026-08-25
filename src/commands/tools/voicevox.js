@@ -7,8 +7,9 @@ import axios from "axios";
 import { getVoiceVox, VoiceVox } from "#libs/scrapers/voicevox";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 
-const speakerNames = Object.keys(VoiceVox.speakers);
-const speakerList = speakerNames.map((s, i) => `${i + 1}. ${s}`).join("\n");
+const speakerList = Object.keys(VoiceVox.speakers)
+    .map((s, i) => `${i + 1}. ${s}`)
+    .join("\n");
 
 export default new CommandBuilder()
     .setName("voicevox")
@@ -23,7 +24,9 @@ export default new CommandBuilder()
         const raw = (interaction.body || "").trim();
         if (!raw) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} [speaker] <text>\`\n\nSpeakers:\n${speakerList}\n\nDefault: zundamon`,
+                interaction.usage(
+                    `\nSpeakers:\n${speakerList}\n\nDefault: zundamon`,
+                ),
             );
         }
 

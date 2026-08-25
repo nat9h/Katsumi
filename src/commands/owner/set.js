@@ -129,9 +129,10 @@ export default new CommandBuilder()
                     return interaction.reply("No groups available to ban.");
                 }
 
-                const picked = await interaction.pickMultipleFromList(
+                const picked = await interaction.pickFromList(
                     groups,
                     "Select group(s) to ban",
+                    { multi: true },
                 );
                 if (!picked) {
                     return;
@@ -184,9 +185,10 @@ export default new CommandBuilder()
                         },
                 );
 
-                const picked = await interaction.pickMultipleFromList(
+                const picked = await interaction.pickFromList(
                     items,
                     "Select group(s) to unban",
+                    { multi: true },
                 );
                 if (!picked) {
                     return;

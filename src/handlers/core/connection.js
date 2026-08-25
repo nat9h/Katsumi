@@ -1,7 +1,6 @@
-import { Boom } from "@hapi/boom";
-import { DisconnectReason } from "baileys";
 import QRCode from "qrcode-terminal";
 import config from "#config";
+import { backoffDelay, parseDisconnect } from "#libs/utils/connection";
 import logger, { print } from "#libs/utils/logger";
 import { state } from "#state";
 
@@ -67,8 +66,30 @@ async function warmEphemeralForDMs(client) {
     }
 }
 
+/**
+ * Request a pairing code once, on the first `connecting` of an unregistered
+ * session.
+ *
+ * Guarded because every reconnect emits `connecting` again, and a second
+ * request overwrites `creds.pairingCode` — invalidating the code the user is
+ * still typing into their phone. The flag is only cleared when the request
+ * itself did not go through.
+ */
 function schedulePairingCode(client) {
+    if (client._pairingRequested) {
+        return;
+    }
+    client._pairingRequested = true;
+
     setTimeout(async () => {
+        if (
+            !client.sock?.ws?.isOpen ||
+            client.sock.authState.creds.registered
+        ) {
+            client._pairingRequested = false;
+            return;
+        }
+
         try {
             const code = await client.sock.requestPairingCode(
                 config.pairingNumber,
@@ -76,25 +97,19 @@ function schedulePairingCode(client) {
             print.pairingCode(code);
             client.emit("pairingCode", code);
         } catch (err) {
+            client._pairingRequested = false;
             print.error(`Pairing code request failed: ${err.message}`);
             logger.error({ err }, "pairing code request failed");
         }
     }, config.pairingDelay);
 }
 
-function backoffDelay(attempt) {
-    const exp = Math.min(config.initialReconnectDelay * 2 ** attempt, 60_000);
-    return exp + Math.floor(Math.random() * 1000);
-}
-
 function scheduleReconnect(client, lastDisconnect) {
-    const statusCode = lastDisconnect?.error
-        ? new Boom(lastDisconnect.error).output?.statusCode
-        : undefined;
+    const { code, reason, shouldReconnect } = parseDisconnect(lastDisconnect);
 
-    if (statusCode === DisconnectReason.loggedOut) {
-        print.error("Logged out – re-authentication required");
-        client.emit("loggedOut");
+    if (!shouldReconnect) {
+        print.error(`${reason} – re-authentication required`);
+        client.emit("loggedOut", code);
         return;
     }
 
@@ -103,7 +118,9 @@ function scheduleReconnect(client, lastDisconnect) {
         process.exit(1);
     }
 
-    const delay = backoffDelay(client.reconnectAttempts);
+    const delay = backoffDelay(client.reconnectAttempts, {
+        baseMs: config.initialReconnectDelay,
+    });
     client.reconnectAttempts++;
     print.warn(
         `Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${client.reconnectAttempts})`,

@@ -1,3 +1,4 @@
+import { fillTemplate } from "#libs/structures/CommandBuilder";
 import { commandMap } from "#libs/utils/plugin";
 
 /** Categories visible only to the bot owner. */
@@ -34,10 +35,7 @@ export function groupCommands(viewerIsOwner) {
 /** Detail view for a single command. */
 export function renderCommandDetail(prefix, cmd) {
     const replacePfx = (s) =>
-        s
-            .replace(/\{prefix\}/g, prefix)
-            .replace(/\{name\}/g, cmd.name)
-            .replace(/^[!.?]/gm, prefix);
+        fillTemplate(s, prefix, cmd.name).replace(/^[!.?]/gm, prefix);
 
     const usage = replacePfx(cmd.usage);
     const example = replacePfx(cmd.example);

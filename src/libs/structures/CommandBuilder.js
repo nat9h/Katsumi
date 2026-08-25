@@ -1,4 +1,3 @@
-import config from "#config";
 import { GUARDS } from "./guards.js";
 
 export { GuardError } from "./guards.js";
@@ -22,6 +21,25 @@ export { GuardError } from "./guards.js";
  * @property {string|null} prefix - Custom prefix override (e.g. ">>" for eval).
  * @property {string} note
  */
+
+/**
+ * Fill `{prefix}` / `{name}` placeholders in a usage/example template.
+ *
+ * Kept unfilled on the definition itself so the same command can render with
+ * whichever prefix actually invoked it (commands may be reached through any
+ * configured prefix, or a custom one).
+ *
+ * @param {string} text
+ * @param {string} prefix
+ * @param {string} name
+ * @returns {string} `prefix + name` when the template is empty.
+ */
+export function fillTemplate(text, prefix, name) {
+    if (!text) {
+        return `${prefix}${name}`;
+    }
+    return text.replaceAll("{prefix}", prefix).replaceAll("{name}", name);
+}
 
 /**
  * Fluent builder for command definitions.
@@ -157,25 +175,23 @@ export class CommandBuilder {
         return this;
     }
 
-    /** Finalize and return the command definition. */
+    /**
+     * Finalize and return the command definition.
+     *
+     * `usage` / `example` stay as templates — `Interaction.usage()` and the
+     * menu renderer fill them with the prefix that actually invoked the
+     * command, which may not be `config.prefixes[0]`.
+     */
     build() {
         const def = this.#def;
         if (!def.name) {
             throw new Error("Command name is required");
         }
 
-        const prefix = def.prefix || config.prefixes[0] || "!";
-        const fillTemplate = (t) =>
-            t
-                ? t
-                      .replaceAll("{prefix}", prefix)
-                      .replaceAll("{name}", def.name)
-                : `${prefix}${def.name}`;
-
         return {
             ...def,
-            usage: fillTemplate(def.usage),
-            example: fillTemplate(def.example),
+            usage: def.usage || "{prefix}{name}",
+            example: def.example || "{prefix}{name}",
         };
     }
 }

@@ -11,10 +11,9 @@ import {
     randomBytes,
 } from "node:crypto";
 import { unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getMediaKeys, proto } from "baileys";
 import sharp from "sharp";
+import { tmpFile } from "#libs/utils/tmp";
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest();
 const genId = () => randomBytes(16).toString("hex").toUpperCase();
@@ -148,10 +147,7 @@ async function encryptMedia(plain, mediaType, reuseKey) {
 }
 
 async function uploadEncrypted(sock, encBuf, fileEncSha256, mediaType) {
-    const tmp = join(
-        tmpdir(),
-        `spack_${Date.now()}_${Math.random().toString(36).slice(2)}.enc`,
-    );
+    const tmp = await tmpFile("enc");
     await writeFile(tmp, encBuf);
     try {
         return await sock.waUploadToServer(tmp, {

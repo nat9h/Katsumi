@@ -224,12 +224,15 @@ export class UserSerialQueue {
         const next = entry.tail.catch(() => {}).then(() => fn());
         entry.tail = next;
 
+        // .catch: the bookkeeping chain is a second branch off `next`, so a
+        // rejecting task would raise unhandledRejection here even when the
+        // caller handles `next` itself.
         next.finally(() => {
             entry.pending--;
             if (entry.pending === 0 && this.#entries.get(userId) === entry) {
                 this.#entries.delete(userId);
             }
-        });
+        }).catch(() => {});
 
         return next;
     }

@@ -5,7 +5,7 @@ import {
     handleMessageRevoke,
 } from "#handlers/core/listeners";
 import { print } from "#libs/utils/logger";
-import { extractText } from "#libs/utils/message";
+import { extractExpiration, extractText } from "#libs/utils/message";
 import {
     decryptSecretEdit,
     isSecretEdit,
@@ -17,53 +17,6 @@ import { processMessage } from "#middleware";
 const pairingJid = config.pairingNumber
     ? `${config.pairingNumber.replace(/\D/g, "")}@s.whatsapp.net`
     : null;
-
-/**
- * Scan a raw msg.message for ephemeral expiration before any unwrapping.
- * Checks the ephemeralMessage wrapper, then contextInfo on each content
- * field, then nested editedMessage content.
- *
- * @param {object} message
- * @returns {number} expiration in seconds, 0 if not found
- */
-function extractExpiration(message) {
-    if (!message || typeof message !== "object") {
-        return 0;
-    }
-
-    const inner = message.ephemeralMessage?.message;
-    if (inner) {
-        for (const v of Object.values(inner)) {
-            if (v && typeof v === "object") {
-                const exp = Number(v.contextInfo?.expiration);
-                if (exp > 0) {
-                    return exp;
-                }
-            }
-        }
-    }
-
-    for (const v of Object.values(message)) {
-        if (v && typeof v === "object" && !Array.isArray(v)) {
-            const exp = Number(v.contextInfo?.expiration);
-            if (exp > 0) {
-                return exp;
-            }
-            if (v.editedMessage) {
-                for (const ev of Object.values(v.editedMessage)) {
-                    if (ev && typeof ev === "object") {
-                        const e = Number(ev.contextInfo?.expiration);
-                        if (e > 0) {
-                            return e;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return 0;
-}
 
 /**
  * @param {import('../Client.js').Client} client
@@ -221,6 +174,63 @@ function recordStats(client, msg) {
 }
 
 /**
+ * Feed an edited message back through the middleware as if it had just
+ * arrived, so a corrected command still runs.
+ *
+ * Shared by both edit paths (secret-encrypted and protocolMessage), which
+ * differ only in how they locate the content and the target key.
+ *
+ * @param {import('../Client.js').Client} client
+ * @param {object} msg - The carrier message the edit arrived on.
+ * @param {object} opts
+ * @param {object} opts.content - Unwrapped edited content.
+ * @param {object} [opts.targetKey] - Key of the message being edited.
+ * @param {string} opts.remoteJid - Chat the edit belongs to.
+ * @param {string} [opts.participant] - Sender, for groups.
+ * @param {string} opts.tag - Log tag distinguishing the two paths.
+ */
+function reprocessEdit(
+    client,
+    msg,
+    { content, targetKey, remoteJid, participant, tag },
+) {
+    const text = extractText(content);
+    if (!text) {
+        return;
+    }
+
+    // In self-DM, force fromMe true when the chat JID is the bot's own JID.
+    let fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
+    if (
+        !fromMe &&
+        isDmJid(remoteJid) &&
+        client.sock?.user?.id &&
+        areJidsSameUser(remoteJid, client.sock.user.id)
+    ) {
+        fromMe = true;
+    }
+
+    processMessage(client, {
+        key: {
+            remoteJid,
+            id: targetKey?.id || msg.key.id,
+            fromMe,
+            participant,
+        },
+        message: content,
+        pushName: msg.pushName,
+        messageTimestamp: msg.messageTimestamp,
+        _isEditReprocess: true,
+        _expiration:
+            extractExpiration(msg.message) ||
+            getCachedExpiration(client, remoteJid) ||
+            0,
+    });
+
+    print.info(`[${tag}] re-processing "${text}" from ${remoteJid}`);
+}
+
+/**
  * Decrypt and re-process a SecretEncryptedMessage edit.
  * Self-edits (fromMe) can't be decrypted — WA doesn't share the
  * messageSecret with the sender's own linked devices.
@@ -264,43 +274,15 @@ function handleSecretEdit(client, msg) {
         ? targetKey?.remoteJid || msg.key.remoteJid
         : msg.key.remoteJid || targetKey?.remoteJid;
 
-    // In self-DM, force fromMe true when the chat JID matches the bot's own JID.
-    let fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
-    if (
-        !fromMe &&
-        !isGroup &&
-        isDmJid(remoteJid) &&
-        client.sock?.user?.id &&
-        areJidsSameUser(remoteJid, client.sock.user.id)
-    ) {
-        fromMe = true;
-    }
-
-    const text = extractText(content);
-    if (!text) {
-        return;
-    }
-
-    processMessage(client, {
-        key: {
-            remoteJid,
-            id: targetKey?.id || msg.key.id,
-            fromMe,
-            participant: isGroup
-                ? targetKey?.participant || msg.key.participant
-                : undefined,
-        },
-        message: content,
-        pushName: msg.pushName,
-        messageTimestamp: msg.messageTimestamp,
-        _isEditReprocess: true,
-        _expiration:
-            extractExpiration(msg.message) ||
-            getCachedExpiration(client, remoteJid) ||
-            0,
+    reprocessEdit(client, msg, {
+        content,
+        targetKey,
+        remoteJid,
+        participant: isGroup
+            ? targetKey?.participant || msg.key.participant
+            : undefined,
+        tag: "edit",
     });
-
-    print.info(`[edit] re-processing "${text}" from ${remoteJid}`);
 }
 
 /**
@@ -333,7 +315,9 @@ export async function handleMessagesUpsert(client, { type, messages }) {
         const innerMessage =
             msg.message?.ephemeralMessage?.message || msg.message;
 
-        if (!isSecretEdit(msg) && innerMessage?.secretEncryptedMessage) {
+        // Only reachable when the secret edit sat inside an ephemeral
+        // wrapper — the unwrapped case already `continue`d above.
+        if (innerMessage?.secretEncryptedMessage) {
             const secretEncType =
                 innerMessage.secretEncryptedMessage.secretEncType;
             const editType =
@@ -356,41 +340,13 @@ export async function handleMessagesUpsert(client, { type, messages }) {
         if (protoMsg?.type === 14 || protoMsg?.type === "MESSAGE_EDIT") {
             if (protoMsg.editedMessage) {
                 const targetKey = protoMsg.key;
-                const remoteJid = targetKey?.remoteJid || msg.key.remoteJid;
-
-                let fromMe = msg.key.fromMe ?? targetKey?.fromMe ?? false;
-                if (
-                    !fromMe &&
-                    isDmJid(remoteJid) &&
-                    client.sock?.user?.id &&
-                    areJidsSameUser(remoteJid, client.sock.user.id)
-                ) {
-                    fromMe = true;
-                }
-
-                const text = extractText(protoMsg.editedMessage);
-
-                if (text) {
-                    processMessage(client, {
-                        key: {
-                            remoteJid,
-                            id: targetKey?.id || msg.key.id,
-                            fromMe,
-                            participant:
-                                targetKey?.participant || msg.key.participant,
-                        },
-                        message: protoMsg.editedMessage,
-                        pushName: msg.pushName,
-                        messageTimestamp: msg.messageTimestamp,
-                        _isEditReprocess: true,
-                        _expiration:
-                            extractExpiration(msg.message) ||
-                            getCachedExpiration(client, remoteJid) ||
-                            0,
-                    });
-
-                    print.info(`[edit-proto] re-processing "${text}"`);
-                }
+                reprocessEdit(client, msg, {
+                    content: protoMsg.editedMessage,
+                    targetKey,
+                    remoteJid: targetKey?.remoteJid || msg.key.remoteJid,
+                    participant: targetKey?.participant || msg.key.participant,
+                    tag: "edit-proto",
+                });
             }
             continue;
         }

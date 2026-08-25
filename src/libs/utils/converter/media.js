@@ -8,9 +8,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpeg from "fluent-ffmpeg";
-
-/** @type {string} Temporary directory for ffmpeg operations. */
-const TMP_DIR = join(process.cwd(), "tmp");
+import { TMP_DIR } from "#libs/utils/tmp";
 
 /**
  * Run an ffmpeg operation on a temp input/output file pair.

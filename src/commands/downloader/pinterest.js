@@ -23,12 +23,7 @@ export default new CommandBuilder()
     .setReact("📌")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const query = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg();
 
         await interaction.typing();
 
@@ -62,9 +57,7 @@ export default new CommandBuilder()
         }
 
         if (!query) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <url|query|image>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         if (/(?:pinterest\.com|pin\.it)\//i.test(query)) {

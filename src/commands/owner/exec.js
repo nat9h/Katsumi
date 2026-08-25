@@ -22,7 +22,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const input = interaction.rawBody || interaction.body;
         if (!input) {
-            return interaction.reply("Usage: `$ <command>`");
+            return interaction.reply(interaction.usage());
         }
 
         try {

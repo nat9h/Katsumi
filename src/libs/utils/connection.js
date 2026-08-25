@@ -216,16 +216,6 @@ export function backoffDelay(
 }
 
 /**
- * Determine if a disconnect error is recoverable.
- *
- * @param {object} lastDisconnect
- * @returns {boolean}
- */
-export function isRecoverable(lastDisconnect) {
-    return parseDisconnect(lastDisconnect).shouldReconnect;
-}
-
-/**
  * Simple connection uptime tracker.
  * Call start() on connection open, stop() on close.
  *

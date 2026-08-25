@@ -55,7 +55,7 @@ export default new CommandBuilder()
             return interaction.reply(
                 `*Project Sekai Sticker Maker*\n\n` +
                     `${list.join("\n")}\n\n` +
-                    `Usage: \`${interaction.prefix}${interaction.commandName} <character> <text>\`\n` +
+                    `${interaction.usage()}\n` +
                     `Use \`-i <number>\` to pick a pose.\n` +
                     `Example: \`${interaction.prefix}${interaction.commandName} emu -i 5 Wonderhoy!\``,
             );
@@ -68,7 +68,7 @@ export default new CommandBuilder()
         if (!text) {
             return interaction.reply(
                 `Please provide text for the sticker.\n\n` +
-                    `Usage: \`${interaction.prefix}${interaction.commandName} <character> <text>\`\n` +
+                    `${interaction.usage()}\n` +
                     `Example: \`${interaction.prefix}${interaction.commandName} emu Wonderhoy!\``,
             );
         }

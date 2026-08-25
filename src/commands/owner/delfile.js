@@ -17,9 +17,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const targetPath = interaction.body;
         if (!targetPath) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <path>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         const filePath = join(process.cwd(), targetPath);

@@ -8,6 +8,7 @@ import { convertAudio } from "#libs/utils/converter/audio";
 import { parseFlags } from "#libs/utils/flags";
 import logger from "#libs/utils/logger";
 import {
+    extractExpiration,
     extractText,
     extractUrl,
     findContextInfo,
@@ -15,6 +16,7 @@ import {
 } from "#libs/utils/message";
 import { isPremium } from "#libs/utils/premium";
 import { Collector } from "./Collector.js";
+import { fillTemplate } from "./CommandBuilder.js";
 
 /**
  * @typedef {import('baileys').WASocket} WASocket
@@ -23,6 +25,47 @@ import { Collector } from "./Collector.js";
  */
 
 const DEFAULT_AWAIT_MS = 30_000;
+
+/**
+ * Parse a list selection into 1-based indices, in the order given, deduped
+ * and clamped to `max`.
+ *
+ * Single mode ignores everything but a lone integer, so a stray "1,2" is
+ * rejected rather than silently taking the first entry.
+ *
+ * @param {string} text
+ * @param {number} max
+ * @param {boolean} [multi]
+ * @returns {number[]}
+ */
+export function parseSelection(text, max, multi = false) {
+    const inRange = (n) => Number.isInteger(n) && n >= 1 && n <= max;
+
+    if (!multi) {
+        const num = Number.parseInt(text, 10);
+        return inRange(num) && String(num) === text.trim() ? [num] : [];
+    }
+
+    const indices = new Set();
+    for (const part of text.split(",")) {
+        const trimmed = part.trim();
+        const range = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (range) {
+            const start = Number.parseInt(range[1], 10);
+            const end = Number.parseInt(range[2], 10);
+            for (let i = start; i <= end; i++) {
+                indices.add(i);
+            }
+        } else {
+            const num = Number.parseInt(trimmed, 10);
+            if (!Number.isNaN(num)) {
+                indices.add(num);
+            }
+        }
+    }
+
+    return [...indices].filter(inRange);
+}
 
 /**
  * Per-message context passed to every command handler.
@@ -40,6 +83,8 @@ export class Interaction {
 
     prefix = "";
     commandName = "";
+    /** @type {import('./CommandBuilder.js').CommandDefinition|null} */
+    command = null;
     /** @type {Record<string, string|null>} */ args = {};
     /** @type {string[]} */ rawArgs = [];
     body = "";
@@ -172,6 +217,57 @@ export class Interaction {
     }
 
     /**
+     * The URL-ish argument for this invocation, checked in the order users
+     * actually supply one: typed inline, then quoted message.
+     *
+     * @param {string} [text] - Source text; pass the positional remainder
+     *   when the command parses flags, so `--gif` isn't mistaken for input.
+     * @returns {string} Empty string when nothing was supplied.
+     */
+    urlArg(text = this.body) {
+        return (
+            extractUrl(text) ||
+            text ||
+            this.quoted?.url ||
+            this.quoted?.text ||
+            ""
+        ).trim();
+    }
+
+    /**
+     * The command's usage line, rendered with the prefix that invoked it.
+     *
+     * @param {string} [extra=""] - Appended on its own line after the usage.
+     * @returns {string}
+     */
+    usage(extra = "") {
+        const line = fillTemplate(
+            this.command?.usage,
+            this.prefix,
+            this.commandName,
+        );
+        return `Usage: \`${line}\`${extra ? `\n${extra}` : ""}`;
+    }
+
+    /**
+     * The command's example line, rendered with the prefix that invoked it.
+     * Multi-line examples are indented so they read as a list.
+     *
+     * @returns {string}
+     */
+    example() {
+        const filled = fillTemplate(
+            this.command?.example,
+            this.prefix,
+            this.commandName,
+        );
+        const lines = filled.split("\n");
+        return lines.length > 1
+            ? `Example:\n${lines.map((l) => `  \`${l.trim()}\``).join("\n")}`
+            : `Example: \`${filled}\``;
+    }
+
+    /**
      * True if the message text contains a URL.
      * @returns {boolean}
      */
@@ -288,39 +384,11 @@ export class Interaction {
             return this.#ephemeralCached;
         }
 
-        const message = this.msg.message;
-        if (!message) {
-            this.#ephemeralCached =
-                this.client.ephemeralCache?.get(this.chatJid) || 0;
-            return this.#ephemeralCached;
-        }
-
-        const inner = message.ephemeralMessage?.message;
-        if (inner) {
-            for (const v of Object.values(inner)) {
-                if (v && typeof v === "object") {
-                    const exp = Number(v.contextInfo?.expiration);
-                    if (exp > 0) {
-                        this.#ephemeralCached = exp;
-                        return exp;
-                    }
-                }
-            }
-        }
-
-        for (const v of Object.values(message)) {
-            if (v && typeof v === "object" && !Array.isArray(v)) {
-                const exp = Number(v.contextInfo?.expiration);
-                if (exp > 0) {
-                    this.#ephemeralCached = exp;
-                    return exp;
-                }
-            }
-        }
-
-        const cached = this.client.ephemeralCache?.get(this.chatJid) || 0;
-        this.#ephemeralCached = cached;
-        return cached;
+        this.#ephemeralCached =
+            extractExpiration(this.msg.message) ||
+            this.client.ephemeralCache?.get(this.chatJid) ||
+            0;
+        return this.#ephemeralCached;
     }
 
     async typing() {
@@ -347,9 +415,9 @@ export class Interaction {
      * message reference, and ephemeralExpiration if the chat is disappearing.
      *
      * @param {number} [extraEphemeral] - Override expiration (seconds).
-     * @returns {Promise<object>}
+     * @returns {object}
      */
-    async #baseOptions(extraEphemeral) {
+    #baseOptions(extraEphemeral) {
         const opts = {
             messageId: this.client.generateMsgId(),
             quoted: this.msg,
@@ -401,6 +469,44 @@ export class Interaction {
     }
 
     /**
+     * Build, relay, and cache a raw proto message — for message types Baileys'
+     * `sendMessage` cannot construct.
+     *
+     * @param {object} content - A `proto.Message`
+     * @param {{ expiration?: number, quoted?: object, additionalNodes?: object[] }} [opts]
+     * @returns {Promise<object>}
+     */
+    async #relay(content, { expiration = 0, quoted, additionalNodes } = {}) {
+        const generated = await generateWAMessageFromContent(
+            this.chatJid,
+            content,
+            {
+                userJid: this.sock.user?.id,
+                messageId: this.client.generateMsgId(),
+                ...(quoted ? { quoted } : {}),
+                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
+            },
+        );
+
+        await this.sock.relayMessage(this.chatJid, generated.message, {
+            messageId: generated.key.id,
+            ...(additionalNodes ? { additionalNodes } : {}),
+        });
+
+        if (generated.key?.id) {
+            this.client.messageCache.set(
+                `${this.chatJid}_${generated.key.id}`,
+                generated.message,
+            );
+        }
+
+        this._replied = true;
+        this._lastMsg = generated;
+        this.stopTyping().catch(() => {});
+        return generated;
+    }
+
+    /**
      * Send a reply to the triggering message. Subsequent calls are
      * automatically routed to `followUp` so the first reply is always
      * a direct quote.
@@ -414,7 +520,7 @@ export class Interaction {
             return this.followUp(content, { ephemeralExpiration });
         }
 
-        const opts = await this.#baseOptions(ephemeralExpiration);
+        const opts = this.#baseOptions(ephemeralExpiration);
         const message = await this.#normalizeContent(content);
         const sent = await this.#send(message, opts);
 
@@ -432,7 +538,7 @@ export class Interaction {
      * @returns {Promise<object>}
      */
     async followUp(content, { ephemeralExpiration } = {}) {
-        const opts = await this.#baseOptions(ephemeralExpiration);
+        const opts = this.#baseOptions(ephemeralExpiration);
         if (this._lastMsg?.key) {
             opts.quoted = this._lastMsg;
         }
@@ -454,7 +560,7 @@ export class Interaction {
             throw new Error("Nothing to edit");
         }
 
-        const opts = await this.#baseOptions();
+        const opts = this.#baseOptions();
         delete opts.quoted;
 
         const sent = await this.#send({ edit: this._lastMsg.key, text }, opts);
@@ -491,7 +597,7 @@ export class Interaction {
                     selectableCount,
                 },
             },
-            await this.#baseOptions(),
+            this.#baseOptions(),
         );
     }
 
@@ -612,19 +718,9 @@ export class Interaction {
             pollCreationMessageV5: pollCreation,
         });
 
-        const generated = await generateWAMessageFromContent(
-            this.chatJid,
-            content,
-            {
-                userJid: this.sock.user?.id,
-                quoted: this.msg,
-                messageId: this.client.generateMsgId(),
-                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
-            },
-        );
-
-        await this.sock.relayMessage(this.chatJid, generated.message, {
-            messageId: generated.key.id,
+        return this.#relay(content, {
+            expiration,
+            quoted: this.msg,
             additionalNodes: [
                 {
                     tag: "meta",
@@ -632,154 +728,6 @@ export class Interaction {
                 },
             ],
         });
-
-        if (generated?.key?.id) {
-            this.client.messageCache.set(
-                `${this.chatJid}_${generated.key.id}`,
-                generated.message,
-            );
-        }
-
-        this._replied = true;
-        this._lastMsg = generated;
-        this.stopTyping().catch(() => {});
-        return generated;
-    }
-
-    /**
-     * Forward an existing StickerPackMessage to this chat, optionally
-     * overriding the pack name, publisher, caption, or per-sticker emojis.
-     *
-     * Why forward? Building a fresh StickerPackMessage requires uploading a
-     * proprietary archive blob to WhatsApp's MMS endpoint that no public
-     * library can produce yet. Forwarding an existing pack reuses its
-     * `directPath` + `mediaKey`, so receivers see a real native pack bubble
-     * with "Lihat paket stiker" — exactly like Plan A in your screenshot.
-     *
-     * @param {object} sourceMessage - The full Message proto containing a
-     *   stickerPackMessage (typically interaction.quoted.message).
-     * @param {object} [overrides]
-     * @param {string} [overrides.name]
-     * @param {string} [overrides.publisher]
-     * @param {string} [overrides.packDescription]
-     * @param {string} [overrides.caption]
-     * @param {string[][]} [overrides.emojis] - Replace per-sticker emoji lists.
-     * @returns {Promise<object>}
-     */
-    async repackStickerPack(sourceMessage, overrides = {}) {
-        const pack =
-            sourceMessage?.stickerPackMessage ||
-            sourceMessage?.ephemeralMessage?.message?.stickerPackMessage ||
-            sourceMessage?.viewOnceMessageV2?.message?.stickerPackMessage;
-
-        if (!pack) {
-            throw new Error("Source message has no stickerPackMessage.");
-        }
-
-        const cloned = proto.Message.StickerPackMessage.fromObject({
-            ...pack,
-            name: overrides.name ?? pack.name,
-            publisher: overrides.publisher ?? pack.publisher,
-            packDescription: overrides.packDescription ?? pack.packDescription,
-            caption: overrides.caption ?? pack.caption,
-        });
-
-        if (Array.isArray(overrides.emojis) && cloned.stickers?.length) {
-            for (let i = 0; i < cloned.stickers.length; i++) {
-                if (Array.isArray(overrides.emojis[i])) {
-                    cloned.stickers[i].emojis = overrides.emojis[i];
-                }
-            }
-        }
-
-        // Reset forwarding metadata so it appears as a fresh share, not a
-        // chain forward.
-        cloned.contextInfo = {
-            ...(cloned.contextInfo || {}),
-            forwardingScore: undefined,
-            isForwarded: undefined,
-        };
-
-        const content = proto.Message.fromObject({
-            stickerPackMessage: cloned,
-        });
-
-        const expiration = this.autoEphemeral ? this.expiration : 0;
-
-        const generated = await generateWAMessageFromContent(
-            this.chatJid,
-            content,
-            {
-                userJid: this.sock.user?.id,
-                messageId: this.client.generateMsgId(),
-                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
-            },
-        );
-
-        await this.sock.relayMessage(this.chatJid, generated.message, {
-            messageId: generated.key.id,
-        });
-
-        if (generated?.key?.id) {
-            this.client.messageCache.set(
-                `${this.chatJid}_${generated.key.id}`,
-                generated.message,
-            );
-        }
-
-        this._replied = true;
-        this._lastMsg = generated;
-        this.stopTyping().catch(() => {});
-        return generated;
-    }
-
-    /**
-     * Send a sticker with `isLottie=true` flagged on the StickerMessage.
-     *
-     * The buffer should already be an animated WebP. WhatsApp clients
-     * supporting native lottie playback will treat it differently from a
-     * regular animated WebP; older clients fall back to the WebP frames.
-     *
-     * @param {Buffer} buffer - Animated WebP buffer
-     * @param {{ ephemeralExpiration?: number, isAnimated?: boolean }} [opts]
-     * @returns {Promise<object>}
-     */
-    async sendLottieSticker(
-        buffer,
-        { ephemeralExpiration, isAnimated = true } = {},
-    ) {
-        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-            throw new Error("sendLottieSticker requires a non-empty Buffer.");
-        }
-
-        const opts = await this.#baseOptions(ephemeralExpiration);
-
-        const sent = await this.#send(
-            {
-                sticker: buffer,
-                mimetype: "image/webp",
-                isAnimated,
-                contextInfo: {
-                    isLottie: true,
-                },
-            },
-            opts,
-        );
-
-        // Patch the protobuf flag after Baileys built the StickerMessage.
-        try {
-            if (sent?.message?.stickerMessage) {
-                sent.message.stickerMessage.isLottie = true;
-                if (isAnimated) {
-                    sent.message.stickerMessage.isAnimated = true;
-                }
-            }
-        } catch {}
-
-        this._replied = true;
-        this._lastMsg = sent;
-        this.stopTyping().catch(() => {});
-        return sent;
     }
 
     /**
@@ -817,109 +765,11 @@ export class Interaction {
             this.sock,
         );
 
-        const content = proto.Message.fromObject(msgContent);
-        const expiration =
-            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
-
-        const generated = await generateWAMessageFromContent(
-            this.chatJid,
-            content,
-            {
-                userJid: this.sock.user?.id,
-                messageId: this.client.generateMsgId(),
-                ...(expiration > 0 ? { ephemeralExpiration: expiration } : {}),
-            },
-        );
-
-        await this.sock.relayMessage(this.chatJid, generated.message, {
-            messageId: generated.key.id,
+        return this.#relay(proto.Message.fromObject(msgContent), {
+            expiration:
+                ephemeralExpiration ||
+                (this.autoEphemeral ? this.expiration : 0),
         });
-
-        if (generated?.key?.id) {
-            this.client.messageCache.set(
-                `${this.chatJid}_${generated.key.id}`,
-                generated.message,
-            );
-        }
-
-        this._replied = true;
-        this._lastMsg = generated;
-        this.stopTyping().catch(() => {});
-        return generated;
-    }
-
-    /**
-     * Bulk-send a collection of stickers with the same pack metadata.
-     *
-     * NOTE: This is NOT a native StickerPackMessage — that message type
-     * requires uploading a packaged pack archive that WhatsApp's MMS endpoints
-     * don't currently accept from third-party clients. Instead, this method
-     * sends each sticker individually with identical pack/author EXIF so they
-     * appear grouped under one pack inside the WhatsApp sticker drawer.
-     *
-     * @param {Buffer[]} stickers - WebP sticker buffers (already converted)
-     * @param {{ pack?: string, author?: string, delayMs?: number, ephemeralExpiration?: number }} [opts]
-     * @returns {Promise<{ sent: number, failed: number }>}
-     */
-    async sendStickerPack(
-        stickers,
-        { pack, author, delayMs = 600, ephemeralExpiration } = {},
-    ) {
-        if (!Array.isArray(stickers) || !stickers.length) {
-            throw new Error("sendStickerPack requires at least one sticker.");
-        }
-
-        const { createSticker } = await import("#libs/utils/converter/sticker");
-
-        const expiration =
-            ephemeralExpiration || (this.autoEphemeral ? this.expiration : 0);
-
-        let sent = 0;
-        let failed = 0;
-
-        for (let i = 0; i < stickers.length; i++) {
-            try {
-                const src = stickers[i];
-                const isWebp =
-                    Buffer.isBuffer(src) &&
-                    src.length >= 12 &&
-                    src.toString("ascii", 0, 4) === "RIFF" &&
-                    src.toString("ascii", 8, 12) === "WEBP";
-
-                const buffer = await createSticker(src, false, {
-                    pack: pack || "@natsumiworld",
-                    author: author || "",
-                    skipConvert: isWebp,
-                });
-
-                const itemOpts = {
-                    messageId: this.client.generateMsgId(),
-                };
-                if (expiration > 0) {
-                    itemOpts.ephemeralExpiration = expiration;
-                }
-
-                const result = await this.sock.sendMessage(
-                    this.chatJid,
-                    { sticker: buffer },
-                    itemOpts,
-                );
-
-                this._lastMsg = result;
-                sent++;
-            } catch (err) {
-                logger.warn({ err }, `sticker pack item ${i} failed`);
-                failed++;
-            }
-
-            if (delayMs > 0 && i < stickers.length - 1) {
-                await new Promise((r) => setTimeout(r, delayMs));
-            }
-        }
-
-        this._replied = true;
-        this.stopTyping().catch(() => {});
-        return { sent, failed };
     }
 
     /**
@@ -969,101 +819,52 @@ export class Interaction {
     }
 
     /**
-     * Show a numbered list and wait for the user to pick one.
-     * Returns the selected item or null on invalid input / timeout.
+     * Show a numbered list and wait for the user to pick from it.
+     *
+     * Single mode accepts one number. Multi mode accepts "1,2,3", "1-5",
+     * "1,3-5" or "all"/"*".
      *
      * @param {object[]} items - Must have `subject` or `id` property
      * @param {string} title
-     * @returns {Promise<object|null>}
+     * @param {{ multi?: boolean }} [opts]
+     * @returns {Promise<object|object[]|null>} Array when `multi`, single item
+     *   otherwise; null on invalid input or timeout.
      */
-    async pickFromList(items, title) {
+    async pickFromList(items, title, { multi = false } = {}) {
         const lines = items.map((it, i) => `${i + 1}. ${it.subject || it.id}`);
+        const hint = multi
+            ? "_Reply with numbers (e.g. 1,2,3 or 1-5 or all)._"
+            : "_Reply with number._";
         const sentMsg = await this.reply(
-            `📋 *${title}:*\n\n${lines.join("\n")}\n\n_Reply with number._`,
+            `📋 *${title}:*\n\n${lines.join("\n")}\n\n${hint}`,
         );
         const targetMsgId = sentMsg?.key?.id;
 
+        let text;
         try {
             const reply = await this.awaitReply((msg) => {
                 if (!targetMsgId) {
                     return true;
                 }
-                const ctx = findContextInfo(msg.message);
-                return ctx?.stanzaId === targetMsgId;
+                return findContextInfo(msg.message)?.stanzaId === targetMsgId;
             }, DEFAULT_AWAIT_MS);
-            const num = Number.parseInt(extractText(reply.message).trim(), 10);
-
-            if (!Number.isInteger(num) || num < 1 || num > items.length) {
-                await this.followUp("Invalid. Cancelled.");
-                return null;
-            }
-            return items[num - 1];
+            text = extractText(reply.message).trim().toLowerCase();
         } catch {
             await this.followUp("⏰ Timeout.");
             return null;
         }
-    }
 
-    /**
-     * Show a numbered list and let the user pick multiple items.
-     * Supports: "1,2,3", "1-5", "1,3-5", or "all".
-     *
-     * @param {object[]} items - Must have `subject` or `id` property
-     * @param {string} title
-     * @returns {Promise<object[]|null>} Selected items or null if cancelled/timeout
-     */
-    async pickMultipleFromList(items, title) {
-        const lines = items.map((it, i) => `${i + 1}. ${it.subject || it.id}`);
-        const sentMsg = await this.reply(
-            `📋 *${title}:*\n\n${lines.join("\n")}\n\n_Reply with numbers (e.g. 1,2,3 or 1-5 or all)._`,
-        );
-        const targetMsgId = sentMsg?.key?.id;
+        if (multi && (text === "all" || text === "*")) {
+            return items.slice();
+        }
 
-        try {
-            const reply = await this.awaitReply((msg) => {
-                if (!targetMsgId) {
-                    return true;
-                }
-                const ctx = findContextInfo(msg.message);
-                return ctx?.stanzaId === targetMsgId;
-            }, DEFAULT_AWAIT_MS);
-            const text = extractText(reply.message).trim().toLowerCase();
-
-            if (text === "all" || text === "*") {
-                return items.slice();
-            }
-
-            const indices = new Set();
-            for (const part of text.split(",")) {
-                const trimmed = part.trim();
-                const rangeMatch = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
-                if (rangeMatch) {
-                    const start = Number.parseInt(rangeMatch[1], 10);
-                    const end = Number.parseInt(rangeMatch[2], 10);
-                    for (let i = start; i <= end; i++) {
-                        indices.add(i);
-                    }
-                } else {
-                    const num = Number.parseInt(trimmed, 10);
-                    if (!Number.isNaN(num)) {
-                        indices.add(num);
-                    }
-                }
-            }
-
-            const selected = [...indices]
-                .filter((n) => n >= 1 && n <= items.length)
-                .map((n) => items[n - 1]);
-
-            if (!selected.length) {
-                await this.followUp("Invalid. Cancelled.");
-                return null;
-            }
-
-            return selected;
-        } catch {
-            await this.followUp("⏰ Timeout.");
+        const picked = parseSelection(text, items.length, multi);
+        if (!picked.length) {
+            await this.followUp("Invalid. Cancelled.");
             return null;
         }
+
+        const selected = picked.map((n) => items[n - 1]);
+        return multi ? selected : selected[0];
     }
 }

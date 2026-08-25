@@ -8,7 +8,6 @@ import reddit from "#libs/scrapers/reddit";
 import { CommandBuilder } from "#libs/structures/CommandBuilder";
 import { mergeVideoAudio } from "#libs/utils/converter/media";
 import { formatCount } from "#libs/utils/format";
-import { extractUrl } from "#libs/utils/message";
 
 export default new CommandBuilder()
     .setName("reddit")
@@ -22,18 +21,10 @@ export default new CommandBuilder()
     .setReact("🔴")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const query = (
-            extractUrl(interaction.body) ||
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg();
 
         if (!query) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <url>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         if (!/reddit\.com|redd\.it/i.test(query)) {

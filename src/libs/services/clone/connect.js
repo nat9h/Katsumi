@@ -355,7 +355,7 @@ function bindCloneEvents({
             print.message(msg, false, mainClient.store, { clone: true });
 
             processMessage(
-                {
+                mainClient.toCloneContext({
                     sock,
                     sendMessage: async (j, c, o) => {
                         const sent = await sock.sendMessage(j, c, o);
@@ -364,17 +364,10 @@ function bindCloneEvents({
                         }
                         return sent;
                     },
-                    db: mainClient.db,
-                    store: mainClient.store,
-                    groupCache: mainClient.groupCache,
-                    ephemeralCache: mainClient.ephemeralCache,
-                    messageCache: mainClient.messageCache,
-                    stats: mainClient.stats,
                     generateMsgId: cloneGenerateMsgId,
                     wasSentByMe: cloneWasSentByMe,
-                    _isClone: true,
-                    _cloneOwner: ownerJid,
-                },
+                    ownerJid,
+                }),
                 msg,
             );
         }
@@ -391,7 +384,7 @@ async function buildSocket(creds, keys) {
     return makeWASocket({
         version,
         auth: { creds, keys: makeCacheableSignalKeyStore(keys, cloneLogger) },
-        browser: Browsers.android("Chrome"),
+        browser: Browsers.macOS("Safari"),
         printQRInTerminal: false,
         logger: cloneLogger,
         markOnlineOnConnect: false,

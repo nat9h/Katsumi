@@ -8,7 +8,12 @@ import makeWASocket, {
     proto,
 } from "baileys";
 import config from "#config";
-import { createAuthStore, createDataStore, createKeyValueStore } from "#db";
+import {
+    createAuthStore,
+    createDataStore,
+    createKeyValueStore,
+    flushAll,
+} from "#db";
 import { handleConnectionUpdate } from "#handlers/core/connection";
 import {
     handleGroupEvents,
@@ -120,6 +125,42 @@ export class Client extends EventEmitter {
         return sent;
     }
 
+    /**
+     * Build the object a clone session passes to `processMessage` in place of
+     * a real Client.
+     *
+     * Clones share this client's stores and caches but run their own socket
+     * and message-ID bookkeeping, so those four members are supplied by the
+     * caller. Keeping the shape here means the duck-typed contract has exactly
+     * one definition to keep in sync with the real class.
+     *
+     * @param {{ sock: object, sendMessage: Function, generateMsgId: Function,
+     *   wasSentByMe: Function, ownerJid: string }} overrides
+     * @returns {object}
+     */
+    toCloneContext({
+        sock,
+        sendMessage,
+        generateMsgId,
+        wasSentByMe,
+        ownerJid,
+    }) {
+        return {
+            sock,
+            sendMessage,
+            generateMsgId,
+            wasSentByMe,
+            db: this.db,
+            store: this.store,
+            groupCache: this.groupCache,
+            ephemeralCache: this.ephemeralCache,
+            messageCache: this.messageCache,
+            stats: this.stats,
+            _isClone: true,
+            _cloneOwner: ownerJid,
+        };
+    }
+
     /** Fetch and cache metadata for all groups the bot is in. */
     async syncGroupMetadata() {
         try {
@@ -204,7 +245,7 @@ export class Client extends EventEmitter {
                 creds: this.authStore.creds,
                 keys: makeCacheableSignalKeyStore(this.authStore.keys, logger),
             },
-            browser: Browsers.android("Chrome"),
+            browser: Browsers.macOS("Safari"),
             printQRInTerminal: false,
             logger,
             markOnlineOnConnect: false,
@@ -502,6 +543,14 @@ export class Client extends EventEmitter {
             } catch {}
 
             await new Promise((r) => setTimeout(r, 300));
+
+            // Flush last: socket teardown can still trigger creds.update.
+            try {
+                flushAll();
+            } catch (err) {
+                logger.error({ err }, "db flush on shutdown failed");
+            }
+
             process.exit(0);
         };
 

@@ -16,9 +16,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const input = interaction.body;
         if (!input) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <invite-link>\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         const match = input.match(/chat\.whatsapp\.com\/([A-Za-z0-9]+)/);

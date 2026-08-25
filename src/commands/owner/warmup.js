@@ -24,7 +24,7 @@ export default new CommandBuilder()
 
         if (!value || (value !== "on" && value !== "off")) {
             return interaction.reply(
-                `Warmup: *${statusIcon(state.warmup)}*\nUsage: \`${interaction.prefix}${interaction.commandName} on|off\``,
+                `Warmup: *${statusIcon(state.warmup)}*\n${interaction.usage()}`,
             );
         }
 

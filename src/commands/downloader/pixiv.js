@@ -20,17 +20,10 @@ export default new CommandBuilder()
     .setReact("🎨")
     .setRateLimit(10_000, 2)
     .setHandler(async (interaction) => {
-        const query = (
-            interaction.body ||
-            interaction.quoted?.url ||
-            interaction.quoted?.text ||
-            ""
-        ).trim();
+        const query = interaction.urlArg();
 
         if (!query) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <query|url> [count]\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         await interaction.typing();

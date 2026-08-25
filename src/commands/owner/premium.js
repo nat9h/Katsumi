@@ -33,7 +33,7 @@ export default new CommandBuilder()
 
                 if (!target) {
                     return interaction.reply(
-                        `Please mention, reply, or provide a number.\nUsage: \`${interaction.prefix}${interaction.commandName} add @user 30d\``,
+                        `Please mention, reply, or provide a number.\n${interaction.example()}`,
                     );
                 }
 
@@ -115,8 +115,6 @@ export default new CommandBuilder()
             }
 
             default:
-                return interaction.reply(
-                    `Usage: \`${interaction.prefix}${interaction.commandName} <add|del|list|check> [user] [duration]\``,
-                );
+                return interaction.reply(interaction.usage());
         }
     });

@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import ffmpeg from "fluent-ffmpeg";
+import { TMP_DIR } from "#libs/utils/tmp";
 
 /**
  * @param {Buffer} inputBuffer - Raw audio buffer to convert.
@@ -16,7 +17,7 @@ import ffmpeg from "fluent-ffmpeg";
  * @throws {Error} If ffmpeg conversion fails.
  */
 export async function convertAudio(inputBuffer, maxDuration = null) {
-    const tmpDir = join(process.cwd(), "tmp");
+    const tmpDir = TMP_DIR;
     await mkdir(tmpDir, { recursive: true });
 
     const id = randomUUID();

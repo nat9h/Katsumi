@@ -26,9 +26,7 @@ export default new CommandBuilder()
         const name = positional[0]?.toLowerCase();
 
         if (!name) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <command> [-d]\``,
-            );
+            return interaction.reply(interaction.usage());
         }
 
         const cmd = commandMap.get(name);

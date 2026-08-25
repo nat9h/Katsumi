@@ -19,7 +19,7 @@ export default new CommandBuilder()
 
         if (!target) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} @user\` or reply to their message.`,
+                interaction.usage("Or reply to their message."),
             );
         }
 

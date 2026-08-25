@@ -18,7 +18,7 @@ export default new CommandBuilder()
     .setHandler(async (interaction) => {
         const input = interaction.rawBody || interaction.body;
         if (!input) {
-            return interaction.reply("Usage: `>> <code>`");
+            return interaction.reply(interaction.usage());
         }
 
         try {

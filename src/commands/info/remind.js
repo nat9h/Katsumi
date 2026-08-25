@@ -18,9 +18,7 @@ export default new CommandBuilder()
         const text = parts.join(" ").trim();
 
         if (!dur || !text) {
-            return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <duration> <message>\`\nExample: \`${interaction.prefix}${interaction.commandName} 10m drink water\``,
-            );
+            return interaction.reply(interaction.usage(interaction.example()));
         }
 
         const ms = parseDuration(dur);

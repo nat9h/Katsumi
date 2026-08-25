@@ -24,7 +24,7 @@ export default new CommandBuilder()
         const body = (interaction.body || "").trim();
         if (!body) {
             return interaction.reply(
-                `Usage: \`${interaction.prefix}${interaction.commandName} <tags>\`\n\nSites:\n${siteList}`,
+                interaction.usage(`\nSites:\n${siteList}`),
             );
         }
 

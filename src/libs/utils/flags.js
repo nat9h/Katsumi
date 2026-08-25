@@ -125,7 +125,7 @@ export function parseFlags(input, schema = {}) {
 
     for (let i = 0; i < tokens.length; i++) {
         const t = tokens[i];
-        const m = t.match(/^(--?)([A-Za-z][\w-]*)(?:=([\s\S]*))?$/);
+        const m = t.match(/^(--?)([A-Za-z0-9][\w-]*)(?:=([\s\S]*))?$/);
 
         if (!m) {
             positional.push(t);

@@ -1,15 +1,16 @@
 /**
  * @fileoverview yt-dlp wrapper — search, info, download.
- * Uses Deno runtime + remote components, with optional YouTube cookies.
+ * Runs node from process.execPath. Optional cookies — see buildArgs.
  * @module services/yt-dlp
  */
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import logger from "#libs/utils/logger";
+import { tmpFile } from "#libs/utils/tmp";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,16 +20,24 @@ const COOKIES_FILE = join(process.cwd(), "cookies", "yt.txt");
  * Build the full yt-dlp argv. Cookies are attached only when `cookies/yt.txt`
  * exists at call time, so swapping the file in/out doesn't require a restart.
  *
+ * Cookies only buy age-restricted and private videos — public ones download
+ * identically without them. They are safe here *because* the client is pinned:
+ * left to itself yt-dlp switches to _DEFAULT_AUTHED_CLIENTS on seeing cookies
+ * and drops every client without SUPPORTS_COOKIES, leaving only ones that need
+ * a GVS PO token provider we do not run.
+ *
  * @param {string[]} extra
  * @returns {string[]}
  */
 function buildArgs(extra) {
     const args = [
         "--js-runtimes",
-        existsSync("/usr/bin/deno") ? "deno" : "node:/usr/bin/node",
+        `node:${process.execPath}`,
         "--remote-components",
         "ejs:npm",
         "--no-warnings",
+        "--extractor-args",
+        "youtube:player_client=web_embedded",
     ];
     if (existsSync(COOKIES_FILE)) {
         args.push("--cookies", COOKIES_FILE);
@@ -98,6 +107,16 @@ async function runYtDlp(
         return stdout;
     } catch (err) {
         const stderr = String(err.stderr || "").trim();
+        logger.error(
+            {
+                argv: buildArgs(extra),
+                cwd: process.cwd(),
+                cookies: existsSync(COOKIES_FILE),
+                path: process.env.PATH,
+                stderr,
+            },
+            "yt-dlp failed",
+        );
         const tail = stderr.split("\n").slice(-3).join(" ").slice(0, 240);
         throw new Error(tail || err.message || "yt-dlp failed");
     }
@@ -165,20 +184,27 @@ export async function info(url) {
  */
 export async function download(url, type = "audio", opts = {}) {
     const isVideo = type === "video";
-    const ext = isVideo ? "mp4" : "mp3";
-    const outFile = join(tmpdir(), `yt_${Date.now()}_${process.pid}.${ext}`);
+    const ext = isVideo ? "mp4" : "m4a";
+    const outFile = await tmpFile(ext);
 
     try {
         const args = ["-o", outFile, "--no-playlist"];
         if (isVideo) {
-            args.push("-f", "best[ext=mp4][height<=480]");
+            args.push(
+                "-f",
+                "best[ext=mp4][height<=480]/best[height<=480]/" +
+                    "bv*[height<=480][vcodec^=avc1]+ba[acodec^=mp4a]/" +
+                    "bv*[height<=480]+ba/b",
+                "--merge-output-format",
+                "mp4",
+            );
         } else {
             args.push(
                 "-f",
                 "bestaudio",
                 "--extract-audio",
                 "--audio-format",
-                "mp3",
+                "m4a",
             );
         }
         args.push(url);
@@ -192,7 +218,7 @@ export async function download(url, type = "audio", opts = {}) {
         return {
             buffer,
             fileName: `${sanitizeTitle(opts.title)}.${ext}`,
-            mimetype: isVideo ? "video/mp4" : "audio/mpeg",
+            mimetype: isVideo ? "video/mp4" : "audio/mp4",
         };
     } finally {
         await unlink(outFile).catch(() => {});

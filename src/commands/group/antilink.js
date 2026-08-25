@@ -35,7 +35,5 @@ export default new CommandBuilder()
             return interaction.reply("❌ Anti-link disabled.");
         }
 
-        return interaction.reply(
-            `Usage: ${interaction.prefix}${interaction.commandName} on|off`,
-        );
+        return interaction.reply(interaction.usage());
     });
